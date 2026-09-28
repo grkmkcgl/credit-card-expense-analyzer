@@ -37,4 +37,11 @@ Değişiklikleri test etmek için dosyayı Chrome'da açmanız yeterli. Uygulama
 
 ## Canlı sayfa / Live page
 
-GitHub Pages ile yayınlanır: **Settings → Pages → Source: Deploy from a branch → `main` / `(root)`**.
+Depo gizli (private) tutulur. Canlı sayfa için depo Cloudflare Pages veya Netlify'a bağlanır; `main` dalına yapılan her değişiklik otomatik yayınlanır.
+The repo stays private; the live page is served by Cloudflare Pages or Netlify connected to this repo, auto-deploying every push to `main`.
+
+- Build command: *(boş / none)*
+- Output / publish directory: `/` (root)
+
+Canlı sayfa bağlantıyı bilen herkes tarafından açılabilir, ancak yalnızca boş aracı gösterir; kullanıcı verileri cihazdan çıkmaz.
+Anyone with the link can open the page, but it is only the empty tool; user data never leaves the device.
