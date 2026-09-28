@@ -504,6 +504,25 @@ def veri_yuklenince_sade_ust_kisim_ve_ozet_kartlari(b, info):
 
 
 @test
+def islem_silmeden_once_onay_sorulur(b, info):
+    a = App(b); a.import_("arti.pdf")
+    real = "history.filter(t=>!t.est).length"
+    n = a.ev(real)
+    answers, msgs = [False, True], []
+    def dlg(d):
+        msgs.append(d.message); d.accept() if answers.pop(0) else d.dismiss()
+    a.pg.on("dialog", dlg)
+    a.pg.click("#allFold > summary"); a.pg.wait_for_timeout(100)
+    desc = a.pg.locator("#alltx tr").first.locator("button[data-an]").inner_text()
+    a.pg.locator("#alltx button.x").first.click(); a.pg.wait_for_timeout(100)
+    eq(a.ev(real), n, "vazgeçince silinmemeli")
+    assert "silinsin mi" in msgs[0] and desc in msgs[0], msgs
+    a.pg.locator("#alltx button.x").first.click(); a.pg.wait_for_timeout(100)
+    eq(a.ev(real), n - 1, "onaylayınca silinmeli")
+    a.close()
+
+
+@test
 def katlanir_bolumler(b, info):
     a = App(b); a.import_("arti.pdf")
     for fid in ("allFold", "unkFold", "monthsFold", "rulesFold"):

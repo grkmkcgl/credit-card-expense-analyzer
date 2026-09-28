@@ -1374,7 +1374,10 @@ function render(){
   $("allCount").textContent=`(${list.length} işlem)`;
   $("alltx").innerHTML=list.map(t=>`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><button class="linkish" data-an="${esc(t.desc)}" title="Bu harcamayı analiz et">${esc(t.desc)}</button>${t.inst?`<br><small>${esc(t.sub)} · ${t.inst.n}/${t.inst.m}. taksit${t.inst.total?` (toplam ${fmt(t.inst.total)})`:""}${t.pdate&&t.pdate.slice(0,7)!==t.date.slice(0,7)?` · alışveriş ${toDate(t.pdate).toLocaleDateString("tr-TR")}`:""}${t.est==="past"?" · özette yok, seriden hesaplandı":t.est==="future"?" · planlanan, henüz özette yok":""}</small>`:t.note?`<br><small>${esc(t.note)}</small>`:""}</td><td><select data-k="${esc(norm(t.desc))}">${catOpts.map(c=>`<option${c===t.sub?" selected":""}>${esc(c)}</option>`).join("")}</select></td><td class="n">${fmt(t.amt)}</td><td>${t.est?"":`<button class="x" data-id="${esc(t.id)}" title="Bu işlemi sil">Sil</button>`}</td></tr>`).join("");
   $("alltx").querySelectorAll("select").forEach(s=>s.addEventListener("change",()=>{if(s.value==="Diğer")delete overrides[s.dataset.k];else overrides[s.dataset.k]=s.value;save();render()}));
-  $("alltx").querySelectorAll("button.x").forEach(b=>b.addEventListener("click",()=>{history=history.filter(t=>t.id!==b.dataset.id);expandInstallments();save();render()}));
+  $("alltx").querySelectorAll("button.x").forEach(b=>b.addEventListener("click",()=>{
+    const t=history.find(t=>t.id===b.dataset.id); if(!t)return;
+    if(!confirm(`Bu işlem silinsin mi?\n\n${t.date?toDate(t.date).toLocaleDateString("tr-TR"):""} · ${t.desc} · ${fmt2(t.amt)}\n\nSilinen işlem aynı ekstreyi tekrar yüklerseniz geri gelir.`))return;
+    history=history.filter(x=>x.id!==t.id);expandInstallments();save();render()}));
   const keys=[...new Set(history.filter(t=>t.kind!=="payment").map(t=>merchantKey(t.desc)))].sort();
   $("qList").innerHTML=keys.slice(0,400).map(k=>`<option value="${esc(k)}">`).join("");
   renderQuery();
