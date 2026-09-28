@@ -48,15 +48,25 @@ Period selector (all time / each statement / custom date range with presets), ca
 
 ## Testing
 
-No test suite is committed yet. During development everything was verified with Playwright (Chromium) against synthetic PDFs built with reportlab, and every change was re-run against all earlier scenarios:
-- 143 transactions over 3 pages (letter-by-letter lines, right-aligned amounts, installments, wrapped descriptions) → all read, totals exact.
-- Installment series across 6 statements uploaded in any order, only the last one, or twice → one installment per period, totals exact.
-- Cut-off date in 6 layouts (same line, table, label-below, spaced letters, period range, missing) → never confused with Son Ödeme Tarihi.
-- Reconciliation: statement with prev balance, payment, late-posted purchase, installment, refund, interest/BSMV → "Tutuyor"; one undated fee line → exact diff, fixed via "Ekle".
-- Worldpuan detail section (split and glued layouts) → ignored; "Worldpuan kullanımı +50,00" inside the table still counts as a refund.
-- Mobile width (390px) with `showDirectoryPicker` removed → open/save JSON flow.
+End-to-end tests drive the real `index.html` in headless Chromium against **synthetic** statement PDFs (no real data anywhere; merchant names in fixtures are invented).
 
-Useful next step: commit these as `tests/` (a small Python script that generates the synthetic PDFs + Playwright checks). Use `/opt/pw-browsers` Chromium if present; Safari/WebKit was never tested (iOS needs 16.4+ for `DecompressionStream` and regex lookbehind).
+```bash
+pip install -r tests/requirements.txt
+python -m playwright install chromium      # skip if Chromium is already available (e.g. /opt/pw-browsers)
+python tests/run_tests.py                   # all tests, ~2-3 min
+python tests/run_tests.py taksit            # only tests whose name contains "taksit"
+VERBOSE=1 python tests/run_tests.py         # print tracebacks
+```
+
+- `tests/fixtures.py` generates the PDFs into `tests/out/` (git-ignored) with reportlab. It needs a TTF with Turkish glyphs; it finds DejaVu/Arial automatically, or set `TEST_FONT=/path/font.ttf`.
+- `tests/run_tests.py` has one function per scenario (`@test`). Each test opens a fresh page (`App` helper), fixes the clock to 2026-09-28 (installment past/future split depends on "today"), imports files, and asserts on visible UI text or on in-page state (`history`, `raw`, `pdfMissed`, …) via `page.evaluate`.
+- **Run the whole suite before every commit that touches `index.html`.** The reconciliation tests ("Tutuyor") and exact totals are the main guard against parser regressions.
+- When fixing a new statement layout: add a generator to `fixtures.py` reproducing the layout with invented names/amounts, add a test with the expected totals, see it fail, then fix.
+- The tests were mutation-checked: breaking payment detection or short-keyword word boundaries makes tests fail.
+
+Scenarios covered: 143-transaction 3-page statement (letter-by-letter lines, wrapped descriptions); installment formats and rotated/vertical margin text; "+" payments/refunds; cut-off date in 6 layouts; statement-period grouping with late-posted purchases; installment series in order, shuffled, last-only and duplicate upload; reconciliation (match, exact diff + "Ekle", no previous balance); real-statement layout with bonus-point column, multi-amount installment lines and Worldpuan sections (split and glued); repair of records saved by older versions; multi-file upload with encrypted + broken files (password asked once); category matching and rule merge; category exclusion + date range; donut chart click; merchant analysis scopes and click-to-analyze from every list; phone open/save/reopen flow; nothing written to browser storage.
+
+Not covered: Safari/WebKit (iOS needs 16.4+ for `DecompressionStream` and regex lookbehind), real bank PDFs other than the layouts above, the desktop folder picker (`showDirectoryPicker` can't be automated; tests bypass it).
 
 ## Deployment
 

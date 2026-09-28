@@ -10,3 +10,7 @@ harcama-verisi*.json
 Thumbs.db
 .vscode/
 .idea/
+
+# Test çıktıları (sentetik PDF ve indirilen dosyalar)
+tests/out/
+__pycache__/
