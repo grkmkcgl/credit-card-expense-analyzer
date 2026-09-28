@@ -26,6 +26,7 @@ Files are never uploaded anywhere; parsing and calculations run in the browser, 
 - Ödeme, iade, puan (Worldpuan vb.) bölümlerini ayırma
 - Ekstre kontrolü: hesaplanan tutarı dönem borcuyla karşılaştırma
 - Otomatik kategori (düzenlenebilir kurallar), kategoriyi toplamdan çıkarma
+- Kategori kurallarını ve yer seçimlerini dosya ile başkasıyla paylaşma ve birleştirme (işlem/tutar paylaşılmaz; eklenecekler önce listelenir, onaylananlar kaydedilir)
 - Çubuk ve pasta grafik, tarih aralığı analizi, yer bazında harcama analizi
 
 ## Geliştirme / Development
@@ -40,11 +41,14 @@ Sentetik ekstre PDF'leri üretip aracı Chromium'da uçtan uca test eder. Ayrın
 
 ## Canlı sayfa / Live page
 
-Depo gizli (private) tutulur. Canlı sayfa için depo Cloudflare Pages veya Netlify'a bağlanır; `main` dalına yapılan her değişiklik otomatik yayınlanır.
-The repo stays private; the live page is served by Cloudflare Pages or Netlify connected to this repo, auto-deploying every push to `main`.
+GitHub Pages, `.github/workflows/pages.yml` ile her push'ta yeniden kurulur:
+- `main` → sitenin kökü
+- diğer her branch → `/onizleme/<branch-adı>/` (`/` yerine `-`), liste: `/onizleme/`
 
-- Build command: *(boş / none)*
-- Output / publish directory: `/` (root)
+Böylece bir branch'teki değişiklik, `index.html` indirmeden telefonda/bilgisayarda denenebilir. Yalnızca `index.html` yayınlanır.
+Ayar: *Settings → Pages → Source: Deploy from a branch → `gh-pages` / (root)*. `gh-pages` branch'i otomatik yazılır, elle değiştirmeyin.
+
+The site is rebuilt by the workflow on every push: `main` at the root, every other branch under `/onizleme/<branch>/`. Only `index.html` is published.
 
 Canlı sayfa bağlantıyı bilen herkes tarafından açılabilir, ancak yalnızca boş aracı gösterir; kullanıcı verileri cihazdan çıkmaz.
 Anyone with the link can open the page, but it is only the empty tool; user data never leaves the device.

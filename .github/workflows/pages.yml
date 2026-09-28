@@ -1,0 +1,69 @@
+# GitHub Pages: main sitenin kökünde, diğer her branch /onizleme/<branch>/ altında yayınlanır.
+# Site her seferinde tüm branch'lerden yeniden kurulur ve gh-pages branch'ine yazılır;
+# silinen branch'in önizlemesi bir sonraki çalışmada kalkar.
+# Yalnızca index.html kopyalanır; kayıt dosyaları, ekstreler ve testler yayına girmez.
+# Ayar: Settings → Pages → Source: "Deploy from a branch", Branch: gh-pages, / (root).
+name: Pages
+
+on:
+  push:
+    branches-ignore: [gh-pages]
+  delete:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Siteyi kur
+        run: |
+          set -euo pipefail
+          site="$RUNNER_TEMP/site"
+          mkdir -p "$site/onizleme"
+          touch "$site/.nojekyll"
+          default="${{ github.event.repository.default_branch }}"
+          git show "origin/$default:index.html" > "$site/index.html"
+
+          links=""
+          for ref in $(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin); do
+            case "$ref" in HEAD|gh-pages|"$default") continue;; esac
+            git cat-file -e "origin/$ref:index.html" 2>/dev/null || continue
+            # Klasör adı: yalnızca harf, rakam, . _ - ("/" → "-")
+            safe=$(printf '%s' "$ref" | tr '/' '-' | tr -c 'A-Za-z0-9._-' '-')
+            mkdir -p "$site/onizleme/$safe"
+            git show "origin/$ref:index.html" > "$site/onizleme/$safe/index.html"
+            when=$(git log -1 --format=%cd --date=format:'%d.%m.%Y %H:%M' "origin/$ref")
+            links="$links<li><a href=\"$safe/\">$safe</a> <small>($when)</small></li>"
+          done
+
+          cat > "$site/onizleme/index.html" <<EOF
+          <!doctype html><html lang="tr"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>Önizlemeler</title>
+          <style>body{background:#000;color:#eee;font:16px system-ui,sans-serif;margin:24px}a{color:#3fb8a8}</style>
+          </head><body><h1>Branch önizlemeleri</h1>
+          <p><a href="../">Ana sürüm ($default)</a></p>
+          <ul>${links:-<li>Başka branch yok.</li>}</ul></body></html>
+          EOF
+
+      - name: gh-pages branch'ine yaz
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/site"
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Pages: ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
