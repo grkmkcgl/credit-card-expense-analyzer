@@ -299,6 +299,7 @@ def _write_json(name, obj):
 def kategori_paylas_disa_aktar(b, info):
     a = App(b); a.import_("arti.pdf")
     a.ev("()=>{$('rules').value+='\\nHobi: ORNEKHOBI';overrides['ORNEK BUTIK']='Giyim';render()}")
+    a.pg.click("#rulesFold > summary")
     with a.pg.expect_download() as dl:
         a.pg.click("#shareCats")
     d = dl.value
@@ -471,10 +472,39 @@ def harcama_analizi_listelerden_acilir(b, info):
         if row.get_attribute("aria-expanded") != "true": row.click(); a.pg.wait_for_timeout(100)
         a.pg.locator("#cats .catlist button[data-an]").filter(has_text="CANKAYA").first.click(); a.pg.wait_for_timeout(150)
         eq(a.ev("$('q').value"), "ege pide", f"kategori listesinden ({view})")
+    a.pg.click("#allFold > summary")
     for sel in ["#top", "#alltx"]:
         a.pg.fill("#q", ""); a.pg.dispatch_event("#q", "input")
         a.pg.locator(sel + " button[data-an]").first.click(); a.pg.wait_for_timeout(150)
         assert a.ev("$('q').value"), f"{sel} listesinden analiz açılmadı"
+    a.close()
+
+
+@test
+def katlanir_bolumler(b, info):
+    a = App(b); a.import_("arti.pdf")
+    for fid in ("allFold", "unkFold", "monthsFold", "rulesFold"):
+        eq(a.ev(f"$('{fid}').open"), False, f"{fid} başta kapalı")
+    assert not a.pg.is_visible("#alltx"), "kapalıyken tablo görünmemeli"
+    n = a.ev("$('alltx').rows.length")
+    assert n > 0
+    eq(a.text("#allCount"), f"({n} işlem)", "başlıktaki sayı")
+    unk = a.ev("[...document.querySelectorAll('#unk select')].length")
+    eq(a.text("#unkCount"), f"({unk})" if unk else "", "kategorisizler sayısı")
+    months = a.ev("$('months').querySelectorAll('.mrow').length")
+    assert months > 0
+    eq(a.text("#monthsCount"), f"({months} dönem)", "dönem sayısı")
+    cats = a.ev("new Set($('rules').value.split('\\n').filter(l=>l.indexOf(':')>0).map(l=>l.slice(0,l.indexOf(':')).trim())).size")
+    eq(a.text("#rulesCount"), f"({cats} kategori)", "kategori sayısı")
+    a.pg.click("#allFold > summary"); a.pg.wait_for_timeout(100)
+    assert a.pg.is_visible("#alltx"), "açınca tablo görünmeli"
+    a.pg.select_option("#alltx select >> nth=0", "Market"); a.pg.wait_for_timeout(150)
+    eq(a.ev("$('allFold').open"), True, "yeniden çizimde açık kalmalı")
+    a.pg.click("#allFold > summary"); a.pg.wait_for_timeout(100)
+    eq(a.ev("$('allFold').open"), False, "tekrar tıklayınca kapanmalı")
+    _preview(a, _write_json("paylas_a.json", SHARE_A))
+    eq(a.ev("$('rulesFold').open"), True, "içe aktarma önizlemesi kural bölümünü açmalı")
+    assert a.pg.is_visible("#impApply")
     a.close()
 
 

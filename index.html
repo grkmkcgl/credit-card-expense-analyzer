@@ -80,6 +80,15 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--mustard);outli
 .row:hover{background:var(--paper)}
 .row .chev{color:var(--muted);font-size:.8rem;transition:transform .15s}
 .row[aria-expanded=true] .chev{transform:rotate(90deg)}
+details.fold{margin-top:32px}
+details.fold>summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;border-radius:6px}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary h2{margin:0}
+details.fold>summary small{color:var(--muted);font-weight:400}
+details.fold>summary .chev{color:var(--muted);font-size:.8rem;transition:transform .15s}
+details.fold[open]>summary .chev{transform:rotate(90deg)}
+details.fold[open]>summary{margin-bottom:10px}
+details.fold>summary:focus-visible{outline:3px solid var(--mustard);outline-offset:2px}
 .catlist{background:var(--paper);border-bottom:1px solid var(--line);padding:4px 10px 10px 28px}
 .catlist td{font-size:.85rem}
 .pct{color:var(--muted);font-size:.85rem;min-width:44px;text-align:right}
@@ -194,23 +203,26 @@ window.libsReady=(async()=>{
 <datalist id="qList"></datalist>
 <div id="qOut"></div>
 
-<h2>Dönemlere göre</h2>
+<details class="fold" id="monthsFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Dönemlere göre <small id="monthsCount"></small></h2></summary>
 <p><small>Kredi kartı işlemleri, hangi ekstrede göründülerse o ekstrenin dönemine yazılır. Banka bir harcamayı birkaç gün geç işlerse (ör. 25 Temmuz'daki harcama 26 Temmuz kesiminden sonra işlendiyse) sonraki ekstrede görünür; bu normaldir.</small></p>
 <p style="margin:0 0 6px"><small id="monthsNote" class="err"></small></p>
 <div id="months"></div>
+</details>
 
 <h2>En çok harcanan yerler</h2>
 <table id="top"></table>
 
-<h2>Tüm işlemler</h2>
+<details class="fold" id="allFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Tüm işlemler <small id="allCount"></small></h2></summary>
 <p><small>Otomatik atanan kategoriyi buradan değiştirebilirsiniz; aynı açıklamaya sahip tüm işlemler güncellenir. Yanlışlıkla eklenen bir satırı (ör. kart ödemesi) silebilirsiniz.</small></p>
 <div class="scroll"><table id="alltx"></table></div>
+</details>
 
-<h2>Kategorisi bulunamayanlar</h2>
+<details class="fold" id="unkFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategorisi bulunamayanlar <small id="unkCount"></small></h2></summary>
 <p><small>Bir kategori seçtiğinizde aynı açıklamaya sahip tüm işlemler güncellenir.</small></p>
 <table id="unk"></table>
+</details>
 
-<h2>Kategori kuralları</h2>
+<details class="fold" id="rulesFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategori kuralları <small id="rulesCount"></small></h2></summary>
 <p><small>Her satır: <code>Kategori: ANAHTAR1, ANAHTAR2</code>. Açıklamada anahtar kelime geçerse o kategoriye atanır. Düzenleyip yeniden uygulayabilirsiniz.</small></p>
 <textarea id="rules" rows="12"></textarea>
 <button class="ghost" id="reapply">Kuralları uygula</button>
@@ -219,6 +231,7 @@ window.libsReady=(async()=>{
 <label class="ghost" style="display:inline-block;color:var(--teal);border:1px solid var(--teal);border-radius:8px;padding:8px 14px;cursor:pointer">Kategorileri içe aktar<input type="file" id="importCats" accept=".json,application/json" style="display:none"></label>
 <p id="shareMsg"></p>
 <div id="sharePreview" class="hide"></div>
+</details>
 </section>
 </main>
 
@@ -1208,6 +1221,7 @@ function render(){
   const curM=iso(new Date()).slice(0,7);
   const past=Object.entries(byM).sort().filter(([k])=>k<=curM).slice(-12), fut=Object.entries(byM).sort().filter(([k])=>k>curM);
   const ms=[...past,...fut], mx=Math.max(...ms.map(m=>m[1]),1);
+  $("monthsCount").textContent=ms.length?`(${ms.length} dönem)`:"";
   $("months").innerHTML=ms.length?ms.map(([k,v])=>{return `<div class="mrow"><span>${periodLabel(k,true)}</span><div class="bar" style="width:${v/mx*100}%;${k===p?"background:var(--mustard)":k>curM?"background:transparent;border:1px dashed var(--teal)":""}"></div><b style="text-align:right">${fmt(v)}</b></div>`}).join(""):"<small>Tarih sütunu okunamadı.</small>";
 
   const byD={}; tx.forEach(t=>{const k=norm(t.desc);byD[k]=byD[k]||{desc:t.desc,sum:0,n:0,cat:t.inst?`Taksit · ${t.sub}`:t.cat,sub:t.sub};byD[k].sum+=t.amt;byD[k].n++});
@@ -1215,10 +1229,13 @@ function render(){
   $("top").innerHTML=all.slice(0,10).map(d=>`<tr><td><button class="linkish" data-an="${esc(d.desc)}" title="Bu harcamayı analiz et">${esc(d.desc)}</button><br><small>${esc(d.cat)}, ${d.n} işlem</small></td><td class="n"><b>${fmt(d.sum)}</b></td></tr>`).join("");
 
   const catNames=[...new Set(rules.map(r=>r.cat))];
+  $("rulesCount").textContent=`(${catNames.length} kategori)`;
   const unk=all.filter(d=>d.sub==="Diğer"&&d.sum>0);
+  $("unkCount").textContent=unk.length?`(${unk.length})`:"";
   $("unk").innerHTML=unk.length?unk.map(d=>`<tr><td>${esc(d.desc)}<br><small>${d.n} işlem</small></td><td class="n">${fmt(d.sum)}</td><td><select data-k="${esc(norm(d.desc))}"><option value="">Seç…</option>${catNames.map(c=>`<option>${esc(c)}</option>`).join("")}</select></td></tr>`).join(""):"<tr><td><small>Hepsi kategorilendi.</small></td></tr>";
   const catOpts=[...new Set([...catNames,"Diğer"])];
   const list=tx.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  $("allCount").textContent=`(${list.length} işlem)`;
   $("alltx").innerHTML=list.map(t=>`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><button class="linkish" data-an="${esc(t.desc)}" title="Bu harcamayı analiz et">${esc(t.desc)}</button>${t.inst?`<br><small>${esc(t.sub)} · ${t.inst.n}/${t.inst.m}. taksit${t.inst.total?` (toplam ${fmt(t.inst.total)})`:""}${t.pdate&&t.pdate.slice(0,7)!==t.date.slice(0,7)?` · alışveriş ${toDate(t.pdate).toLocaleDateString("tr-TR")}`:""}${t.est==="past"?" · özette yok, seriden hesaplandı":t.est==="future"?" · planlanan, henüz özette yok":""}</small>`:t.note?`<br><small>${esc(t.note)}</small>`:""}</td><td><select data-k="${esc(norm(t.desc))}">${catOpts.map(c=>`<option${c===t.sub?" selected":""}>${esc(c)}</option>`).join("")}</select></td><td class="n">${fmt(t.amt)}</td><td>${t.est?"":`<button class="x" data-id="${esc(t.id)}" title="Bu işlemi sil">Sil</button>`}</td></tr>`).join("");
   $("alltx").querySelectorAll("select").forEach(s=>s.addEventListener("change",()=>{if(s.value==="Diğer")delete overrides[s.dataset.k];else overrides[s.dataset.k]=s.value;save();render()}));
   $("alltx").querySelectorAll("button.x").forEach(b=>b.addEventListener("click",()=>{history=history.filter(t=>t.id!==b.dataset.id);expandInstallments();save();render()}));
@@ -1254,7 +1271,7 @@ $("shareCats").addEventListener("click",()=>{
 });
 $("importCats").addEventListener("change",async e=>{
   const f=e.target.files[0]; e.target.value=""; if(!f)return;
-  closeSharePreview();
+  closeSharePreview(); $("rulesFold").open=true;
   let plan;
   try{plan=planImport(JSON.parse(await f.text()))}
   catch(err){$("shareMsg").innerHTML='<span class="err">Bu dosya okunamadı. "Kategorileri paylaş" ile indirilmiş bir dosya veya harcama-verisi.json seçin.</span>';return}
