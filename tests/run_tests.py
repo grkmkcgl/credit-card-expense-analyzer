@@ -481,6 +481,29 @@ def harcama_analizi_listelerden_acilir(b, info):
 
 
 @test
+def veri_yuklenince_sade_ust_kisim_ve_ozet_kartlari(b, info):
+    a = App(b)
+    assert a.pg.is_visible("#how") and not a.pg.is_visible("#toolbar"), "boşken adımlar görünmeli"
+    a.import_("wp_ayri.pdf")
+    for sel in ["#folderPanel", "#drop", "#how", ".intro"]:
+        assert not a.pg.is_visible(sel), f"veri varken {sel} gizlenmeli"
+    assert a.pg.is_visible("#toolbar") and a.pg.is_visible("#hist"), "araç çubuğu ve kayıt bölümü görünmeli"
+    a.period("2026-08")
+    k = a.text("#kpis"); assert "Tutuyor" in k and "En büyük kategori" in k, k
+    a.pg.click("#kpiRecon"); a.pg.wait_for_timeout(100)
+    assert a.ev("document.querySelector('#recon details').open"), "kart ekstre kontrolünü açmalı"
+    a.period("")
+    assert "Gelecek taksitler" in a.text("#kpis"), a.text("#kpis")
+    # Sayfaya bırakılan dosya da yüklenir
+    data = list(open(f("arti.pdf"), "rb").read())
+    a.ev("""d=>{const dt=new DataTransfer();dt.items.add(new File([new Uint8Array(d)],"arti.pdf",{type:"application/pdf"}));
+      document.body.dispatchEvent(new DragEvent("drop",{dataTransfer:dt,bubbles:true,cancelable:true}))}""", data)
+    a.pg.wait_for_function("!document.getElementById('setup').classList.contains('hide')", timeout=20000)
+    assert not a.ev("document.body.classList.contains('dragging')")
+    a.close()
+
+
+@test
 def katlanir_bolumler(b, info):
     a = App(b); a.import_("arti.pdf")
     for fid in ("allFold", "unkFold", "monthsFold", "rulesFold"):

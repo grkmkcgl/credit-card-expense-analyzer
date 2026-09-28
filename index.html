@@ -16,20 +16,77 @@ html{color-scheme:dark}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:900px;margin:0 auto;padding:24px 16px 64px}
 h1{font-size:1.9rem;line-height:1.15;margin:0 0 6px;letter-spacing:-.02em}
-h2{font-size:1.15rem;margin:32px 0 10px}
+h2{font-size:1.15rem;margin:40px 0 12px;letter-spacing:-.01em}
 p{margin:0 0 10px;max-width:68ch}
 code{background:var(--field);padding:1px 5px;border-radius:4px}
 .lock{display:flex;gap:10px;align-items:flex-start;background:#0C2420;border:1px solid #1C4A42;color:#CFE9E3;padding:14px 16px;border-radius:10px;margin:16px 0 24px;font-size:.93rem}
 .lock b{color:#fff}
-.drop{border:2px dashed var(--teal);border-radius:12px;padding:28px 16px;text-align:center;background:var(--paper);cursor:pointer;display:block}
+.drop{position:relative;border:2px dashed var(--teal);border-radius:12px;padding:24px 16px;text-align:center;background:var(--paper);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;margin:14px 0 0;color:var(--ink);font-size:1rem}
+.drop:hover,body.dragging .drop{background:#0C2420}
 .drop:focus-within{outline:3px solid var(--mustard)}
-.drop input{display:block;margin:12px auto 0;color:var(--muted)}
+.drop .num{margin-bottom:4px}
+.drop .btn{margin:10px 0 2px}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0)}
 .panel{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:14px}
 label{font-size:.88rem;color:var(--muted);display:block;margin-bottom:4px}
 select,input[type=number],input[type=date],textarea{font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;width:100%;background:var(--field);color:var(--ink)}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-button{font:inherit;font-weight:600;background:var(--teal);color:#001512;border:0;border-radius:8px;padding:10px 18px;cursor:pointer;margin-top:14px}
-button.ghost{background:transparent;color:var(--teal);border:1px solid var(--teal)}
+button,.btn{display:inline-block;font:inherit;font-weight:600;background:var(--teal);color:#001512;border:0;border-radius:8px;padding:10px 18px;cursor:pointer;margin-top:14px;line-height:1.5}
+button.ghost,.btn.ghost{background:transparent;color:var(--teal);border:1px solid var(--teal)}
+button:hover,.btn:hover{filter:brightness(1.12)}
+label.btn{margin:14px 8px 0 0}
+button.danger{color:var(--red);border-color:var(--red)}
+.head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.head h1{margin:0}
+.badge{display:none;font-size:.8rem;color:#CFE9E3;background:#0C2420;border:1px solid #1C4A42;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.stephead{display:flex;gap:12px;align-items:flex-start}
+.stephead p{margin:0}
+.step>button,.step>.btn{margin-left:40px}
+.num{flex:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--teal);color:#001512;font-weight:700;font-size:.9rem}
+.how{list-style:none;counter-reset:how;padding:0;margin:28px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.how li{counter-increment:how;border:1px solid var(--line);border-radius:10px;padding:14px 14px 12px}
+.how li::before{content:counter(how);display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:1px solid var(--muted);color:var(--muted);font-size:.8rem;font-weight:700;margin-bottom:8px}
+.how b{display:block}
+.how small{display:block;margin-top:2px}
+.toolbar{display:none;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px 10px 16px;margin-top:10px}
+.tbinfo{display:flex;flex-direction:column;min-width:0}
+.tbinfo b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbact{display:flex;gap:8px;flex-wrap:wrap}
+.tbact button{margin:0;padding:7px 14px;font-size:.9rem}
+.has-data .intro,.has-data #folderPanel,.has-data #mobilePanel,.has-data #drop,.has-data #how{display:none!important}
+.has-data .toolbar{display:flex}
+.has-data .badge{display:inline-block}
+body.dragging::after{content:"Dosyaları bırakın";position:fixed;inset:12px;z-index:20;display:flex;align-items:center;justify-content:center;border:3px dashed var(--teal);border-radius:16px;background:rgba(0,21,18,.88);color:var(--ink);font-size:1.4rem;font-weight:700;pointer-events:none}
+#msg:not(:empty){margin:14px 0 0}
+.flist{border:1px solid var(--line);border-radius:10px;margin:8px 0 6px;overflow:hidden}
+.frow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid var(--line);font-size:.9rem}
+.frow:last-child{border-bottom:0}
+.frow>div:first-child{min-width:0;overflow-wrap:anywhere}
+.fchk{text-align:right;white-space:nowrap}
+.periodbar{display:flex;align-items:center;gap:12px;margin-top:24px}
+.periodbar label{margin:0;white-space:nowrap}
+.periodbar select{max-width:380px}
+.hero{display:flex;flex-wrap:wrap;gap:16px 24px;align-items:flex-end;justify-content:space-between;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:16px}
+.herosum{min-width:0}
+.hero h2{margin:0 0 2px;font-size:.95rem;color:var(--muted);font-weight:600;letter-spacing:0}
+.kpis{flex:1 1 300px;max-width:520px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.kpis:empty{display:none}
+.kpi{display:block;margin:0;text-align:left;background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-weight:400}
+.kpi small{display:block;line-height:1.35}
+.kpi b{display:block;font-size:1.2rem;letter-spacing:-.01em;margin:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kpi.good b{color:var(--teal)}
+.kpi.bad b{color:var(--red)}
+button.kpi:hover{border-color:var(--muted);filter:none}
+.search{display:flex;gap:8px}
+.search input{flex:1;min-width:0;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink)}
+.search button{margin:0}
+.top td{padding:9px 4px}
+.top .tdot{width:18px;padding-right:0;vertical-align:top;padding-top:14px}
+.top .dot{display:inline-block}
+.mbar{height:4px;border-radius:2px;background:var(--line);margin-top:6px;overflow:hidden}
+.mbar span{display:block;height:100%;border-radius:2px}
+.folds{margin-top:40px;border-top:1px solid var(--line)}
+.total,.n,td.n,.row b,.pct,.mrow b,.qcard b,.kpi b,.frow{font-variant-numeric:tabular-nums}
 button.x{margin:0;padding:3px 9px;font-size:.8rem;background:transparent;color:var(--muted);border:1px solid var(--line)}
 button.x:hover{color:var(--red);border-color:var(--red)}
 button:focus-visible,select:focus-visible{outline:3px solid var(--mustard);outline-offset:2px}
@@ -67,20 +124,32 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--mustard);outli
 .qcard b{display:block;font-size:1.25rem;letter-spacing:-.01em}
 .qcard small{display:block}
 .qtip{background:#0C2420;border:1px solid #1C4A42;color:#CFE9E3;border-radius:10px;padding:10px 12px;margin:10px 0;font-size:.92rem}
-.linkish{background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;font-weight:inherit;text-align:left;cursor:pointer;text-decoration:underline dotted var(--muted);text-underline-offset:3px}
-.linkish:hover{color:var(--teal)}
+.linkish{background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;font-weight:inherit;text-align:left;cursor:pointer;text-decoration:none;text-underline-offset:3px}
+.linkish:hover{color:var(--teal);text-decoration:underline;filter:none}
 .excl{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:10px 0 0;font-size:.9rem}
 .excl button{margin:0 0 0 8px;padding:3px 10px;font-size:.8rem}
 .rangebox{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 .presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .presets button{margin:0;padding:4px 10px;font-size:.8rem}
-.row{display:grid;grid-template-columns:14px 1fr auto auto 12px;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:.95rem}
+.row{display:grid;grid-template-columns:14px 1fr auto auto 12px;grid-template-areas:"dot nm pct amt chev";gap:2px 10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:.95rem}
+.row .dot{grid-area:dot}.row .nm{grid-area:nm}.row .pct{grid-area:pct}.row .amt{grid-area:amt;text-align:right}.row .chev{grid-area:chev}
+@media (max-width:640px){
+.row{grid-template-columns:12px 1fr auto 12px;grid-template-areas:"dot nm amt chev" ". nm pct .";align-items:start}
+.row .dot{margin-top:5px}
+.row .pct{min-width:0}
+.inc{align-items:flex-start;padding-top:9px}
+.hero{padding:16px}
+.kpis{max-width:none}
+.step>button,.step>.btn{margin-left:0}
+.periodbar{flex-direction:column;align-items:stretch;gap:4px}
+.periodbar select{max-width:none}
+}
 .dot{width:12px;height:12px;border-radius:3px}
 .row{cursor:pointer;width:100%;background:none;color:inherit;border:0;border-bottom:1px solid var(--line);margin:0;font:inherit;font-weight:400;text-align:left;border-radius:0;padding:9px 4px}
-.row:hover{background:var(--paper)}
+.row:hover{background:var(--paper);filter:none}
 .row .chev{color:var(--muted);font-size:.8rem;transition:transform .15s}
 .row[aria-expanded=true] .chev{transform:rotate(90deg)}
-details.fold{margin-top:32px}
+details.fold{margin:0;padding:14px 0;border-bottom:1px solid var(--line)}
 details.fold>summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;border-radius:6px}
 details.fold>summary::-webkit-details-marker{display:none}
 details.fold>summary h2{margin:0}
@@ -101,7 +170,7 @@ td select{padding:4px;font-size:.85rem;min-width:130px}
 .scroll{max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:0 8px}
 .err{color:var(--red);font-weight:600}
 .ok{color:var(--teal);font-weight:600}
-.hide{display:none}
+.hide{display:none!important}
 small{color:var(--muted)}
 details summary{cursor:pointer}
 </style>
@@ -127,40 +196,55 @@ window.libsReady=(async()=>{
 <noscript><div style="background:#2A2208;border:1px solid #F0B93A;color:#F7E3B0;padding:14px 16px;margin:16px;border-radius:10px;font:16px/1.5 system-ui,sans-serif">
 <b>Bu sayfa şu an çalıştırılamıyor.</b> Dosya bir önizleme penceresinde açılmış (ör. iPhone'daki Dosyalar uygulaması). Sayfayı Safari'de bir web adresinden açın.</div></noscript>
 <main>
+<header class="head">
 <h1>Harcama analizi</h1>
-<p>Bankanızdan indirdiğiniz Excel veya CSV dökümünü seçin; harcamalar otomatik kategorilere ayrılsın, siz sadece tanınmayanları düzeltin.</p>
+<span class="badge" title="İnternet bağlantısı kullanılmaz, tarayıcıda hiçbir şey saklanmaz. Kayıtlar yalnızca harcama-verisi.json dosyanızda.">🔒 Çevrimdışı</span>
+</header>
+<div class="intro">
+<p>Kredi kartı ekstrenizi (PDF) ya da bankanızdan indirdiğiniz Excel/CSV dökümünü seçin; harcamalar otomatik kategorilere ayrılsın, siz sadece tanınmayanları düzeltin.</p>
 
 <div class="lock" role="note">
 <span aria-hidden="true">🔒</span>
 <span><b>İnternet bağlantısı gerekmez, tarayıcıda hiçbir şey saklanmaz.</b> Tüm kayıtlar sadece sizin <code>harcama-verisi.json</code> dosyanızda tutulur. Bilgisayarda Chrome veya Edge ile açın; telefonda da çalışır.</span>
 </div>
+</div>
 
-<section class="panel" id="folderPanel">
-<p><b>Adım 1: Veri klasörünü seçin</b><br><small id="folderInfo">Her açılışta bir kez seçmeniz gerekir (ör. Masaüstü/harcamalar). Tarayıcı izni hatırlamaz, çünkü hiçbir şey saklamıyor.</small></p>
+<section class="panel step" id="folderPanel">
+<div class="stephead"><span class="num" aria-hidden="true">1</span><p><b>Veri klasörünü seçin</b><br><small id="folderInfo">Her açılışta bir kez seçmeniz gerekir (ör. Masaüstü/harcamalar). Tarayıcı izni hatırlamaz, çünkü hiçbir şey saklamıyor.</small></p></div>
 <button id="pick">Klasör seç</button>
 </section>
 
-<section class="panel hide" id="mobilePanel">
-<p><b>Adım 1: Kayıt dosyanızı açın</b><br><small>Telefon tarayıcıları bir klasöre doğrudan yazamaz. Bu yüzden kayıtlar <code>harcama-verisi.json</code> dosyasında tutulur: açılışta dosyayı seçersiniz, değişiklikten sonra "Kaydet" ile güncel halini indirirsiniz. İlk kez kullanıyorsanız "Yeni başla"ya basın.</small></p>
-<label class="ghost" style="display:inline-block;margin:14px 8px 0 0;color:var(--teal);font-weight:600;cursor:pointer;border:1px solid var(--teal);border-radius:8px;padding:10px 18px">Kayıt dosyasını aç<input type="file" id="openData" accept=".json,application/json" style="display:none"></label>
+<section class="panel step hide" id="mobilePanel">
+<div class="stephead"><span class="num" aria-hidden="true">1</span><p><b>Kayıt dosyanızı açın</b><br><small>Telefon tarayıcıları bir klasöre doğrudan yazamaz. Bu yüzden kayıtlar <code>harcama-verisi.json</code> dosyasında tutulur: açılışta dosyayı seçersiniz, değişiklikten sonra "Kaydet" ile güncel halini indirirsiniz. İlk kez kullanıyorsanız "Yeni başla"ya basın.</small></p></div>
+<label class="btn ghost">Kayıt dosyasını aç<input type="file" id="openData" accept=".json,application/json" style="display:none"></label>
 <button class="ghost" id="fresh">Yeni başla</button>
 <p id="mobileInfo" style="margin-top:10px"><small></small></p>
 </section>
+
+<div class="toolbar" id="toolbar">
+<span class="tbinfo"><b id="tbWhere"></b><small id="tbCount"></small></span>
+<span class="tbact"><button id="tbAdd">+ Ekstre ekle</button><button class="ghost" id="tbSwitch">Klasör değiştir</button></span>
+</div>
 
 <div id="saveBar" class="hide" style="position:sticky;top:0;z-index:5;background:#2A2208;border:1px solid var(--mustard);color:#F7E3B0;border-radius:10px;padding:10px 14px;margin-top:14px;display:none;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
 <span>Kaydedilmemiş değişiklikler var.</span><button id="dl" style="margin:0;background:var(--mustard);color:#1A1400">Kaydet (dosyayı indir)</button>
 </div>
 
 <label class="drop hide" id="drop">
-<b>Adım 2: Döküm dosyasını seçin</b><br><small>PDF hesap özeti, .xlsx, .xls veya .csv. Birden fazla ekstreyi aynı anda seçebilirsiniz.</small>
-<input type="file" id="file" accept=".pdf,.xlsx,.xls,.csv" multiple>
+<span class="num" aria-hidden="true">2</span>
+<b>Ekstre veya döküm dosyalarını seçin</b>
+<small>PDF hesap özeti (şifreli olabilir), .xlsx, .xls veya .csv. Birden fazla dosyayı aynı anda seçebilirsiniz.</small>
+<span class="btn">Dosya seç</span>
+<small>veya dosyaları buraya sürükleyin</small>
+<input type="file" id="file" class="vh" accept=".pdf,.xlsx,.xls,.csv" multiple>
 </label>
-<p id="msg"></p>
 
-<section class="panel hide" id="hist">
-<p><b>Kayıtlı geçmiş</b><br><small id="histInfo"></small></p>
-<button class="ghost" id="clr" style="color:var(--red);border-color:var(--red)">Geçmişi sil</button>
-</section>
+<ol class="how" id="how">
+<li><b>Kayıt yerini seçin</b><small>Bilgisayarda bir klasör, telefonda <code>harcama-verisi.json</code> dosyası.</small></li>
+<li><b>Ekstreleri yükleyin</b><small>PDF hesap özeti ya da bankanın Excel/CSV dökümü; birden fazlası aynı anda.</small></li>
+<li><b>Sonuçları inceleyin</b><small>Kategoriler, taksitler, dönemler ve ekstre borcuyla karşılaştırma.</small></li>
+</ol>
+<div id="msg"></div>
 
 <section id="setup" class="panel hide">
 <p><b>Sütunları kontrol edin.</b> Otomatik tahmin ettim; yanlışsa düzeltin.</p>
@@ -178,39 +262,42 @@ window.libsReady=(async()=>{
 </section>
 
 <section id="out" class="hide">
-<div style="margin-top:24px"><label for="period">Dönem</label><select id="period"></select></div>
+<div class="periodbar"><label for="period">Dönem</label><select id="period"></select></div>
 <div id="rangeWrap" class="hide">
 <div class="rangebox"><div><label for="rFrom">Başlangıç</label><input type="date" id="rFrom"></div><div><label for="rTo">Bitiş</label><input type="date" id="rTo"></div></div>
 <div class="presets"><button class="ghost" data-pr="7">Son 7 gün</button><button class="ghost" data-pr="30">Son 30 gün</button><button class="ghost" data-pr="90">Son 3 ay</button><button class="ghost" data-pr="month">Bu takvim ayı</button><button class="ghost" data-pr="year">Bu yıl</button></div>
 <p style="margin-top:8px"><small>Tarih aralığında normal harcamalar işlem tarihine, taksitler ise faturalandıkları ekstrenin kesim tarihine göre sayılır.</small></p>
 </div>
-<h2 id="totalTitle">Toplam harcama</h2>
-<p style="margin:-4px 0 6px"><small>Kategorilerin solundaki kutucuğu kaldırarak o kategoriyi toplamdan çıkarabilirsiniz.</small></p>
+<div class="hero">
+<div class="herosum"><h2 id="totalTitle">Toplam harcama</h2>
 <p class="total" id="total"></p>
-<small id="range"></small>
+<small id="range"></small></div>
+<div class="kpis" id="kpis"></div>
+</div>
 <div id="exclInfo"></div>
 <div id="recon"></div>
-<div class="viewbar"><small id="viewHint">Harcama dağılımı</small>
+<div class="viewbar"><small id="viewHint">Kutucuğu kaldırarak bir kategoriyi toplamdan çıkarabilirsiniz.</small>
 <div class="seg" role="group" aria-label="Dağılım görünümü"><button id="vBar" aria-pressed="true">Çubuk</button><button id="vPie" aria-pressed="false">Pasta grafik</button></div></div>
 <div class="catview" id="catview">
 <div id="pieBox" class="hide"></div>
 <div><div class="strip" id="strip" aria-hidden="true"></div><div id="cats"></div></div>
 </div>
 
-<h2>Harcama analizi</h2>
-<p><small>Bir yerin ya da harcamanın adını yazın (ör. <i>ege pide</i>); tüm dönemlerde ne kadar harcadığınızı görün. Birden fazla yeri virgülle ayırabilirsiniz (ör. <i>yemeksepeti, getir</i>). Listelerdeki bir harcamanın adına tıklayarak da analiz açabilirsiniz.</small></p>
-<div style="display:flex;gap:8px"><input type="search" id="q" list="qList" placeholder="Harcama ara…" autocomplete="off" style="flex:1;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink)"><button class="ghost" id="qClear" style="margin:0">Temizle</button></div>
+<h2>En çok harcanan yerler</h2>
+<table id="top" class="top"></table>
+
+<h2>Harcama ara</h2>
+<p><small>Bir yerin adını yazın, tüm dönemlerdeki harcamanızı görün. Birden fazla yer için virgül kullanın. Listelerdeki adlara tıklayarak da açabilirsiniz.</small></p>
+<div class="search"><input type="search" id="q" list="qList" placeholder="Harcama ara… (ör. getir)" autocomplete="off"><button class="ghost" id="qClear">Temizle</button></div>
 <datalist id="qList"></datalist>
 <div id="qOut"></div>
 
+<div class="folds">
 <details class="fold" id="monthsFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Dönemlere göre <small id="monthsCount"></small></h2></summary>
 <p><small>Kredi kartı işlemleri, hangi ekstrede göründülerse o ekstrenin dönemine yazılır. Banka bir harcamayı birkaç gün geç işlerse (ör. 25 Temmuz'daki harcama 26 Temmuz kesiminden sonra işlendiyse) sonraki ekstrede görünür; bu normaldir.</small></p>
 <p style="margin:0 0 6px"><small id="monthsNote" class="err"></small></p>
 <div id="months"></div>
 </details>
-
-<h2>En çok harcanan yerler</h2>
-<table id="top"></table>
 
 <details class="fold" id="allFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Tüm işlemler <small id="allCount"></small></h2></summary>
 <p><small>Otomatik atanan kategoriyi buradan değiştirebilirsiniz; aynı açıklamaya sahip tüm işlemler güncellenir. Yanlışlıkla eklenen bir satırı (ör. kart ödemesi) silebilirsiniz.</small></p>
@@ -228,10 +315,16 @@ window.libsReady=(async()=>{
 <button class="ghost" id="reapply">Kuralları uygula</button>
 <p><small>Başka biriyle kategori paylaşmak için: "Kategorileri paylaş" yalnızca kuralları ve yer seçimlerini içeren bir dosya indirir (işlem ve tutar içermez). Karşı taraf bu dosyayı "Kategorileri içe aktar" ile açar; eklenecekler listelenir ve yalnızca onayladıkları kaydedilir.</small></p>
 <button class="ghost" id="shareCats">Kategorileri paylaş</button>
-<label class="ghost" style="display:inline-block;color:var(--teal);border:1px solid var(--teal);border-radius:8px;padding:8px 14px;cursor:pointer">Kategorileri içe aktar<input type="file" id="importCats" accept=".json,application/json" style="display:none"></label>
+<label class="btn ghost">Kategorileri içe aktar<input type="file" id="importCats" accept=".json,application/json" style="display:none"></label>
 <p id="shareMsg"></p>
 <div id="sharePreview" class="hide"></div>
 </details>
+
+<details class="fold" id="hist"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kayıtlı geçmiş</h2></summary>
+<p><small id="histInfo"></small></p>
+<button class="ghost danger" id="clr">Geçmişi sil</button>
+</details>
+</div>
 </section>
 </main>
 
@@ -347,7 +440,11 @@ function applyImport(plan,sel){
   sel.picks.forEach(i=>{overrides[plan.picks[i].desc]=plan.picks[i].cat});
   sel.conflicts.forEach(i=>{overrides[plan.conflicts[i].desc]=plan.conflicts[i].theirs});
 }
+let dataName="";
 function updateHistInfo(){
+  $("tbWhere").textContent=MOBILE?`📄 ${dataName||DATA_FILE}`:dir?`📁 ${dir.name}`:"";
+  $("tbSwitch").textContent=MOBILE?"Başka dosya aç":"Klasör değiştir";
+  $("tbCount").textContent=`${history.filter(t=>!t.est).length} işlem kayıtlı · ${Object.keys(statements).length} ekstre`;
   if(!history.length){$("histInfo").textContent="Henüz kayıt yok. İlk dökümünüzü yükleyin.";return}
   const ds=history.map(t=>t.date).filter(Boolean).sort();
   $("histInfo").textContent=`${history.length} işlem kayıtlı`+(ds.length?`, ${toDate(ds[0]).toLocaleDateString("tr-TR")} – ${toDate(ds.at(-1)).toLocaleDateString("tr-TR")}`:"")+". Yeni dökümleri yükledikçe sadece yeni işlemler eklenir.";
@@ -367,7 +464,7 @@ $("pick").addEventListener("click",async()=>{
 });
 $("clr").addEventListener("click",async()=>{
   if(!confirm(`Kayıtlı tüm işlemler silinsin mi? Kategori seçimleriniz ve kurallarınız korunur.`+(MOBILE?"":` Önceki hali "${PREV_FILE}" olarak kalır.`)))return;
-  history=[];await save();$("out").classList.add("hide");$("msg").textContent="İşlemler silindi. Özetleri yeniden yükleyebilirsiniz; kategori seçimleriniz korundu.";
+  history=[];await save();render();$("msg").textContent="İşlemler silindi. Özetleri yeniden yükleyebilirsiniz; kategori seçimleriniz korundu.";
 });
 function startMobile(info){
   mobileReady=true;
@@ -380,16 +477,30 @@ if(MOBILE){
   $("saveBar").style.display="none";
   $("openData").addEventListener("change",async e=>{
     const f=e.target.files[0]; if(!f)return;
-    try{applyData(JSON.parse(await f.text()));startMobile(`${f.name} açıldı.`)}
+    try{applyData(JSON.parse(await f.text()));dataName=f.name;startMobile(`${f.name} açıldı.`)}
     catch(err){$("msg").innerHTML='<span class="err">Bu dosya okunamadı. Bu araçla kaydedilmiş harcama-verisi.json dosyasını seçin.</span>'}
     e.target.value="";
   });
-  $("fresh").addEventListener("click",()=>{history=[];overrides={};lastMap=null;$("rules").value=DEFAULT_RULES;startMobile("Boş kayıtla başlandı. İşiniz bitince Kaydet'e basmayı unutmayın.")});
+  $("fresh").addEventListener("click",()=>{dataName="";history=[];overrides={};lastMap=null;$("rules").value=DEFAULT_RULES;startMobile("Boş kayıtla başlandı. İşiniz bitince Kaydet'e basmayı unutmayın.")});
   $("dl").addEventListener("click",downloadData);
   window.addEventListener("beforeunload",e=>{if(!$("saveBar").classList.contains("hide")){e.preventDefault();e.returnValue=""}});
 }
 
 
+$("tbAdd").addEventListener("click",()=>$("file").click());
+$("tbSwitch").addEventListener("click",()=>MOBILE?$("openData").click():$("pick").click());
+/* Dosyalar sayfanın herhangi bir yerine sürüklenip bırakılabilir */
+let dragDepth=0;
+const hasFiles=e=>e.dataTransfer&&[...e.dataTransfer.types].includes("Files");
+document.addEventListener("dragenter",e=>{if(!hasFiles(e))return;e.preventDefault();dragDepth++;document.body.classList.add("dragging")});
+document.addEventListener("dragover",e=>{if(hasFiles(e))e.preventDefault()});
+document.addEventListener("dragleave",e=>{if(!hasFiles(e))return;if(--dragDepth<=0){dragDepth=0;document.body.classList.remove("dragging")}});
+document.addEventListener("drop",e=>{
+  if(!hasFiles(e))return;
+  e.preventDefault(); dragDepth=0; document.body.classList.remove("dragging");
+  if($("drop").classList.contains("hide")){$("msg").innerHTML=`<span class="err">Önce ${MOBILE?"kayıt dosyanızı açın ya da \"Yeni başla\"ya basın":"veri klasörünü seçin"}.</span>`;return}
+  handleFiles([...e.dataTransfer.files]);
+});
 
 /* ---------- PDF okuma (tamamen cihazda) ---------- */
 const MONTHS=[["Ocak","OCAK","Oca","OCA"],["Şubat","ŞUBAT","SUBAT","Şub","ŞUB","Sub"],["Mart","MART","Mar","MAR"],["Nisan","NİSAN","NISAN","Nis","NİS","NIS"],["Mayıs","MAYIS","Mayis","May","MAY"],["Haziran","HAZİRAN","HAZIRAN","Haz","HAZ"],["Temmuz","TEMMUZ","Tem","TEM"],["Ağustos","AĞUSTOS","AGUSTOS","Ağu","AĞU","Agu","AGU"],["Eylül","EYLÜL","EYLUL","Eyl","EYL"],["Ekim","EKİM","EKIM","Eki","EKİ","EKI"],["Kasım","KASIM","Kasim","Kas","KAS"],["Aralık","ARALIK","Aralik","Ara","ARA"]];
@@ -796,8 +907,8 @@ function reconDiff(stmt){
   return Math.round((S.due-calc)*100)/100;
 }
 
-$("file").addEventListener("change",async e=>{
-  const files=[...e.target.files]; e.target.value="";
+$("file").addEventListener("change",e=>{const files=[...e.target.files]; e.target.value=""; handleFiles(files)});
+async function handleFiles(files){
   if(!files.length)return;
   $("msg").textContent="";
   /* Tek dosya: önizleme ve kontrol adımıyla */
@@ -826,16 +937,16 @@ $("file").addEventListener("change",async e=>{
   save(); render();
   const tot=k=>results.filter(r=>r.ok).reduce((s,r)=>s+(r[k]||0),0);
   const rowsHtml=results.map(r=>{
-    if(!r.ok)return `<tr><td>${esc(r.name)}</td><td colspan="3" class="err">${esc(r.err)}</td></tr>`;
+    if(!r.ok)return `<div class="frow"><div><b>${esc(r.name)}</b></div><div class="err" style="white-space:normal;text-align:right">${esc(r.err)}</div></div>`;
     const d=r.stmt?reconDiff(r.stmt):null;
-    const check=d==null?"<small>dönem borcu yok</small>":Math.abs(d)<1?'<span class="ok">Tutuyor</span>':`<span class="err">Fark ${fmt2(d)}</span>`;
-    return `<tr><td>${esc(r.name)}</td><td>${r.stmt?toDate(r.stmt).toLocaleDateString("tr-TR"):"–"}${r.warn?' <small class="err">(tahmini, kontrol edin)</small>':""}</td><td class="n">${r.added} yeni${r.dup?`<br><small>${r.dup} zaten kayıtlı</small>`:""}</td><td>${check}</td></tr>`;
+    const check=d==null?"<small>dönem borcu yok</small>":Math.abs(d)<1?'<span class="ok">✓ Tutuyor</span>':`<span class="err">Fark ${fmt2(d)}</span>`;
+    return `<div class="frow"><div><b>${esc(r.name)}</b><br><small>${r.stmt?`Kesim ${toDate(r.stmt).toLocaleDateString("tr-TR")}`:"Kesim tarihi yok"}${r.warn?' <span class="err">(tahmini, kontrol edin)</span>':""} · ${r.added} yeni${r.dup?`, ${r.dup} zaten kayıtlı`:""}</small></div><div class="fchk">${check}</div></div>`;
   }).join("");
   $("msg").innerHTML=`<span class="ok">${results.filter(r=>r.ok).length}/${files.length} dosya işlendi, ${tot("added")} yeni kayıt eklendi.</span>
-    <div class="scroll" style="margin-top:8px"><table><tr><td><b>Dosya</b></td><td><b>Kesim tarihi</b></td><td class="n"><b>İşlem</b></td><td><b>Ekstre kontrolü</b></td></tr>${rowsHtml}</table></div>
-    <small>Kesim tarihi tahmini olan ya da fark çıkan bir ekstreyi tek başına tekrar yükleyerek önizlemede kontrol edebilirsiniz; kayıtlı işlemler tekrar eklenmez.</small>`;
+    <div class="flist">${rowsHtml}</div>
+    <small>Kesim tarihi tahmini olan ya da fark çıkan bir ekstreyi tek başına yükleyip önizlemede kontrol edebilirsiniz; kayıtlı işlemler tekrar eklenmez.</small>`;
   $("msg").scrollIntoView({behavior:"smooth"});
-});
+}
 $("hdr").addEventListener("change",fillCols);
 
 function fillCols(){
@@ -1153,8 +1264,32 @@ function renderQuery(){
     ${names.length>1?`<p style="margin-top:10px"><small>Eşleşen ${names.length} farklı açıklama: ${names.slice(0,8).map(esc).join(", ")}${names.length>8?"…":""}. Yanlış eşleşme varsa aramayı daraltın.</small></p>`:""}
     <details style="margin-top:8px"><summary><small>Bu kapsamdaki işlemleri göster (${hits.length})</small></summary><div class="scroll" style="margin-top:6px"><table>${hits.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(t=>`<tr><td style="white-space:nowrap"><small>${toDate(t.date).toLocaleDateString("tr-TR")}</small></td><td>${esc(t.desc)}${t.inst?`<br><small>${t.inst.n}/${t.inst.m}. taksit</small>`:""}</td><td class="n">${fmt(t.amt)}</td></tr>`).join("")}</table></div></details>`;
 }
+/* Toplamın yanındaki özet kartları: seçili kapsama göre değişir */
+function renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross}){
+  const cards=[];
+  const card=(label,value,sub,cls="",attr="")=>`<${attr?"button":"div"} class="kpi ${cls}" ${attr}><small>${label}</small><b>${value}</b>${sub?`<small>${sub}</small>`:""}</${attr?"button":"div"}>`;
+  if(isRange){
+    const days=Math.max(1,Math.round((toDate(rt)-toDate(rf))/864e5)+1);
+    cards.push(card("Günlük ortalama",fmt(total/days),`${days} gün`));
+  }else if(p){
+    const list=Object.keys(statements).filter(k=>k.slice(0,7)===p).sort();
+    const diffs=list.map(reconDiff).filter(d=>d!=null);
+    if(diffs.length){
+      const bad=diffs.find(d=>Math.abs(d)>=1);
+      cards.push(card("Ekstre kontrolü",bad==null?"✓ Tutuyor":`Fark ${fmt2(bad)}`,bad==null?"Dönem borcuyla aynı":"Ayrıntı için tıklayın",bad==null?"good":"bad",'id="kpiRecon" title="Ekstre kontrolünü göster"'));
+    }
+  }else{
+    const n=new Set(tx.map(periodKey).filter(Boolean)).size;
+    if(n>1)cards.push(card("Dönem başına ortalama",fmt(total/n),`${n} dönem`));
+    if(upcoming.length)cards.push(card("Gelecek taksitler",fmt(upcoming.reduce((s,t)=>s+t.amt,0)),`${upcoming.length} taksit; dönem seçerek görün`));
+  }
+  if(posCats.length){const [c,v]=posCats[0];cards.push(card("En büyük kategori",esc(c),`${fmt(v)} · %${(v/gross*100).toFixed(1)}`))}
+  $("kpis").innerHTML=cards.join("");
+  if($("kpiRecon"))$("kpiRecon").addEventListener("click",()=>{const d=$("recon").querySelector("details");if(d){d.open=true;d.scrollIntoView({behavior:"smooth",block:"start"})}});
+}
 function render(){
   parseRules(); updateHistInfo();
+  document.body.classList.toggle("has-data",history.length>0);
   if(!history.length){$("out").classList.add("hide");return}
   fillPeriods();
   const p=$("period").value;
@@ -1184,10 +1319,9 @@ function render(){
   const ds=tx.map(t=>t.d).filter(Boolean).sort((a,b)=>a-b);
   if(isRange){
     const days=Math.max(1,Math.round((toDate(rt)-toDate(rf))/864e5)+1);
-    $("range").textContent=`${toDate(rf).toLocaleDateString("tr-TR")} – ${toDate(rt).toLocaleDateString("tr-TR")} arası, ${days} gün, ${tx.length} işlem. Günlük ortalama ${fmt(total/days)}.`;
+    $("range").textContent=`${toDate(rf).toLocaleDateString("tr-TR")} – ${toDate(rt).toLocaleDateString("tr-TR")} arası, ${days} gün, ${tx.length} işlem`;
   }else
-  $("range").textContent=`${tx.length} işlem`+(ds.length?`, ${ds[0].toLocaleDateString("tr-TR")} – ${ds.at(-1).toLocaleDateString("tr-TR")}`:"")+
-    (!p&&upcoming.length?`. Ayrıca gelecek aylarda ödenecek ${upcoming.length} taksit var: ${fmt(upcoming.reduce((s,t)=>s+t.amt,0))} (dönem seçerek görebilirsiniz).`:"");
+  $("range").textContent=`${tx.length} işlem`+(ds.length?`, ${ds[0].toLocaleDateString("tr-TR")} – ${ds.at(-1).toLocaleDateString("tr-TR")}`:"");
 
   const byCat={}; allTx.forEach(t=>byCat[t.cat]=(byCat[t.cat]||0)+t.amt);
   const cats=Object.entries(byCat).sort((a,b)=>(excluded.has(a[0])-excluded.has(b[0]))||b[1]-a[1]);
@@ -1199,6 +1333,7 @@ function render(){
   const colorOf=c=>ranked.includes(c)?PAL[ranked.indexOf(c)]:GRAY;
   const col={}; cats.forEach(([c])=>col[c]=colorOf(c));
   renderPie(posCats,col,ranked,gross,total,allTx);
+  renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross});
   $("strip").innerHTML=posCats.map(([c,v])=>`<span style="width:${v/gross*100}%;background:${col[c]}" title="${esc(c)}"></span>`).join("");
   $("cats").innerHTML=cats.map(([c,v])=>{
     const open=openCats.has(c);
@@ -1209,7 +1344,7 @@ function render(){
       const bs={}; items.forEach(t=>bs[t.sub]=(bs[t.sub]||0)+t.amt);
       subHtml=`<div style="margin:6px 0 10px"><small>Taksitlerin kendi içindeki dağılımı:</small>`+Object.entries(bs).sort((a,b)=>b[1]-a[1]).map(([sc,sv])=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dashed var(--line)"><span>${esc(sc)}</span><span><small>%${(sv/v*100).toFixed(1)}</small> <b>${fmt(sv)}</b></span></div>`).join("")+`</div>`;
     }
-    return `<div class="catrow${off?" off":""}"><label class="inc" title="${off?"Toplama dahil et":"Toplamdan çıkar"}"><input type="checkbox" data-inc="${esc(c)}" ${off?"":"checked"} aria-label="${esc(c)} toplama dahil"></label><button class="row" data-cat="${esc(c)}" aria-expanded="${open}"><span class="dot" style="background:${col[c]}"></span><span>${esc(c)} <small>(${allTx.filter(t=>t.cat===c).length})</small></span><span class="pct">${v>0&&!off?`%${(v/gross*100).toFixed(1)}`:off?"çıkarıldı":""}</span><b>${fmt(v)}</b><span class="chev" aria-hidden="true">▶</span></button></div>`+
+    return `<div class="catrow${off?" off":""}"><label class="inc" title="${off?"Toplama dahil et":"Toplamdan çıkar"}"><input type="checkbox" data-inc="${esc(c)}" ${off?"":"checked"} aria-label="${esc(c)} toplama dahil"></label><button class="row" data-cat="${esc(c)}" aria-expanded="${open}"><span class="dot" style="background:${col[c]}"></span><span class="nm">${esc(c)} <small>(${allTx.filter(t=>t.cat===c).length})</small></span><span class="pct">${v>0&&!off?`%${(v/gross*100).toFixed(1)}`:off?"çıkarıldı":""}</span><b class="amt">${fmt(v)}</b><span class="chev" aria-hidden="true">▶</span></button></div>`+
       (open?`<div class="catlist">${subHtml}<table>${items.map(t=>`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><button class="linkish" data-an="${esc(t.desc)}" title="Bu harcamayı analiz et">${esc(t.desc)}</button>${t.inst?`<br><small>${esc(t.sub)} · ${t.inst.n}/${t.inst.m}. taksit${t.inst.total?` (toplam ${fmt(t.inst.total)})`:""}${t.pdate&&t.pdate.slice(0,7)!==t.date.slice(0,7)?` · alışveriş ${toDate(t.pdate).toLocaleDateString("tr-TR")}`:""}${t.est==="past"?" · özette yok, seriden hesaplandı":t.est==="future"?" · planlanan, henüz özette yok":""}</small>`:t.note?`<br><small>${esc(t.note)}</small>`:""}</td><td class="n">${fmt(t.amt)}</td></tr>`).join("")}</table></div>`:"");
   }).join("");
   $("cats").querySelectorAll("input[data-inc]").forEach(i=>i.addEventListener("change",()=>{const c=i.dataset.inc;i.checked?excluded.delete(c):excluded.add(c);save();render()}));
@@ -1224,9 +1359,10 @@ function render(){
   $("monthsCount").textContent=ms.length?`(${ms.length} dönem)`:"";
   $("months").innerHTML=ms.length?ms.map(([k,v])=>{return `<div class="mrow"><span>${periodLabel(k,true)}</span><div class="bar" style="width:${v/mx*100}%;${k===p?"background:var(--mustard)":k>curM?"background:transparent;border:1px dashed var(--teal)":""}"></div><b style="text-align:right">${fmt(v)}</b></div>`}).join(""):"<small>Tarih sütunu okunamadı.</small>";
 
-  const byD={}; tx.forEach(t=>{const k=norm(t.desc);byD[k]=byD[k]||{desc:t.desc,sum:0,n:0,cat:t.inst?`Taksit · ${t.sub}`:t.cat,sub:t.sub};byD[k].sum+=t.amt;byD[k].n++});
+  const byD={}; tx.forEach(t=>{const k=norm(t.desc);byD[k]=byD[k]||{desc:t.desc,sum:0,n:0,cat:t.inst?`Taksit · ${t.sub}`:t.cat,sub:t.sub,col:col[t.cat]||GRAY};byD[k].sum+=t.amt;byD[k].n++});
   const all=Object.values(byD).sort((a,b)=>b.sum-a.sum);
-  $("top").innerHTML=all.slice(0,10).map(d=>`<tr><td><button class="linkish" data-an="${esc(d.desc)}" title="Bu harcamayı analiz et">${esc(d.desc)}</button><br><small>${esc(d.cat)}, ${d.n} işlem</small></td><td class="n"><b>${fmt(d.sum)}</b></td></tr>`).join("");
+  const topMax=Math.max(all.length?all[0].sum:0,1);
+  $("top").innerHTML=all.slice(0,10).map(d=>`<tr><td class="tdot"><span class="dot" style="background:${d.col}"></span></td><td><button class="linkish" data-an="${esc(d.desc)}" title="Bu harcamayı analiz et">${esc(d.desc)}</button><br><small>${esc(d.cat)}, ${d.n} işlem</small><div class="mbar" aria-hidden="true"><span style="width:${Math.max(0,d.sum/topMax*100)}%;background:${d.col}"></span></div></td><td class="n"><b>${fmt(d.sum)}</b></td></tr>`).join("");
 
   const catNames=[...new Set(rules.map(r=>r.cat))];
   $("rulesCount").textContent=`(${catNames.length} kategori)`;
