@@ -1,0 +1,12 @@
+# Kişisel veriler asla depoya girmemeli / Personal financial data must never be committed
+harcama-verisi*.json
+*.pdf
+*.xlsx
+*.xls
+*.csv
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
