@@ -42,7 +42,7 @@ A single-file, fully offline web app (`index.html`) that analyzes Turkish credit
 ### Categorization
 - Rules are editable text `Kategori: KEY1, KEY2`; `categorize` picks the **longest** matching keyword; keys ≤4 chars match whole words only (so `PET` ≠ `PETROL`, `DIS` ≠ `YURT DISI`). Per-description `overrides` win.
 - `mergeRules(base, incoming)` adds missing keywords/categories without removing anything; used for default-rule merge in `applyData` and for category import.
-- Sharing between people (each has their own data file): "Kategorileri paylaş" downloads `harcama-kategorileri.json` = `{type:"kategoriler", version, updated, rules, overrides}` — no transactions/amounts. "Kategorileri içe aktar" (`importCategories`) accepts that file or a full `harcama-verisi.json` (only `rules`/`overrides` are read), merges rules, adds missing overrides and keeps the user's own choice on conflict.
+- Sharing between people (each has their own data file): "Kategorileri paylaş" downloads `harcama-kategorileri.json` = `{type:"kategoriler", version, updated, rules, overrides}` — no transactions/amounts. "Kategorileri içe aktar" accepts that file or a full `harcama-verisi.json` (only `rules`/`overrides` are read). `planImport` computes the diff without changing anything (new keywords in existing categories, new categories, new merchant picks, conflicting picks); the user sees it in `#sharePreview` with a checkbox per item (new items ticked, conflicts unticked = keep own) and nothing is saved until "Uygula". `applyImport` applies only the ticked items via `mergeRules`.
 - Special categories: `Taksitler` (all installments; sub-category = rule category), `İadeler ve indirimler`, `Diğer` (unmatched).
 
 ### UI features
@@ -66,7 +66,7 @@ VERBOSE=1 python tests/run_tests.py         # print tracebacks
 - When fixing a new statement layout: add a generator to `fixtures.py` reproducing the layout with invented names/amounts, add a test with the expected totals, see it fail, then fix.
 - The tests were mutation-checked: breaking payment detection or short-keyword word boundaries makes tests fail.
 
-Scenarios covered: 143-transaction 3-page statement (letter-by-letter lines, wrapped descriptions); installment formats and rotated/vertical margin text; "+" payments/refunds; cut-off date in 6 layouts; statement-period grouping with late-posted purchases; installment series in order, shuffled, last-only and duplicate upload; reconciliation (match, exact diff + "Ekle", no previous balance); real-statement layout with bonus-point column, multi-amount installment lines and Worldpuan sections (split and glued); repair of records saved by older versions; multi-file upload with encrypted + broken files (password asked once); category matching and rule merge; category share export (no transactions) / import (merge, own choice wins, full data file, broken file); category exclusion + date range; donut chart click; merchant analysis scopes and click-to-analyze from every list; phone open/save/reopen flow; nothing written to browser storage.
+Scenarios covered: 143-transaction 3-page statement (letter-by-letter lines, wrapped descriptions); installment formats and rotated/vertical margin text; "+" payments/refunds; cut-off date in 6 layouts; statement-period grouping with late-posted purchases; installment series in order, shuffled, last-only and duplicate upload; reconciliation (match, exact diff + "Ekle", no previous balance); real-statement layout with bonus-point column, multi-amount installment lines and Worldpuan sections (split and glued); repair of records saved by older versions; multi-file upload with encrypted + broken files (password asked once); category matching and rule merge; category share export (no transactions) / import preview (nothing changes before "Uygula", per-item accept/reject, conflicts, cancel, already up to date, full data file, broken file); category exclusion + date range; donut chart click; merchant analysis scopes and click-to-analyze from every list; phone open/save/reopen flow; nothing written to browser storage.
 
 Not covered: Safari/WebKit (iOS needs 16.4+ for `DecompressionStream` and regex lookbehind), real bank PDFs other than the layouts above, the desktop folder picker (`showDirectoryPicker` can't be automated; tests bypass it).
 
@@ -75,5 +75,7 @@ Not covered: Safari/WebKit (iOS needs 16.4+ for `DecompressionStream` and regex 
 Repo is private. Live page: Cloudflare Pages or Netlify connected to this repo, no build command, output = root. On iOS, opening the HTML from the Files app shows a Quick Look preview that doesn't run JS; use the live URL.
 
 ## Commits
+
+Ask the owner for the branch name before creating a new branch.
 
 Commit messages in Turkish, short subject + body explaining why.

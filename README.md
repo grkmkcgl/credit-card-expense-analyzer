@@ -26,7 +26,7 @@ Files are never uploaded anywhere; parsing and calculations run in the browser, 
 - Ödeme, iade, puan (Worldpuan vb.) bölümlerini ayırma
 - Ekstre kontrolü: hesaplanan tutarı dönem borcuyla karşılaştırma
 - Otomatik kategori (düzenlenebilir kurallar), kategoriyi toplamdan çıkarma
-- Kategori kurallarını ve yer seçimlerini dosya ile başkasıyla paylaşma ve birleştirme (işlem/tutar paylaşılmaz)
+- Kategori kurallarını ve yer seçimlerini dosya ile başkasıyla paylaşma ve birleştirme (işlem/tutar paylaşılmaz; eklenecekler önce listelenir, onaylananlar kaydedilir)
 - Çubuk ve pasta grafik, tarih aralığı analizi, yer bazında harcama analizi
 
 ## Geliştirme / Development

@@ -214,10 +214,11 @@ window.libsReady=(async()=>{
 <p><small>Her satır: <code>Kategori: ANAHTAR1, ANAHTAR2</code>. Açıklamada anahtar kelime geçerse o kategoriye atanır. Düzenleyip yeniden uygulayabilirsiniz.</small></p>
 <textarea id="rules" rows="12"></textarea>
 <button class="ghost" id="reapply">Kuralları uygula</button>
-<p><small>Başka biriyle kategori paylaşmak için: "Kategorileri paylaş" yalnızca kuralları ve yer seçimlerini içeren bir dosya indirir (işlem ve tutar içermez). Karşı taraf bu dosyayı "Kategorileri içe aktar" ile kendi kaydına ekler; kendi seçimleri korunur.</small></p>
+<p><small>Başka biriyle kategori paylaşmak için: "Kategorileri paylaş" yalnızca kuralları ve yer seçimlerini içeren bir dosya indirir (işlem ve tutar içermez). Karşı taraf bu dosyayı "Kategorileri içe aktar" ile açar; eklenecekler listelenir ve yalnızca onayladıkları kaydedilir.</small></p>
 <button class="ghost" id="shareCats">Kategorileri paylaş</button>
 <label class="ghost" style="display:inline-block;color:var(--teal);border:1px solid var(--teal);border-radius:8px;padding:8px 14px;cursor:pointer">Kategorileri içe aktar<input type="file" id="importCats" accept=".json,application/json" style="display:none"></label>
 <p id="shareMsg"></p>
+<div id="sharePreview" class="hide"></div>
 </section>
 </main>
 
@@ -304,17 +305,34 @@ function mergeRules(base,incoming){
 /* Kategori paylaşımı: yalnızca kurallar ve yer seçimleri; işlem, tutar, ekstre içermez. */
 const SHARE_FILE="harcama-kategorileri.json";
 function shareSnapshot(){return JSON.stringify({type:"kategoriler",version:1,updated:new Date().toISOString(),rules:$("rules").value,overrides},null,1)}
-function importCategories(d){
+/* İçe aktarılacak dosyayla mevcut durum arasındaki farkı çıkarır; hiçbir şeyi değiştirmez.
+   keys: mevcut kategoriye yeni anahtar, cats: yeni kategori, picks: yeni yer seçimi, conflicts: farklı yer seçimi. */
+function planImport(d){
   if(!d||typeof d!=="object"||(typeof d.rules!=="string"&&(!d.overrides||typeof d.overrides!=="object")))throw new Error("format");
-  const m=mergeRules($("rules").value,typeof d.rules==="string"?d.rules:"");
-  let added=0, kept=0;
-  for(const [k,v] of Object.entries(d.overrides||{})){
+  const mine={};
+  $("rules").value.split("\n").forEach(l=>{const i=l.indexOf(":");if(i<=0)return;const c=l.slice(0,i).trim();if(!c)return;
+    (mine[c]||(mine[c]=new Set()));l.slice(i+1).split(",").forEach(k=>{const n=norm(k);if(n)mine[c].add(n)})});
+  const keys=[], cats=[], newCats={};
+  String(typeof d.rules==="string"?d.rules:"").split("\n").forEach(l=>{const i=l.indexOf(":");if(i<=0)return;const c=l.slice(0,i).trim();if(!c)return;
+    for(const k of l.slice(i+1).split(",").map(x=>x.trim()).filter(Boolean)){
+      const n=norm(k);
+      if(mine[c]){if(!mine[c].has(n)){mine[c].add(n);keys.push({cat:c,key:k})}}
+      else{let nc=newCats[c];if(!nc){nc=newCats[c]={cat:c,keys:[],seen:new Set()};cats.push(nc)}if(!nc.seen.has(n)){nc.seen.add(n);nc.keys.push(k)}}
+    }});
+  const picks=[], conflicts=[];
+  for(const [k,v] of Object.entries(d.overrides&&typeof d.overrides==="object"?d.overrides:{})){
     if(typeof v!=="string"||!v)continue;
     const nk=norm(k);
-    if(!overrides[nk]){overrides[nk]=v;added++} else if(overrides[nk]!==v)kept++;
+    if(!overrides[nk])picks.push({desc:nk,cat:v}); else if(overrides[nk]!==v)conflicts.push({desc:nk,mine:overrides[nk],theirs:v});
   }
-  $("rules").value=m.text;
-  return {keys:m.keys,cats:m.cats,added,kept};
+  return {keys,cats:cats.map(({cat,keys})=>({cat,keys})),picks,conflicts};
+}
+/* Yalnızca seçilen öğeleri uygular. sel: {keys:[i..], cats:[i..], picks:[i..], conflicts:[i..]} */
+function applyImport(plan,sel){
+  const lines=[...sel.keys.map(i=>`${plan.keys[i].cat}: ${plan.keys[i].key}`),...sel.cats.map(i=>`${plan.cats[i].cat}: ${plan.cats[i].keys.join(", ")}`)];
+  if(lines.length)$("rules").value=mergeRules($("rules").value,lines.join("\n")).text;
+  sel.picks.forEach(i=>{overrides[plan.picks[i].desc]=plan.picks[i].cat});
+  sel.conflicts.forEach(i=>{overrides[plan.conflicts[i].desc]=plan.conflicts[i].theirs});
 }
 function updateHistInfo(){
   if(!history.length){$("histInfo").textContent="Henüz kayıt yok. İlk dökümünüzü yükleyin.";return}
@@ -1236,17 +1254,39 @@ $("shareCats").addEventListener("click",()=>{
 });
 $("importCats").addEventListener("change",async e=>{
   const f=e.target.files[0]; e.target.value=""; if(!f)return;
-  let r;
-  try{r=importCategories(JSON.parse(await f.text()))}
+  closeSharePreview();
+  let plan;
+  try{plan=planImport(JSON.parse(await f.text()))}
   catch(err){$("shareMsg").innerHTML='<span class="err">Bu dosya okunamadı. "Kategorileri paylaş" ile indirilmiş bir dosya veya harcama-verisi.json seçin.</span>';return}
-  save(); render();
-  const parts=[];
-  if(r.keys)parts.push(`${r.keys} yeni anahtar kelime`);
-  if(r.cats)parts.push(`${r.cats} yeni kategori`);
-  if(r.added)parts.push(`${r.added} yer seçimi`);
-  $("shareMsg").innerHTML=`<span class="ok">${f.name}: `+(parts.length?parts.join(", ")+" eklendi.":"Yeni bir şey yok, kategorileriniz zaten güncel.")+
-    (r.kept?` ${r.kept} yer için sizin seçiminiz korundu.`:"")+"</span>";
+  if(!plan.keys.length&&!plan.cats.length&&!plan.picks.length&&!plan.conflicts.length){
+    $("shareMsg").innerHTML=`<span class="ok">${esc(f.name)}: Yeni bir şey yok, kategorileriniz zaten güncel.</span>`;return}
+  $("shareMsg").innerHTML=`${esc(f.name)} içinde aşağıdaki değişiklikler var. İstemediklerinizin işaretini kaldırıp "Uygula"ya basın; hiçbir şey siz onaylamadan değişmez.`;
+  const box=(t,i,on,label)=>`<label style="display:block;margin:4px 0"><input type="checkbox" data-imp="${t}" data-i="${i}"${on?" checked":""}> ${label}</label>`;
+  let h="";
+  if(plan.keys.length)h+=`<h3>Mevcut kategorilere yeni anahtar kelimeler (${plan.keys.length})</h3>`+plan.keys.map((k,i)=>box("keys",i,true,`<b>${esc(k.key)}</b> → ${esc(k.cat)}`)).join("");
+  if(plan.cats.length)h+=`<h3>Yeni kategoriler (${plan.cats.length})</h3>`+plan.cats.map((c,i)=>box("cats",i,true,`<b>${esc(c.cat)}</b>: ${esc(c.keys.join(", "))}`)).join("");
+  if(plan.picks.length)h+=`<h3>Yeni yer seçimleri (${plan.picks.length})</h3>`+plan.picks.map((p,i)=>box("picks",i,true,`${esc(p.desc)} → <b>${esc(p.cat)}</b>`)).join("");
+  if(plan.conflicts.length)h+=`<h3>Farklı seçilmiş yerler (${plan.conflicts.length})</h3><p><small>İşaretlerseniz karşı tarafın seçimi alınır; işaretsiz bırakırsanız sizinki kalır.</small></p>`+
+    plan.conflicts.map((c,i)=>box("conflicts",i,false,`${esc(c.desc)}: sizin <b>${esc(c.mine)}</b> → onların <b>${esc(c.theirs)}</b>`)).join("");
+  h+=`<button id="impApply">Uygula</button> <button class="ghost" id="impCancel">Vazgeç</button>`;
+  const pv=$("sharePreview"); pv.innerHTML=h; pv.classList.remove("hide");
+  $("impCancel").addEventListener("click",()=>{closeSharePreview();$("shareMsg").textContent="İçe aktarma iptal edildi, hiçbir şey değişmedi."});
+  $("impApply").addEventListener("click",()=>{
+    const sel={keys:[],cats:[],picks:[],conflicts:[]};
+    pv.querySelectorAll("input[data-imp]:checked").forEach(c=>sel[c.dataset.imp].push(+c.dataset.i));
+    closeSharePreview();
+    const n=sel.keys.length+sel.cats.length+sel.picks.length+sel.conflicts.length;
+    if(!n){$("shareMsg").textContent="Hiçbir öğe seçilmedi, hiçbir şey değişmedi.";return}
+    applyImport(plan,sel); save(); render();
+    const parts=[];
+    if(sel.keys.length)parts.push(`${sel.keys.length} yeni anahtar kelime`);
+    if(sel.cats.length)parts.push(`${sel.cats.length} yeni kategori`);
+    if(sel.picks.length)parts.push(`${sel.picks.length} yer seçimi`);
+    if(sel.conflicts.length)parts.push(`${sel.conflicts.length} yer için karşı tarafın seçimi`);
+    $("shareMsg").innerHTML=`<span class="ok">${parts.join(", ")} eklendi.</span>`;
+  });
 });
+function closeSharePreview(){const pv=$("sharePreview");pv.innerHTML="";pv.classList.add("hide")}
 
 $("rules").value=DEFAULT_RULES;
 render();

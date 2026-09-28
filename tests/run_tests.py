@@ -312,33 +312,75 @@ def kategori_paylas_disa_aktar(b, info):
     a.close()
 
 
+SHARE_A = {
+    "type": "kategoriler", "version": 1,
+    "rules": "Market: MIGROS, KOSE BAKKALI ORNEK, migros, ORNEKMARKET\nHobi: ORNEKHOBI, MAKETCI",
+    "overrides": {"ORNEK BUTIK": "Giyim", "ÖRNEK KAFE": "Market", "YENI DUKKAN": "Hobi"},
+}
+
+
+def _preview(a, path):
+    a.pg.set_input_files("#importCats", path)
+    a.pg.wait_for_function("!document.getElementById('sharePreview').classList.contains('hide') || /okunamadı|güncel/.test(document.getElementById('shareMsg').textContent)")
+
+
 @test
-def kategori_paylas_ice_aktar(b, info):
-    share = _write_json("paylas_a.json", {
-        "type": "kategoriler", "version": 1,
-        "rules": "Market: MIGROS, KOSE BAKKALI ORNEK, migros\nHobi: ORNEKHOBI, MAKETCI",
-        "overrides": {"ORNEK BUTIK": "Giyim", "ÖRNEK KAFE": "Market", "YENI DUKKAN": "Hobi"},
-    })
+def kategori_paylas_ice_aktar_onizleme_ve_secim(b, info):
+    share = _write_json("paylas_a.json", SHARE_A)
     a = App(b); a.import_("arti.pdf")
     n = a.ev("history.length")
     a.ev("()=>{overrides['ORNEK KAFE']='Kafe ve restoran';render()}")
-    eq(a.ev("d=>categorize(d)", "MAKETCI DUNYASI"), "Diğer", "önce kategorisiz")
-    a.pg.set_input_files("#importCats", share); a.pg.wait_for_timeout(200)
+    rules0 = a.ev("$('rules').value")
+    _preview(a, share)
+    # onaydan önce hiçbir şey değişmez
+    eq(a.ev("$('rules').value"), rules0, "önizlemede kurallar değişmemeli")
+    eq(a.ev("overrides['ORNEK BUTIK']||null"), None, "önizlemede yer seçimi eklenmemeli")
+    pv = a.text("#sharePreview")
+    for s in ("KOSE BAKKALI ORNEK", "ORNEKMARKET", "Hobi", "MAKETCI", "ORNEK BUTIK", "YENI DUKKAN", "Kafe ve restoran", "Uygula", "Vazgeç"):
+        assert s in pv, f"önizlemede '{s}' yok: {pv}"
+    eq(a.ev("[...document.querySelectorAll('#sharePreview input[data-imp=keys]')].length"), 2, "tekrarlanan MIGROS listelenmemeli")
+    eq(a.ev("document.querySelector('#sharePreview input[data-imp=conflicts]').checked"), False, "çakışma varsayılan olarak işaretsiz")
+    eq(a.ev("[...document.querySelectorAll('#sharePreview input[data-imp]:not([data-imp=conflicts])')].every(c=>c.checked)"), True, "yeniler varsayılan işaretli")
+    # ORNEKMARKET'i ve YENI DUKKAN'ı reddet, çakışmada karşı tarafı seç
+    a.ev("()=>{const L=[...document.querySelectorAll('#sharePreview label')];"
+         "L.find(l=>l.textContent.includes('ORNEKMARKET')).querySelector('input').checked=false;"
+         "L.find(l=>l.textContent.includes('YENI DUKKAN')).querySelector('input').checked=false;"
+         "document.querySelector('#sharePreview input[data-imp=conflicts]').checked=true}")
+    a.pg.click("#impApply"); a.pg.wait_for_timeout(150)
     rules = a.ev("$('rules').value")
     market = [l for l in rules.split("\n") if l.startswith("Market:")][0]
-    assert "KOSE BAKKALI ORNEK" in market, "yeni anahtar mevcut kategoriye eklenmeli"
-    eq(market.upper().count("MIGROS,") + market.upper().endswith("MIGROS"), 1, "anahtar tekrarlanmamalı")
+    assert "KOSE BAKKALI ORNEK" in market, "onaylanan anahtar eklenmeli"
+    assert "ORNEKMARKET" not in rules, "reddedilen anahtar eklenmemeli"
     eq(sum(l.startswith("Hobi:") for l in rules.split("\n")), 1, "yeni kategori bir kez eklenmeli")
     eq(a.ev("d=>categorize(d)", "MAKETCI DUNYASI"), "Hobi", "yeni kural uygulanmalı")
-    eq(a.ev("overrides['ORNEK BUTIK']"), "Giyim", "eksik yer seçimi eklenmeli")
-    eq(a.ev("overrides['ORNEK KAFE']"), "Kafe ve restoran", "kendi seçimi korunmalı")
+    eq(a.ev("overrides['ORNEK BUTIK']"), "Giyim", "onaylanan yer seçimi eklenmeli")
+    eq(a.ev("overrides['YENI DUKKAN']||null"), None, "reddedilen yer seçimi eklenmemeli")
+    eq(a.ev("overrides['ORNEK KAFE']"), "Market", "seçilen çakışmada karşı tarafınki alınmalı")
     eq(a.ev("history.length"), n, "işlemler değişmemeli")
+    assert a.ev("document.getElementById('sharePreview').classList.contains('hide')"), "önizleme kapanmalı"
     msg = a.text("#shareMsg")
-    for s in ("1 yeni anahtar kelime", "1 yeni kategori", "2 yer seçimi", "1 yer için sizin seçiminiz korundu"):
+    for s in ("1 yeni anahtar kelime", "1 yeni kategori", "1 yer seçimi", "1 yer için karşı tarafın seçimi"):
         assert s in msg, f"mesajda '{s}' yok: {msg}"
-    # aynı dosya ikinci kez: değişiklik yok
-    a.pg.set_input_files("#importCats", share); a.pg.wait_for_timeout(200)
-    eq(a.ev("$('rules').value"), rules, "tekrar içe aktarma kuralları değiştirmemeli")
+    # tekrar: yalnızca reddedilenler listelenir
+    _preview(a, share)
+    eq(a.ev("[...document.querySelectorAll('#sharePreview input[data-imp]')].map(c=>c.dataset.imp).sort()"), ["keys", "picks"], "yalnızca reddedilenler kalmalı")
+    a.close()
+
+
+@test
+def kategori_ice_aktar_vazgec_ve_guncel(b, info):
+    share = _write_json("paylas_a.json", SHARE_A)
+    a = App(b); a.import_("arti.pdf")
+    rules0 = a.ev("$('rules').value"); ov0 = a.ev("JSON.stringify(overrides)")
+    _preview(a, share)
+    a.pg.click("#impCancel"); a.pg.wait_for_timeout(100)
+    eq(a.ev("$('rules').value"), rules0, "vazgeçince kurallar aynı")
+    eq(a.ev("JSON.stringify(overrides)"), ov0, "vazgeçince yer seçimleri aynı")
+    assert "iptal" in a.text("#shareMsg"), a.text("#shareMsg")
+    # hepsini onayla, sonra aynı dosya: önizleme açılmaz
+    _preview(a, share); a.pg.click("#impApply"); a.pg.wait_for_timeout(100)
+    _preview(a, share)
+    assert a.ev("document.getElementById('sharePreview').classList.contains('hide')"), "değişiklik yoksa önizleme açılmamalı"
     assert "zaten güncel" in a.text("#shareMsg"), a.text("#shareMsg")
     a.close()
 
@@ -354,12 +396,12 @@ def kategori_ice_aktar_tam_kayit_ve_bozuk_dosya(b, info):
         fh.write("{bozuk")
     a = App(b); a.import_("arti.pdf")
     n = a.ev("history.length")
-    a.pg.set_input_files("#importCats", full); a.pg.wait_for_timeout(200)
+    _preview(a, full); a.pg.click("#impApply"); a.pg.wait_for_timeout(150)
     eq(a.ev("history.length"), n, "başkasının işlemleri alınmamalı")
     eq(a.ev("d=>categorize(d)", "ORNEKHOBI MAGAZA"), "Hobi", "kurallar alınmalı")
     eq(a.ev("overrides['ORNEK BUTIK']"), "Giyim", "yer seçimi alınmalı")
     before = a.ev("$('rules').value")
-    a.pg.set_input_files("#importCats", bad); a.pg.wait_for_timeout(200)
+    _preview(a, bad)
     assert "okunamadı" in a.text("#shareMsg"), a.text("#shareMsg")
     eq(a.ev("$('rules').value"), before, "bozuk dosya kuralları değiştirmemeli")
     a.close()
