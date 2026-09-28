@@ -72,7 +72,7 @@ Not covered: Safari/WebKit (iOS needs 16.4+ for `DecompressionStream` and regex 
 
 ## Deployment
 
-Repo is private. Live page: Cloudflare Pages or Netlify connected to this repo, no build command, output = root. On iOS, opening the HTML from the Files app shows a Quick Look preview that doesn't run JS; use the live URL.
+Live page: GitHub Pages from the `gh-pages` branch, built by `.github/workflows/pages.yml` on every push/branch delete: `main`'s `index.html` at the root, every other branch at `/onizleme/<branch, / → ->/`, list at `/onizleme/`. Only `index.html` is published. Never commit to `gh-pages` by hand; it is force-rewritten. Pages setting: Source = Deploy from a branch, `gh-pages`, `/ (root)`. On iOS, opening the HTML from the Files app shows a Quick Look preview that doesn't run JS; use the live URL.
 
 ## Commits
 
