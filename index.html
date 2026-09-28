@@ -203,10 +203,11 @@ window.libsReady=(async()=>{
 <datalist id="qList"></datalist>
 <div id="qOut"></div>
 
-<h2>Dönemlere göre</h2>
+<details class="fold" id="monthsFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Dönemlere göre <small id="monthsCount"></small></h2></summary>
 <p><small>Kredi kartı işlemleri, hangi ekstrede göründülerse o ekstrenin dönemine yazılır. Banka bir harcamayı birkaç gün geç işlerse (ör. 25 Temmuz'daki harcama 26 Temmuz kesiminden sonra işlendiyse) sonraki ekstrede görünür; bu normaldir.</small></p>
 <p style="margin:0 0 6px"><small id="monthsNote" class="err"></small></p>
 <div id="months"></div>
+</details>
 
 <h2>En çok harcanan yerler</h2>
 <table id="top"></table>
@@ -221,7 +222,7 @@ window.libsReady=(async()=>{
 <table id="unk"></table>
 </details>
 
-<h2>Kategori kuralları</h2>
+<details class="fold" id="rulesFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategori kuralları <small id="rulesCount"></small></h2></summary>
 <p><small>Her satır: <code>Kategori: ANAHTAR1, ANAHTAR2</code>. Açıklamada anahtar kelime geçerse o kategoriye atanır. Düzenleyip yeniden uygulayabilirsiniz.</small></p>
 <textarea id="rules" rows="12"></textarea>
 <button class="ghost" id="reapply">Kuralları uygula</button>
@@ -230,6 +231,7 @@ window.libsReady=(async()=>{
 <label class="ghost" style="display:inline-block;color:var(--teal);border:1px solid var(--teal);border-radius:8px;padding:8px 14px;cursor:pointer">Kategorileri içe aktar<input type="file" id="importCats" accept=".json,application/json" style="display:none"></label>
 <p id="shareMsg"></p>
 <div id="sharePreview" class="hide"></div>
+</details>
 </section>
 </main>
 
@@ -1219,6 +1221,7 @@ function render(){
   const curM=iso(new Date()).slice(0,7);
   const past=Object.entries(byM).sort().filter(([k])=>k<=curM).slice(-12), fut=Object.entries(byM).sort().filter(([k])=>k>curM);
   const ms=[...past,...fut], mx=Math.max(...ms.map(m=>m[1]),1);
+  $("monthsCount").textContent=ms.length?`(${ms.length} dönem)`:"";
   $("months").innerHTML=ms.length?ms.map(([k,v])=>{return `<div class="mrow"><span>${periodLabel(k,true)}</span><div class="bar" style="width:${v/mx*100}%;${k===p?"background:var(--mustard)":k>curM?"background:transparent;border:1px dashed var(--teal)":""}"></div><b style="text-align:right">${fmt(v)}</b></div>`}).join(""):"<small>Tarih sütunu okunamadı.</small>";
 
   const byD={}; tx.forEach(t=>{const k=norm(t.desc);byD[k]=byD[k]||{desc:t.desc,sum:0,n:0,cat:t.inst?`Taksit · ${t.sub}`:t.cat,sub:t.sub};byD[k].sum+=t.amt;byD[k].n++});
@@ -1226,6 +1229,7 @@ function render(){
   $("top").innerHTML=all.slice(0,10).map(d=>`<tr><td><button class="linkish" data-an="${esc(d.desc)}" title="Bu harcamayı analiz et">${esc(d.desc)}</button><br><small>${esc(d.cat)}, ${d.n} işlem</small></td><td class="n"><b>${fmt(d.sum)}</b></td></tr>`).join("");
 
   const catNames=[...new Set(rules.map(r=>r.cat))];
+  $("rulesCount").textContent=`(${catNames.length} kategori)`;
   const unk=all.filter(d=>d.sub==="Diğer"&&d.sum>0);
   $("unkCount").textContent=unk.length?`(${unk.length})`:"";
   $("unk").innerHTML=unk.length?unk.map(d=>`<tr><td>${esc(d.desc)}<br><small>${d.n} işlem</small></td><td class="n">${fmt(d.sum)}</td><td><select data-k="${esc(norm(d.desc))}"><option value="">Seç…</option>${catNames.map(c=>`<option>${esc(c)}</option>`).join("")}</select></td></tr>`).join(""):"<tr><td><small>Hepsi kategorilendi.</small></td></tr>";
@@ -1267,7 +1271,7 @@ $("shareCats").addEventListener("click",()=>{
 });
 $("importCats").addEventListener("change",async e=>{
   const f=e.target.files[0]; e.target.value=""; if(!f)return;
-  closeSharePreview();
+  closeSharePreview(); $("rulesFold").open=true;
   let plan;
   try{plan=planImport(JSON.parse(await f.text()))}
   catch(err){$("shareMsg").innerHTML='<span class="err">Bu dosya okunamadı. "Kategorileri paylaş" ile indirilmiş bir dosya veya harcama-verisi.json seçin.</span>';return}

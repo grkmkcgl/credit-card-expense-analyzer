@@ -46,7 +46,7 @@ A single-file, fully offline web app (`index.html`) that analyzes Turkish credit
 - Special categories: `Taksitler` (all installments; sub-category = rule category), `İadeler ve indirimler`, `Diğer` (unmatched).
 
 ### UI features
-Period selector (all time / each statement / custom date range with presets), category include/exclude checkboxes (affects totals, charts, lists), bar or donut chart (top 6 colored, rest folded to gray), "Dönemlere göre" chart, merchant analysis (`renderQuery`, scoped to the selected period; items in every list are clickable via `data-an`), multi-file upload with per-file summary table, category share export/import. "Tüm işlemler" and "Kategorisi bulunamayanlar" are native `<details class="fold">` sections (`#allFold`, `#unkFold`), closed by default, with counts in the title (`#allCount`, `#unkCount`); open state is not saved and survives re-render because `render()` only rewrites the tables.
+Period selector (all time / each statement / custom date range with presets), category include/exclude checkboxes (affects totals, charts, lists), bar or donut chart (top 6 colored, rest folded to gray), "Dönemlere göre" chart, merchant analysis (`renderQuery`, scoped to the selected period; items in every list are clickable via `data-an`), multi-file upload with per-file summary table, category share export/import. "Dönemlere göre", "Tüm işlemler", "Kategorisi bulunamayanlar" and "Kategori kuralları" are native `<details class="fold">` sections (`#monthsFold`, `#allFold`, `#unkFold`, `#rulesFold`), closed by default, with counts in the title (`#…Count`); a category import opens `#rulesFold` so the preview is visible; open state is not saved and survives re-render because `render()` only rewrites the tables.
 
 ## Testing
 
