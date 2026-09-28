@@ -288,6 +288,83 @@ def kayitli_kurallara_yeni_anahtarlar_eklenir(b, info):
     a.close()
 
 
+def _write_json(name, obj):
+    p = f(name)
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump(obj, fh, ensure_ascii=False)
+    return p
+
+
+@test
+def kategori_paylas_disa_aktar(b, info):
+    a = App(b); a.import_("arti.pdf")
+    a.ev("()=>{$('rules').value+='\\nHobi: ORNEKHOBI';overrides['ORNEK BUTIK']='Giyim';render()}")
+    with a.pg.expect_download() as dl:
+        a.pg.click("#shareCats")
+    d = dl.value
+    eq(d.suggested_filename, "harcama-kategorileri.json", "dosya adı")
+    data = json.loads(open(d.path(), encoding="utf-8").read())
+    eq(data.get("type"), "kategoriler", "tür")
+    assert "Hobi: ORNEKHOBI" in data["rules"], "kurallar paylaşılmalı"
+    eq(data["overrides"].get("ORNEK BUTIK"), "Giyim", "yer seçimi paylaşılmalı")
+    for k in ("history", "statements", "lastMap"):
+        assert k not in data, f"paylaşım dosyasında {k} olmamalı"
+    a.close()
+
+
+@test
+def kategori_paylas_ice_aktar(b, info):
+    share = _write_json("paylas_a.json", {
+        "type": "kategoriler", "version": 1,
+        "rules": "Market: MIGROS, KOSE BAKKALI ORNEK, migros\nHobi: ORNEKHOBI, MAKETCI",
+        "overrides": {"ORNEK BUTIK": "Giyim", "ÖRNEK KAFE": "Market", "YENI DUKKAN": "Hobi"},
+    })
+    a = App(b); a.import_("arti.pdf")
+    n = a.ev("history.length")
+    a.ev("()=>{overrides['ORNEK KAFE']='Kafe ve restoran';render()}")
+    eq(a.ev("d=>categorize(d)", "MAKETCI DUNYASI"), "Diğer", "önce kategorisiz")
+    a.pg.set_input_files("#importCats", share); a.pg.wait_for_timeout(200)
+    rules = a.ev("$('rules').value")
+    market = [l for l in rules.split("\n") if l.startswith("Market:")][0]
+    assert "KOSE BAKKALI ORNEK" in market, "yeni anahtar mevcut kategoriye eklenmeli"
+    eq(market.upper().count("MIGROS,") + market.upper().endswith("MIGROS"), 1, "anahtar tekrarlanmamalı")
+    eq(sum(l.startswith("Hobi:") for l in rules.split("\n")), 1, "yeni kategori bir kez eklenmeli")
+    eq(a.ev("d=>categorize(d)", "MAKETCI DUNYASI"), "Hobi", "yeni kural uygulanmalı")
+    eq(a.ev("overrides['ORNEK BUTIK']"), "Giyim", "eksik yer seçimi eklenmeli")
+    eq(a.ev("overrides['ORNEK KAFE']"), "Kafe ve restoran", "kendi seçimi korunmalı")
+    eq(a.ev("history.length"), n, "işlemler değişmemeli")
+    msg = a.text("#shareMsg")
+    for s in ("1 yeni anahtar kelime", "1 yeni kategori", "2 yer seçimi", "1 yer için sizin seçiminiz korundu"):
+        assert s in msg, f"mesajda '{s}' yok: {msg}"
+    # aynı dosya ikinci kez: değişiklik yok
+    a.pg.set_input_files("#importCats", share); a.pg.wait_for_timeout(200)
+    eq(a.ev("$('rules').value"), rules, "tekrar içe aktarma kuralları değiştirmemeli")
+    assert "zaten güncel" in a.text("#shareMsg"), a.text("#shareMsg")
+    a.close()
+
+
+@test
+def kategori_ice_aktar_tam_kayit_ve_bozuk_dosya(b, info):
+    full = _write_json("paylas_tam.json", {
+        "version": 1, "history": [{"id": "x1", "date": "2026-01-01", "desc": "BASKASININ ISLEMI", "amount": 999}],
+        "statements": {}, "rules": "Hobi: ORNEKHOBI", "overrides": {"ORNEK BUTIK": "Giyim"},
+    })
+    bad = f("paylas_bozuk.json")
+    with open(bad, "w") as fh:
+        fh.write("{bozuk")
+    a = App(b); a.import_("arti.pdf")
+    n = a.ev("history.length")
+    a.pg.set_input_files("#importCats", full); a.pg.wait_for_timeout(200)
+    eq(a.ev("history.length"), n, "başkasının işlemleri alınmamalı")
+    eq(a.ev("d=>categorize(d)", "ORNEKHOBI MAGAZA"), "Hobi", "kurallar alınmalı")
+    eq(a.ev("overrides['ORNEK BUTIK']"), "Giyim", "yer seçimi alınmalı")
+    before = a.ev("$('rules').value")
+    a.pg.set_input_files("#importCats", bad); a.pg.wait_for_timeout(200)
+    assert "okunamadı" in a.text("#shareMsg"), a.text("#shareMsg")
+    eq(a.ev("$('rules').value"), before, "bozuk dosya kuralları değiştirmemeli")
+    a.close()
+
+
 # ---------------------------------------------------------------- Görünümler
 @test
 def kategori_cikarma_ve_tarih_araligi(b, info):
