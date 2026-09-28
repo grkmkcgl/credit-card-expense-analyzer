@@ -77,5 +77,6 @@ Live page: GitHub Pages from the `gh-pages` branch, built by `.github/workflows/
 ## Commits
 
 Ask the owner for the branch name before creating a new branch.
+Never put session info (Claude session links/IDs, `Claude-Session:` trailers, claude.ai/code URLs) in commit messages, PR titles/bodies, merge commits or comments.
 
 Commit messages in Turkish, short subject + body explaining why.
