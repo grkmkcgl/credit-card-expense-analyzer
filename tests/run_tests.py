@@ -471,10 +471,31 @@ def harcama_analizi_listelerden_acilir(b, info):
         if row.get_attribute("aria-expanded") != "true": row.click(); a.pg.wait_for_timeout(100)
         a.pg.locator("#cats .catlist button[data-an]").filter(has_text="CANKAYA").first.click(); a.pg.wait_for_timeout(150)
         eq(a.ev("$('q').value"), "ege pide", f"kategori listesinden ({view})")
+    a.pg.click("#allFold > summary")
     for sel in ["#top", "#alltx"]:
         a.pg.fill("#q", ""); a.pg.dispatch_event("#q", "input")
         a.pg.locator(sel + " button[data-an]").first.click(); a.pg.wait_for_timeout(150)
         assert a.ev("$('q').value"), f"{sel} listesinden analiz açılmadı"
+    a.close()
+
+
+@test
+def katlanir_bolumler(b, info):
+    a = App(b); a.import_("arti.pdf")
+    for fid in ("allFold", "unkFold"):
+        eq(a.ev(f"$('{fid}').open"), False, f"{fid} başta kapalı")
+    assert not a.pg.is_visible("#alltx"), "kapalıyken tablo görünmemeli"
+    n = a.ev("$('alltx').rows.length")
+    assert n > 0
+    eq(a.text("#allCount"), f"({n} işlem)", "başlıktaki sayı")
+    unk = a.ev("[...document.querySelectorAll('#unk select')].length")
+    eq(a.text("#unkCount"), f"({unk})" if unk else "", "kategorisizler sayısı")
+    a.pg.click("#allFold > summary"); a.pg.wait_for_timeout(100)
+    assert a.pg.is_visible("#alltx"), "açınca tablo görünmeli"
+    a.pg.select_option("#alltx select >> nth=0", "Market"); a.pg.wait_for_timeout(150)
+    eq(a.ev("$('allFold').open"), True, "yeniden çizimde açık kalmalı")
+    a.pg.click("#allFold > summary"); a.pg.wait_for_timeout(100)
+    eq(a.ev("$('allFold').open"), False, "tekrar tıklayınca kapanmalı")
     a.close()
 
 
