@@ -33,7 +33,10 @@ Files are never uploaded anywhere; parsing and calculations run in the browser, 
 Tüm uygulama `index.html` içindedir. Excel (SheetJS) ve PDF (PDF.js) kütüphaneleri dosyanın içine sıkıştırılmış olarak gömülüdür; harici bağımlılık veya derleme adımı yoktur.
 The whole app is `index.html`. SheetJS and PDF.js are embedded (gzip + base64), so there is no build step and no network dependency.
 
-Değişiklikleri test etmek için dosyayı Chrome'da açmanız yeterli. Uygulama kodu dosyanın sonundaki `<script>` bloğundadır.
+Uygulama kodu dosyanın sonundaki `<script>` bloğundadır.
+
+**Testler / Tests:** `pip install -r tests/requirements.txt && python -m playwright install chromium && python tests/run_tests.py`
+Sentetik ekstre PDF'leri üretip aracı Chromium'da uçtan uca test eder. Ayrıntılar `CLAUDE.md` içinde.
 
 ## Canlı sayfa / Live page
 
