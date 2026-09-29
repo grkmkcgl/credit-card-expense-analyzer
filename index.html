@@ -184,6 +184,18 @@ td select{padding:4px;font-size:.85rem;min-width:130px}
 .hide{display:none!important}
 small{color:var(--muted)}
 details summary{cursor:pointer}
+/* Cila: yumuşak geçişler, basma/üzerine gelme geri bildirimi, boş durum */
+button{transition:filter .15s,transform .1s,background-color .15s,border-color .15s,color .15s}
+button:active:not(:disabled){transform:scale(.97)}
+.kpi,.qcard,.excl,.hero{transition:border-color .2s,box-shadow .2s,transform .2s}
+button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.row,.linkish,details.fold>summary,select,input{transition:background-color .15s,color .15s,border-color .15s}
+#out:not(.hide){animation:fadein .3s ease-out}
+@keyframes fadein{from{opacity:0}}
+.empty{display:flex;align-items:center;gap:8px;color:var(--muted);padding:10px 4px}
+.empty .tick{color:var(--teal);font-weight:700}
+.catrow.off{transition:opacity .2s}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 </style>
 <script>
 /* Kütüphaneler dosyanın içinde sıkıştırılmış olarak durur; internetten hiçbir şey indirilmez. */
@@ -1423,7 +1435,7 @@ function render(){
   $("rulesCount").textContent=`(${catNames.length} kategori)`;
   const unk=all.filter(d=>d.sub==="Diğer"&&d.sum>0);
   $("unkCount").textContent=unk.length?`(${unk.length})`:"";
-  preact.render(hx`<tbody>${unk.length?unk.map(d=>hx`<tr key=${norm(d.desc)}><td>${d.desc}<br/><small>${d.n} işlem</small></td><td class="n">${fmt(d.sum)}</td><td><select data-k=${norm(d.desc)} onChange=${e=>{if(e.target.value){overrides[norm(d.desc)]=e.target.value;save();render()}}}><option value="">Seç…</option>${catNames.map(c=>hx`<option key=${c}>${c}</option>`)}</select></td></tr>`):hx`<tr><td><small>Hepsi kategorilendi.</small></td></tr>`}</tbody>`,$("unk"));
+  preact.render(hx`<tbody>${unk.length?unk.map(d=>hx`<tr key=${norm(d.desc)}><td>${d.desc}<br/><small>${d.n} işlem</small></td><td class="n">${fmt(d.sum)}</td><td><select data-k=${norm(d.desc)} onChange=${e=>{if(e.target.value){overrides[norm(d.desc)]=e.target.value;save();render()}}}><option value="">Seç…</option>${catNames.map(c=>hx`<option key=${c}>${c}</option>`)}</select></td></tr>`):hx`<tr><td><div class="empty"><span class="tick" aria-hidden="true">✓</span><small>Hepsi kategorilendi.</small></div></td></tr>`}</tbody>`,$("unk"));
   const catOpts=[...new Set([...catNames,"Diğer"])];
   const list=tx.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   $("allCount").textContent=`(${list.length} işlem)`;
