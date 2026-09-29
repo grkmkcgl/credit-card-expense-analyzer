@@ -618,6 +618,44 @@ def ekstre_kontrolu_kapali_kalir(b, info):
     a.close()
 
 
+@test
+def pasta_grafik_yerinde_guncellenir(b, info):
+    a = App(b); a.import_("arti.pdf"); a.pg.click("#vPie"); a.pg.wait_for_timeout(700)
+    n0 = a.ev("document.querySelectorAll('#donut path').length")
+    a.ev("document.querySelector('#donut path').dataset.isaret='1'")
+    total0 = a.text("#dVal")
+    bb = a.pg.locator("#donut svg").bounding_box(); sc = bb["width"] / 240
+    a.pg.mouse.move(bb["x"] + 150 * sc, bb["y"] + 35 * sc); a.pg.wait_for_timeout(100)  # ilk dilimin halkası
+    assert a.text("#dName"), "üzerine gelince kategori adı görünmeli"
+    assert a.text("#dVal") != total0, "üzerine gelince dilimin tutarı görünmeli"
+    a.pg.mouse.move(2, 2); a.pg.wait_for_timeout(100)
+    eq(a.text("#dName"), "", "ayrılınca ad silinmeli"); eq(a.text("#dVal"), total0, "ayrılınca toplam dönmeli")
+    a.pg.uncheck("input[data-inc='Ulaşım']"); a.pg.wait_for_timeout(500)
+    eq(a.ev("document.querySelectorAll('#donut path').length"), n0 - 1, "dışlanan kategorinin dilimi kalkmalı")
+    eq(a.ev("document.querySelector('#donut path').dataset.isaret"), "1", "dilim DOM'u yeniden yaratılmamalı")
+    a.pg.focus("#donut path >> nth=1"); a.pg.keyboard.press("Enter"); a.pg.wait_for_timeout(150)
+    assert a.pg.is_visible("#cats .catlist"), "Enter ile kategori açılmalı"
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
+def pasta_grafik_hareket_azaltilinca_animasyonsuz(b, info):
+    ctx = b.new_context(viewport={"width": 1000, "height": 1300}, reduced_motion="reduce")
+    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.clock.set_fixed_time(NOW); pg.goto(PAGE); pg.wait_for_function("window.libsReady && typeof pdfToRows==='function'")
+    pg.evaluate("window.libsReady")
+    pg.evaluate("['drop','hist'].forEach(i=>document.getElementById(i).classList.remove('hide'))")
+    pg.set_input_files("#file", f("arti.pdf"))
+    pg.wait_for_function("!document.getElementById('setup').classList.contains('hide')", timeout=20000)
+    pg.click("#run"); pg.wait_for_timeout(150); pg.click("#vPie"); pg.wait_for_timeout(50)
+    eq(pg.evaluate("getComputedStyle(document.querySelector('#donut path')).animationName"), "none", "animasyon kapalı olmalı")
+    pg.uncheck("input[data-inc='Ulaşım']"); pg.wait_for_timeout(50)
+    eq(pg.evaluate("document.querySelectorAll('#donut path').length"), 3, "hemen son durumda olmalı")
+    assert not errs, errs
+    ctx.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]

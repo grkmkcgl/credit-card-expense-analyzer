@@ -109,7 +109,9 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--mustard);outli
 @media (max-width:640px){.catview.pie{grid-template-columns:1fr}}
 .donutwrap{position:relative;width:240px;max-width:100%;margin:6px auto 10px}
 .donutwrap svg{display:block;width:100%;height:auto}
-.donutwrap path{cursor:pointer;transition:opacity .12s}
+.donutwrap path{cursor:pointer;transition:opacity .12s;transform-origin:120px 120px;animation:dpop .5s ease-out backwards;animation-delay:calc(var(--i,0)*60ms)}
+@keyframes dpop{from{opacity:0;transform:scale(.85) rotate(-25deg)}}
+.dcenter b{animation:popin .3s ease-out}
 .donutwrap path:focus{outline:none}
 .donutwrap path:focus-visible{stroke:var(--mustard);stroke-width:3}
 .donutwrap.hov path:not(.on){opacity:.35}
@@ -192,6 +194,7 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 .row,.linkish,details.fold>summary,select,input{transition:background-color .15s,color .15s,border-color .15s}
 #out:not(.hide){animation:fadein .3s ease-out}
 @keyframes fadein{from{opacity:0}}
+#msg .ok,#msg .err,#msg .flist{animation:fadein .3s ease-out}
 .empty{display:flex;align-items:center;gap:8px;color:var(--muted);padding:10px 4px}
 .empty .tick{color:var(--teal);font-weight:700}
 .catrow.off{transition:opacity .2s}
@@ -1174,47 +1177,65 @@ function renderPie(posCats,col,ranked,gross,total,allTx){
   $("catview").classList.toggle("pie",pie);
   $("strip").classList.toggle("hide",pie);
   $("vBar").setAttribute("aria-pressed",!pie); $("vPie").setAttribute("aria-pressed",pie);
-  if(!pie){$("pieBox").innerHTML="";return}
+  if(!pie){preact.render(null,$("pieBox"));return}
   /* Dilimler palet sırasıyla (doğrulanmış komşuluk), gri kategoriler tek dilimde toplanır */
   const colored=ranked.map(c=>posCats.find(([k])=>k===c)).filter(Boolean);
   const rest=posCats.filter(([c])=>!ranked.includes(c));
   const slices=colored.map(([c,v])=>({label:c,v,color:col[c],cats:[c]}));
   if(rest.length)slices.push({label:rest.length===1?rest[0][0]:`Diğer kategoriler (${rest.length})`,v:rest.reduce((s,[,v])=>s+v,0),color:GRAY,cats:rest.map(([c])=>c),hatch:rest.length>1,detail:rest});
   const sum=slices.reduce((s,x)=>s+x.v,0);
-  if(!sum){$("pieBox").innerHTML='<p class="pienote">Bu dönemde gösterilecek harcama yok.</p>';return}
-  const C=120,R1=110,R0=70; let a=0;
-  const paths=slices.map((sl,i)=>{
-    const a0=a, a1=a+sl.v/sum*Math.PI*2; a=a1;
-    const pct=(sl.v/sum*100).toFixed(1);
-    return `<path d="${arcPath(C,C,R0,R1,a0,a1)}" fill="${sl.hatch?"url(#hatch)":sl.color}" stroke="#000" stroke-width="2" stroke-linejoin="round" data-i="${i}" tabindex="0" role="img" aria-label="${esc(sl.label)}: ${fmt(sl.v)}, yüzde ${pct}"></path>`;
-  }).join("");
+  if(!sum){preact.render(hx`<p class="pienote">Bu dönemde gösterilecek harcama yok.</p>`,$("pieBox"));return}
   const refund=allTx.filter(t=>t.amt<0&&!excluded.has(t.cat)).reduce((s,t)=>s+t.amt,0);
-  $("pieBox").innerHTML=`<div class="donutwrap" id="donut"><svg viewBox="0 0 240 240" aria-label="Harcama dağılımı pasta grafiği">
-    <defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="${GRAY}"/><line x1="0" y1="0" x2="0" y2="6" stroke="#3f4543" stroke-width="2.2"/></pattern></defs>
-    ${paths}</svg>
-    <div class="dcenter"><span class="nm" id="dName"></span><b id="dVal">${fmt(sum)}</b><small id="dLbl">${excluded.size?"seçili kategoriler":"toplam harcama"}</small></div></div>
-    <div class="tip" id="dTip"></div>
-    ${refund<0?`<p class="pienote">İadeler (${fmt(refund)}) grafikte gösterilmez; net toplam ${fmt(total)}.</p>`:""}
-    <p class="pienote">Bir dilime dokunun: kategori listede açılır.</p>`;
-  const wrap=$("donut"), tip=$("dTip");
-  const show=(i,ev)=>{
-    const sl=slices[i], pct=(sl.v/sum*100).toFixed(1);
-    wrap.classList.add("hov"); wrap.querySelectorAll("path").forEach(p=>p.classList.toggle("on",+p.dataset.i===i));
-    $("dName").textContent=sl.label; $("dVal").textContent=fmt(sl.v); $("dLbl").textContent=`%${pct}`;
-    /* birleştirilmiş gri dilimin içeriği grafiğin altında */
-    if(sl.detail){tip.innerHTML=`<span class="sw" style="background:${GRAY}"></span><b>${esc(sl.label)}</b><br><small>${sl.detail.map(([c,v])=>`${esc(c)} ${fmt(v)}`).join("<br>")}</small>`;tip.style.display="block"}
-    else tip.style.display="none";
-  };
-  const hide=()=>{wrap.classList.remove("hov");tip.style.display="none";$("dName").textContent="";$("dVal").textContent=fmt(sum);$("dLbl").textContent=excluded.size?"seçili kategoriler":"toplam harcama"};
   const pick=i=>{const c=slices[i].cats[0]; slices[i].cats.forEach(k=>openCats.add(k)); render();
     const el=document.querySelector(`#cats .row[data-cat="${CSS.escape(c)}"]`); if(el)el.scrollIntoView({behavior:"smooth",block:"center"})};
-  wrap.querySelectorAll("path").forEach(p=>{
-    const i=+p.dataset.i;
-    p.addEventListener("pointermove",e=>show(i,e)); p.addEventListener("pointerleave",hide);
-    p.addEventListener("focus",()=>show(i)); p.addEventListener("blur",hide);
-    p.addEventListener("click",()=>pick(i)); p.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();pick(i)}});
-  });
+  preact.render(hx`<${donutClass()} slices=${slices} sum=${sum} total=${total} refund=${refund} exclNow=${excluded.size>0} onPick=${pick}/>`,$("pieBox"));
 }
+/* Pasta grafik: üzerine gelme/odak durumu state'te, veri değişince dilim açıları 200 ms'de yumuşakça geçer */
+/* Preact kütüphaneyle birlikte yüklendiği için sınıf ilk kullanımda tanımlanır */
+let DonutC;
+const donutClass=()=>DonutC||(DonutC=class Donut extends preact.Component{
+  state={hov:null};
+  disp={}; from=null; p=1; raf=0; timer=0;
+  show=i=>{if(this.state.hov!==i)this.setState({hov:i})};
+  hide=()=>{if(this.state.hov!==null)this.setState({hov:null})};
+  componentWillReceiveProps(){
+    if(matchMedia("(prefers-reduced-motion:reduce)").matches)return;
+    this.from=this.disp; this.p=0; this.t0=0;
+    cancelAnimationFrame(this.raf); clearTimeout(this.timer);
+    this.raf=requestAnimationFrame(this.tick);
+    this.timer=setTimeout(()=>{cancelAnimationFrame(this.raf);this.p=1;this.forceUpdate()},260);
+  }
+  componentWillUnmount(){cancelAnimationFrame(this.raf);clearTimeout(this.timer)}
+  tick=ts=>{
+    if(!this.t0)this.t0=ts;
+    this.p=Math.min(1,(ts-this.t0)/200); this.forceUpdate();
+    this.raf=this.p<1?requestAnimationFrame(this.tick):0;
+  };
+  render({slices,sum,total,refund,exclNow,onPick},{hov}){
+    const C=120,R1=110,R0=70, e=1-Math.pow(1-this.p,3), disp={};
+    let a=0;
+    const paths=slices.map((sl,i)=>{
+      const t0=a, t1=a+sl.v/sum*Math.PI*2; a=t1;
+      const fr=this.from&&this.from[sl.label]||[t0,t0];
+      const a0=fr[0]+(t0-fr[0])*e, a1=fr[1]+(t1-fr[1])*e; disp[sl.label]=[a0,a1];
+      const pct=(sl.v/sum*100).toFixed(1);
+      const key=k=>e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onPick(i)}};
+      return hx`<path key=${sl.label} class=${hov===i?"on":""} style=${`--i:${i}`} d=${arcPath(C,C,R0,R1,a0,a1)} fill=${sl.hatch?"url(#hatch)":sl.color} stroke="#000" stroke-width="2" stroke-linejoin="round" data-i=${i} tabindex="0" role="img" aria-label=${`${sl.label}: ${fmt(sl.v)}, yüzde ${pct}`}
+        onPointerMove=${()=>this.show(i)} onPointerLeave=${this.hide} onFocus=${()=>this.show(i)} onBlur=${this.hide} onClick=${()=>onPick(i)} onKeyDown=${key(i)}/>`;
+    });
+    this.disp=disp;
+    const sl=hov!=null?slices[hov]:null;
+    return hx`<${preact.Fragment}>
+      <div class=${"donutwrap"+(sl?" hov":"")} id="donut"><svg viewBox="0 0 240 240" aria-label="Harcama dağılımı pasta grafiği">
+        <defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill=${GRAY}/><line x1="0" y1="0" x2="0" y2="6" stroke="#3f4543" stroke-width="2.2"/></pattern></defs>
+        ${paths}</svg>
+        <div class="dcenter"><span class="nm" id="dName">${sl?sl.label:""}</span><b id="dVal" key=${sl?sl.label:"toplam"}>${fmt(sl?sl.v:sum)}</b><small id="dLbl">${sl?`%${(sl.v/sum*100).toFixed(1)}`:exclNow?"seçili kategoriler":"toplam harcama"}</small></div></div>
+      <div class="tip" id="dTip" style=${sl&&sl.detail?"display:block":"display:none"}>${sl&&sl.detail?hx`<span class="sw" style=${"background:"+GRAY}></span><b>${sl.label}</b><br/><small>${sl.detail.map(([c,v])=>hx`<${preact.Fragment} key=${c}>${c} ${fmt(v)}<br/><//>`)}</small>`:null}</div>
+      ${refund<0?hx`<p class="pienote">İadeler (${fmt(refund)}) grafikte gösterilmez; net toplam ${fmt(total)}.</p>`:null}
+      <p class="pienote">Bir dilime dokunun: kategori listede açılır.</p>
+    <//>`;
+  }
+})
 /* Bir açıklamadan arama terimi üret: ilk kelime(ler), en az 6 harf olana kadar (ör. "EGE PIDE", "MIGROS") */
 function merchantKey(desc){
   const w=norm(desc).replace(/[^A-Z0-9 &.-]/g," ").split(/\s+/).filter(Boolean);
