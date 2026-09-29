@@ -607,6 +607,17 @@ def kategori_listesi_yerinde_guncellenir(b, info):
     a.close()
 
 
+@test
+def ekstre_kontrolu_kapali_kalir(b, info):
+    a = App(b); a.import_("wp_ayri.pdf"); a.period("2026-08")
+    assert a.ev("!!$('recon').querySelector('details')"), "ekstre kontrolü görünmeli"
+    a.ev("$('recon').querySelector('details').open=false"); a.ev("render()")
+    eq(a.ev("$('recon').querySelector('details').open"), False, "kullanıcının kapattığı kutu yeniden çizimde açılmamalı")
+    a.pg.click("#kpiRecon"); a.pg.wait_for_timeout(100)
+    eq(a.ev("$('recon').querySelector('details').open"), True, "özet kartı kutuyu açmalı")
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]

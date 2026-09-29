@@ -1107,45 +1107,47 @@ function fillPeriods(){
 }
 
 function renderRecon(p){
-  const el=$("recon");
   const list=p?Object.keys(statements).filter(k=>k.slice(0,7)===p).sort():[];
-  el.innerHTML="";
-  list.forEach(stmt=>renderOneRecon(el,stmt,list.length>1));
+  preact.render(list.map(stmt=>hx`<${ReconBox} key=${stmt} stmt=${stmt} multi=${list.length>1}/>`),$("recon"));
 }
-function renderOneRecon(el,stmt,multi){
+/* Okunamayan satırı bu ekstreye harcama olarak ekler */
+function addMissed(stmt,i){
+  const S=statements[stmt], t=S.missed[i], am=[...t.matchAll(AMT_RE)];
+  if(!am.length)return;
+  const m=am[am.length-1]; let v=toNum(m[1].replace(/\s/g,"").replace(/^\+/,""));
+  const desc=t.slice(0,am[0].index).replace(/\b(TL|TRY)\b|₺/g,"").replace(/\s+/g," ").trim()||"Ekstre kalemi";
+  history.push({id:`M|${stmt}|${norm(desc)}|${v}`,date:stmt,stmt,desc,amt:Math.round(Math.abs(v)*100)/100,note:"Ekstreden elle eklendi"});
+  S.missed.splice(i,1); save(); render();
+}
+/* Ekstre kontrolü: önceki borç − ödemeler + harcamalar − iadeler = dönem borcu. <details> açık/kapalı durumu yeniden çizimde korunur. */
+function ReconBox({stmt,multi}){
   const S=statements[stmt];
   const own=history.filter(t=>t.stmt===stmt&&!t.est);
   const B=own.filter(t=>!t.kind).reduce((s,t)=>s+t.amt,0);
   const C=-own.filter(t=>t.kind==="refund").reduce((s,t)=>s+t.amt,0);
   const D=own.filter(t=>t.kind==="payment").reduce((s,t)=>s+t.amt,0);
-  const countNote=S.rows&&own.length<S.rows?`<p><small class="err">Ekstrede ${S.rows} satır okundu ama bu ekstreye bağlı ${own.length} kayıt var. Ekstreyi bir kez daha yükleyin; eksik bağlantılar düzelir.</small></p>`:"";
-  const row=(l,v,b)=>`<tr><td>${l}</td><td class="n">${b?"<b>":""}${v==null?"<small>bulunamadı</small>":fmt2(v)}${b?"</b>":""}</td></tr>`;
-  let html=`<details class="panel" style="margin-top:14px" ${S.due!=null?"open":""}><summary><b>Ekstre kontrolü</b> <small>(${multi?`kesim ${toDate(stmt).toLocaleDateString("tr-TR")}, `:""}dönem borcu ile karşılaştırma)</small></summary><table style="margin-top:8px">`;
+  const row=(l,v,b)=>{const c=v==null?hx`<small>bulunamadı</small>`:fmt2(v);return hx`<tr key=${l}><td>${l}</td><td class="n">${b?hx`<b>${c}</b>`:c}</td></tr>`};
   const hasPrev=S.prev!=null;
-  html+=hasPrev?row("Önceki dönem borcu (ekstreden)",S.prev):"";
-  html+=row("+ Bu ekstredeki harcamalar ve taksitler",B)+row("− İadeler ve indirimler",C)+(hasPrev?row("− Ödemeleriniz",D):"");
   const calc=(hasPrev?S.prev-D:0)+B-C;
-  html+=row(hasPrev?"= Hesaplanan dönem borcu":"= Bu dönemin net harcaması",calc,true)+row("Ekstredeki dönem borcu",S.due,true);
-  html+="</table>"+countNote;
+  let verdict;
   if(S.due!=null){
     const diff=Math.round((S.due-calc)*100)/100;
-    if(Math.abs(diff)<1) html+=`<p class="ok" style="margin-top:8px">Tutuyor. Ekstredeki tüm tutarlar okunmuş.</p>`;
-    else{
-      html+=`<p style="margin-top:8px"><b class="err">Fark: ${fmt2(diff)}</b><br><small>`+
-        (hasPrev?"":`Ekstrede önceki dönem borcu bulunamadığı için devreden borç hesaba katılamadı${D?` (bu ekstrede ${fmt2(D)} ödemeniz var)`:""}. Önceki borcunuzu tam ödediyseniz fark sıfıra yakın olmalı; kısmi ödediyseniz fark, ödenmeyen kısım kadardır. `)+
-        (diff>0?"Ekstrede, araçta harcama olarak görünmeyen tutarlar var. Genelde faiz, BSMV/KKDF, kart ücreti ya da tarihi olmadığı için okunamayan satırlardır.":"Araç, ekstredekinden fazla harcama saymış. Aynı işlem iki kez okunmuş ya da bir ödeme/iade harcama sanılmış olabilir; aşağıdaki işlem listesini kontrol edin.")+`</small></p>`;
-      if(S.missed&&S.missed.length) html+=`<p><small>Bu ekstrede işlem olarak okunamayan, tutar içeren satırlar:</small></p><div class="scroll" style="max-height:200px;font-size:.85rem">${S.missed.map((t,i)=>`<div style="padding:4px 0;border-bottom:1px solid var(--line);display:flex;gap:10px;justify-content:space-between;align-items:center"><span>${esc(t)}</span><button class="x" data-mi="${i}" title="Bu satırı bu ekstreye harcama olarak ekle">Ekle</button></div>`).join("")}</div>`;
-    }
-  }else html+=`<p><small>Ekstrede dönem borcu bulunamadı, karşılaştırma yapılamadı.</small></p>`;
-  const box=document.createElement("div"); box.innerHTML=html+"</details>"; el.appendChild(box);
-  box.querySelectorAll("button[data-mi]").forEach(b=>b.addEventListener("click",()=>{
-    const t=S.missed[+b.dataset.mi], am=[...t.matchAll(AMT_RE)];
-    if(!am.length)return;
-    const m=am[am.length-1]; let v=toNum(m[1].replace(/\s/g,"").replace(/^\+/,""));
-    const desc=t.slice(0,am[0].index).replace(/\b(TL|TRY)\b|₺/g,"").replace(/\s+/g," ").trim()||"Ekstre kalemi";
-    history.push({id:`M|${stmt}|${norm(desc)}|${v}`,date:stmt,stmt,desc,amt:Math.round(Math.abs(v)*100)/100,note:"Ekstreden elle eklendi"});
-    S.missed.splice(+b.dataset.mi,1); save(); render();
-  }));
+    if(Math.abs(diff)<1)verdict=hx`<p class="ok" style="margin-top:8px">Tutuyor. Ekstredeki tüm tutarlar okunmuş.</p>`;
+    else verdict=hx`<${preact.Fragment}>
+      <p style="margin-top:8px"><b class="err">Fark: ${fmt2(diff)}</b><br/><small>${hasPrev?"":`Ekstrede önceki dönem borcu bulunamadığı için devreden borç hesaba katılamadı${D?` (bu ekstrede ${fmt2(D)} ödemeniz var)`:""}. Önceki borcunuzu tam ödediyseniz fark sıfıra yakın olmalı; kısmi ödediyseniz fark, ödenmeyen kısım kadardır. `}${diff>0?"Ekstrede, araçta harcama olarak görünmeyen tutarlar var. Genelde faiz, BSMV/KKDF, kart ücreti ya da tarihi olmadığı için okunamayan satırlardır.":"Araç, ekstredekinden fazla harcama saymış. Aynı işlem iki kez okunmuş ya da bir ödeme/iade harcama sanılmış olabilir; aşağıdaki işlem listesini kontrol edin."}</small></p>
+      ${S.missed&&S.missed.length?hx`<p><small>Bu ekstrede işlem olarak okunamayan, tutar içeren satırlar:</small></p><div class="scroll" style="max-height:200px;font-size:.85rem">${S.missed.map((t,i)=>hx`<div key=${i+t} style="padding:4px 0;border-bottom:1px solid var(--line);display:flex;gap:10px;justify-content:space-between;align-items:center"><span>${t}</span><button class="x" data-mi=${i} title="Bu satırı bu ekstreye harcama olarak ekle" onClick=${()=>addMissed(stmt,i)}>Ekle</button></div>`)}</div>`:null}
+    <//>`;
+  }else verdict=hx`<p><small>Ekstrede dönem borcu bulunamadı, karşılaştırma yapılamadı.</small></p>`;
+  return hx`<div><details class="panel" style="margin-top:14px" open=${S.due!=null}>
+    <summary><b>Ekstre kontrolü</b> <small>(${multi?`kesim ${toDate(stmt).toLocaleDateString("tr-TR")}, `:""}dönem borcu ile karşılaştırma)</small></summary>
+    <table style="margin-top:8px"><tbody>
+      ${hasPrev?row("Önceki dönem borcu (ekstreden)",S.prev):null}
+      ${row("+ Bu ekstredeki harcamalar ve taksitler",B)}${row("− İadeler ve indirimler",C)}${hasPrev?row("− Ödemeleriniz",D):null}
+      ${row(hasPrev?"= Hesaplanan dönem borcu":"= Bu dönemin net harcaması",calc,true)}${row("Ekstredeki dönem borcu",S.due,true)}
+    </tbody></table>
+    ${S.rows&&own.length<S.rows?hx`<p><small class="err">Ekstrede ${S.rows} satır okundu ama bu ekstreye bağlı ${own.length} kayıt var. Ekstreyi bir kez daha yükleyin; eksik bağlantılar düzelir.</small></p>`:null}
+    ${verdict}
+  </details></div>`;
 }
 const fmt2=n=>n.toLocaleString("tr-TR",{style:"currency",currency:"TRY",minimumFractionDigits:2,maximumFractionDigits:2});
 function arcPath(cx,cy,r0,r1,a0,a1){
@@ -1221,7 +1223,7 @@ function scopeInfo(){
 function monthSpan(a,b){const out=[];let [y,m]=a.split("-").map(Number);while(out.length<121){const k=`${y}-${String(m).padStart(2,"0")}`;if(k>b)break;out.push(k);if(++m>12){m=1;y++}}return out}
 function renderQuery(){
   const out=$("qOut"), raw=$("q").value.trim();
-  if(!raw){out.innerHTML="";return}
+  if(!raw){preact.render(null,out);return}
   const terms=raw.split(",").map(t=>norm(t)).filter(Boolean);
   const sq2=x=>x.replace(/\s+/g,"");
   const today=iso(new Date());
@@ -1230,26 +1232,26 @@ function renderQuery(){
   const match=t=>{const d=norm(t.desc);return terms.some(q=>d.includes(q)||sq2(d).includes(sq2(q)))};
   const allHits=base.filter(match);
   const hits=allHits.filter(sc.in);
-  const scopeLine=`<p style="margin:10px 0 0"><small>Kapsam: <b>${esc(sc.label)}</b> (yukarıdaki Dönem seçimine göre).</small></p>`;
+  const scopeLine=hx`<p style="margin:10px 0 0"><small>Kapsam: <b>${sc.label}</b> (yukarıdaki Dönem seçimine göre).</small></p>`;
   if(!hits.length){
-    out.innerHTML=scopeLine+`<p style="margin-top:6px"><small>"${esc(raw)}" ile eşleşen harcama bu kapsamda bulunamadı.`+(allHits.length?` Tüm zamanlarda ${allHits.length} işlem var; Dönem'i "Tüm zamanlar" yapın.`:` Daha kısa yazmayı deneyin (ör. sadece "pide").`)+`</small></p>`;
+    preact.render(hx`<${preact.Fragment}>${scopeLine}<p style="margin-top:6px"><small>"${raw}" ile eşleşen harcama bu kapsamda bulunamadı.${allHits.length?` Tüm zamanlarda ${allHits.length} işlem var; Dönem'i "Tüm zamanlar" yapın.`:` Daha kısa yazmayı deneyin (ör. sadece "pide").`}</small></p><//>`,out);
     return;
   }
   const byM={}; allHits.forEach(t=>{const k=periodKey(t);byM[k]=(byM[k]||0)+t.amt});
   const inM={}; hits.forEach(t=>{const k=periodKey(t);inM[k]=(inM[k]||0)+t.amt});
   const total=hits.reduce((s,t)=>s+t.amt,0), pos=hits.filter(t=>t.amt>0), n=pos.length;
   const avgVisit=n?pos.reduce((s,t)=>s+t.amt,0)/n:0;
-  const card=(v,l)=>`<div class="qcard"><small>${l}</small><b>${v}</b></div>`;
+  const card=(v,l)=>hx`<div class="qcard" key=${l}><small>${l}</small><b>${v}</b></div>`;
   const scopeAll=base.filter(sc.in).filter(t=>t.amt>0).reduce((s,t)=>s+t.amt,0);
   const share=scopeAll?total/scopeAll*100:0;
   const allKeys=base.map(periodKey).filter(Boolean).sort();
-  let cards="", tip="", months=[], hl=null, chartTitle="";
+  let cards=[], tip="", months=[], hl=null, chartTitle="";
   if(sc.mode==="period"){
     /* tek dönem: bu dönemin rakamları + diğer aylarla karşılaştırma */
     months=monthSpan(allKeys[0],allKeys.at(-1)); hl=sc.p;
     const others=months.filter(k=>k!==sc.p), oAvg=others.length?others.reduce((s,k)=>s+(byM[k]||0),0)/others.length:0;
     const d=oAvg?Math.round((total-oAvg)/oAvg*100):null;
-    cards=card(fmt(total),"Bu dönemde")+card(`${n} kez`,"işlem")+card(fmt(avgVisit),"İşlem başına ortalama")+card(fmt(oAvg),"Diğer ayların ortalaması");
+    cards=[card(fmt(total),"Bu dönemde"),card(`${n} kez`,"işlem"),card(fmt(avgVisit),"İşlem başına ortalama"),card(fmt(oAvg),"Diğer ayların ortalaması")];
     tip=`Bu dönemde <b>${fmt(total)}</b>`+(d==null?".":d>0?`, diğer ayların ortalamasından <b>%${d} fazla</b>.`:d<0?`, diğer ayların ortalamasından %${-d} az.`:", diğer ayların ortalamasıyla aynı.")+
       `<br>Bu dönemin harcamaları içindeki payı: %${share.toLocaleString("tr-TR",{maximumFractionDigits:1})}.`+(total>oAvg&&oAvg?` Ortalamaya inseydiniz bu dönem <b>${fmt(total-oAvg)}</b> daha az harcardınız.`:"");
     chartTitle="Diğer aylarla karşılaştırma (seçili dönem sarı):";
@@ -1262,7 +1264,7 @@ function renderQuery(){
     const lastK=months.at(-1), prev=months.slice(0,-1), prevAvg=prev.length?prev.reduce((s,k)=>s+(src[k]||0),0)/prev.length:0;
     const lastV=src[lastK]||0, d=prevAvg?Math.round((lastV-prevAvg)/prevAvg*100):null;
     hl=lastK;
-    cards=card(fmt(total),`Toplam, ${months.length} ayda`)+card(fmt(avg),"Aylık ortalama")+card(`${n} kez`,`${active.length} farklı ayda`)+card(fmt(avgVisit),"İşlem başına ortalama");
+    cards=[card(fmt(total),`Toplam, ${months.length} ayda`),card(fmt(avg),"Aylık ortalama"),card(`${n} kez`,`${active.length} farklı ayda`),card(fmt(avgVisit),"İşlem başına ortalama")];
     tip=(months.length>1?`${periodLabel(lastK,true)}: <b>${fmt(lastV)}</b>`+(d==null?".":d>0?`, önceki ayların ortalamasından <b>%${d} fazla</b>.`:d<0?`, önceki ayların ortalamasından %${-d} az.`:", önceki ayların ortalamasıyla aynı.")+(maxK?` En çok harcanan ay: ${periodLabel(maxK,true)} (${fmt(src[maxK])}).`:"")+"<br>":"")+
       `${sc.mode==="range"?"Bu aralıktaki":"Tüm"} harcamalarınız içindeki payı: %${share.toLocaleString("tr-TR",{maximumFractionDigits:1})}. Bu harcamayı yarıya indirirseniz yılda yaklaşık <b>${fmt(avg*6)}</b> tasarruf edersiniz.`;
     chartTitle=sc.mode==="range"?"Aralıktaki aylar (son ay sarı; ilk ve son ay kısmi olabilir):":"Aylara göre (son ay sarı):";
@@ -1270,13 +1272,15 @@ function renderQuery(){
   }
   const mx=Math.max(...months.map(k=>byM[k]||0),1);
   const names=[...new Set(hits.map(t=>t.desc))];
-  out.innerHTML=scopeLine+`
+  /* tip yalnızca rakam ve dönem etiketlerinden üretilir, kullanıcı metni içermez */
+  preact.render(hx`<${preact.Fragment}>${scopeLine}
     <div class="qcards">${cards}</div>
-    <div class="qtip">${tip}</div>
+    <div class="qtip" dangerouslySetInnerHTML=${{__html:tip}}></div>
     <p style="margin:4px 0"><small>${chartTitle}</small></p>
-    <div>${months.map(k=>{const v=byM[k]||0;return `<div class="mrow"><span>${periodLabel(k,true)}</span><div class="bar" style="width:${v/mx*100}%;${k===hl?"background:var(--mustard)":""}${v?"":";background:transparent"}"></div><b style="text-align:right">${v?fmt(v):"<small>–</small>"}</b></div>`}).join("")}</div>
-    ${names.length>1?`<p style="margin-top:10px"><small>Eşleşen ${names.length} farklı açıklama: ${names.slice(0,8).map(esc).join(", ")}${names.length>8?"…":""}. Yanlış eşleşme varsa aramayı daraltın.</small></p>`:""}
-    <details style="margin-top:8px"><summary><small>Bu kapsamdaki işlemleri göster (${hits.length})</small></summary><div class="scroll" style="margin-top:6px"><table>${hits.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(t=>`<tr><td style="white-space:nowrap"><small>${toDate(t.date).toLocaleDateString("tr-TR")}</small></td><td>${esc(t.desc)}${t.inst?`<br><small>${t.inst.n}/${t.inst.m}. taksit</small>`:""}</td><td class="n">${fmt(t.amt)}</td></tr>`).join("")}</table></div></details>`;
+    <div>${months.map(k=>{const v=byM[k]||0;return hx`<div class="mrow" key=${k}><span>${periodLabel(k,true)}</span><div class="bar" style=${`width:${v/mx*100}%;`+(k===hl?"background:var(--mustard)":"")+(v?"":";background:transparent")}></div><b style="text-align:right">${v?fmt(v):hx`<small>–</small>`}</b></div>`})}</div>
+    ${names.length>1?hx`<p style="margin-top:10px"><small>Eşleşen ${names.length} farklı açıklama: ${names.slice(0,8).join(", ")}${names.length>8?"…":""}. Yanlış eşleşme varsa aramayı daraltın.</small></p>`:null}
+    <details style="margin-top:8px"><summary><small>Bu kapsamdaki işlemleri göster (${hits.length})</small></summary><div class="scroll" style="margin-top:6px"><table><tbody>${hits.slice().sort((a,b)=>b.date.localeCompare(a.date)).map((t,n)=>hx`<tr key=${t.id||"i"+n}><td style="white-space:nowrap"><small>${toDate(t.date).toLocaleDateString("tr-TR")}</small></td><td>${t.desc}${t.inst?hx`<br/><small>${t.inst.n}/${t.inst.m}. taksit</small>`:null}</td><td class="n">${fmt(t.amt)}</td></tr>`)}</tbody></table></div></details>
+  <//>`,out);
 }
 /* Toplamın yanındaki özet kartları: seçili kapsama göre değişir */
 function renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross}){
