@@ -84,7 +84,10 @@ button.kpi:hover{border-color:var(--muted);filter:none}
 .top .tdot{width:18px;padding-right:0;vertical-align:top;padding-top:14px}
 .top .dot{display:inline-block}
 .mbar{height:4px;border-radius:2px;background:var(--line);margin-top:6px;overflow:hidden}
-.mbar span{display:block;height:100%;border-radius:2px}
+.mbar span{display:block;height:100%;border-radius:2px;transition:width .45s ease}
+#alltx tr,#unk tr,#top tr{animation:rowin .25s ease-out}
+@keyframes rowin{from{opacity:0}}
+@media (prefers-reduced-motion:reduce){.mbar span{transition:none}#alltx tr,#unk tr,#top tr{animation:none}}
 .folds{margin-top:40px;border-top:1px solid var(--line)}
 .total,.n,td.n,.row b,.pct,.mrow b,.qcard b,.kpi b,.frow{font-variant-numeric:tabular-nums}
 button.x{margin:0;padding:3px 9px;font-size:.8rem;background:transparent;color:var(--muted);border:1px solid var(--line)}
@@ -1303,12 +1306,24 @@ function KpiCard({label,value,sub,cls,id,title,onClick}){
   return hx`<${T} class=${("kpi "+cls).trim()} id=${id} title=${title} onClick=${onClick}><small>${label}</small><b key=${value}>${value}</b>${sub?hx`<small>${sub}</small>`:null}<//>`;
 }
 /* Kategori altındaki işlem satırı; açıklamaya tıklayınca harcama analizi açılır */
+function txExtra(t){
+  if(t.inst)return `${t.sub} · ${t.inst.n}/${t.inst.m}. taksit`+(t.inst.total?` (toplam ${fmt(t.inst.total)})`:"")+(t.pdate&&t.pdate.slice(0,7)!==t.date.slice(0,7)?` · alışveriş ${toDate(t.pdate).toLocaleDateString("tr-TR")}`:"")+(t.est==="past"?" · özette yok, seriden hesaplandı":t.est==="future"?" · planlanan, henüz özette yok":"");
+  return t.note||null;
+}
+function AnBtn({desc}){return hx`<button class="linkish" data-an=${desc} title="Bu harcamayı analiz et" onClick=${e=>{e.stopPropagation();openAnalysis(desc)}}>${desc}</button>`}
 function TxRow({t}){
-  let extra=null;
-  if(t.inst){
-    extra=`${t.sub} · ${t.inst.n}/${t.inst.m}. taksit`+(t.inst.total?` (toplam ${fmt(t.inst.total)})`:"")+(t.pdate&&t.pdate.slice(0,7)!==t.date.slice(0,7)?` · alışveriş ${toDate(t.pdate).toLocaleDateString("tr-TR")}`:"")+(t.est==="past"?" · özette yok, seriden hesaplandı":t.est==="future"?" · planlanan, henüz özette yok":"");
-  }else if(t.note)extra=t.note;
-  return hx`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><button class="linkish" data-an=${t.desc} title="Bu harcamayı analiz et" onClick=${e=>{e.stopPropagation();openAnalysis(t.desc)}}>${t.desc}</button>${extra?hx`<br/><small>${extra}</small>`:null}</td><td class="n">${fmt(t.amt)}</td></tr>`;
+  const extra=txExtra(t);
+  return hx`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><${AnBtn} desc=${t.desc}/>${extra?hx`<br/><small>${extra}</small>`:null}</td><td class="n">${fmt(t.amt)}</td></tr>`;
+}
+/* "Tüm işlemler" satırı: kategori seçimi ve silme */
+function AllRow({t,catOpts}){
+  const extra=txExtra(t);
+  const del=()=>{
+    if(!confirm(`Bu işlem silinsin mi?\n\n${t.date?toDate(t.date).toLocaleDateString("tr-TR"):""} · ${t.desc} · ${fmt2(t.amt)}\n\nSilinen işlem aynı ekstreyi tekrar yüklerseniz geri gelir.`))return;
+    history=history.filter(x=>x.id!==t.id);expandInstallments();save();render();
+  };
+  const pick=e=>{const v=e.target.value,k=norm(t.desc);if(v==="Diğer")delete overrides[k];else overrides[k]=v;save();render()};
+  return hx`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><${AnBtn} desc=${t.desc}/>${extra?hx`<br/><small>${extra}</small>`:null}</td><td><select data-k=${norm(t.desc)} onChange=${pick}>${catOpts.map(c=>hx`<option key=${c} selected=${c===t.sub}>${c}</option>`)}</select></td><td class="n">${fmt(t.amt)}</td><td>${t.est?null:hx`<button class="x" data-id=${t.id} title="Bu işlemi sil" onClick=${del}>Sil</button>`}</td></tr>`;
 }
 /* Liste yeniden çizilirken satırlar eski yerinden yenisine kayar (FLIP); hareket azaltılmışsa atlanır */
 function flipList(el,draw){
@@ -1398,27 +1413,21 @@ function render(){
   const byD={}; tx.forEach(t=>{const k=norm(t.desc);byD[k]=byD[k]||{desc:t.desc,sum:0,n:0,cat:t.inst?`Taksit · ${t.sub}`:t.cat,sub:t.sub,col:col[t.cat]||GRAY};byD[k].sum+=t.amt;byD[k].n++});
   const all=Object.values(byD).sort((a,b)=>b.sum-a.sum);
   const topMax=Math.max(all.length?all[0].sum:0,1);
-  $("top").innerHTML=all.slice(0,10).map(d=>`<tr><td class="tdot"><span class="dot" style="background:${d.col}"></span></td><td><button class="linkish" data-an="${esc(d.desc)}" title="Bu harcamayı analiz et">${esc(d.desc)}</button><br><small>${esc(d.cat)}, ${d.n} işlem</small><div class="mbar" aria-hidden="true"><span style="width:${Math.max(0,d.sum/topMax*100)}%;background:${d.col}"></span></div></td><td class="n"><b>${fmt(d.sum)}</b></td></tr>`).join("");
+  preact.render(hx`<tbody>${all.slice(0,10).map(d=>hx`<tr key=${d.desc}><td class="tdot"><span class="dot" style=${"background:"+d.col}></span></td><td><${AnBtn} desc=${d.desc}/><br/><small>${d.cat}, ${d.n} işlem</small><div class="mbar" aria-hidden="true"><span style=${`width:${Math.max(0,d.sum/topMax*100)}%;background:${d.col}`}></span></div></td><td class="n"><b>${fmt(d.sum)}</b></td></tr>`)}</tbody>`,$("top"));
 
   const catNames=[...new Set(rules.map(r=>r.cat))];
   $("rulesCount").textContent=`(${catNames.length} kategori)`;
   const unk=all.filter(d=>d.sub==="Diğer"&&d.sum>0);
   $("unkCount").textContent=unk.length?`(${unk.length})`:"";
-  $("unk").innerHTML=unk.length?unk.map(d=>`<tr><td>${esc(d.desc)}<br><small>${d.n} işlem</small></td><td class="n">${fmt(d.sum)}</td><td><select data-k="${esc(norm(d.desc))}"><option value="">Seç…</option>${catNames.map(c=>`<option>${esc(c)}</option>`).join("")}</select></td></tr>`).join(""):"<tr><td><small>Hepsi kategorilendi.</small></td></tr>";
+  preact.render(hx`<tbody>${unk.length?unk.map(d=>hx`<tr key=${norm(d.desc)}><td>${d.desc}<br/><small>${d.n} işlem</small></td><td class="n">${fmt(d.sum)}</td><td><select data-k=${norm(d.desc)} onChange=${e=>{if(e.target.value){overrides[norm(d.desc)]=e.target.value;save();render()}}}><option value="">Seç…</option>${catNames.map(c=>hx`<option key=${c}>${c}</option>`)}</select></td></tr>`):hx`<tr><td><small>Hepsi kategorilendi.</small></td></tr>`}</tbody>`,$("unk"));
   const catOpts=[...new Set([...catNames,"Diğer"])];
   const list=tx.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   $("allCount").textContent=`(${list.length} işlem)`;
-  $("alltx").innerHTML=list.map(t=>`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><button class="linkish" data-an="${esc(t.desc)}" title="Bu harcamayı analiz et">${esc(t.desc)}</button>${t.inst?`<br><small>${esc(t.sub)} · ${t.inst.n}/${t.inst.m}. taksit${t.inst.total?` (toplam ${fmt(t.inst.total)})`:""}${t.pdate&&t.pdate.slice(0,7)!==t.date.slice(0,7)?` · alışveriş ${toDate(t.pdate).toLocaleDateString("tr-TR")}`:""}${t.est==="past"?" · özette yok, seriden hesaplandı":t.est==="future"?" · planlanan, henüz özette yok":""}</small>`:t.note?`<br><small>${esc(t.note)}</small>`:""}</td><td><select data-k="${esc(norm(t.desc))}">${catOpts.map(c=>`<option${c===t.sub?" selected":""}>${esc(c)}</option>`).join("")}</select></td><td class="n">${fmt(t.amt)}</td><td>${t.est?"":`<button class="x" data-id="${esc(t.id)}" title="Bu işlemi sil">Sil</button>`}</td></tr>`).join("");
-  $("alltx").querySelectorAll("select").forEach(s=>s.addEventListener("change",()=>{if(s.value==="Diğer")delete overrides[s.dataset.k];else overrides[s.dataset.k]=s.value;save();render()}));
-  $("alltx").querySelectorAll("button.x").forEach(b=>b.addEventListener("click",()=>{
-    const t=history.find(t=>t.id===b.dataset.id); if(!t)return;
-    if(!confirm(`Bu işlem silinsin mi?\n\n${t.date?toDate(t.date).toLocaleDateString("tr-TR"):""} · ${t.desc} · ${fmt2(t.amt)}\n\nSilinen işlem aynı ekstreyi tekrar yüklerseniz geri gelir.`))return;
-    history=history.filter(x=>x.id!==t.id);expandInstallments();save();render()}));
+  preact.render(hx`<tbody>${list.map((t,n)=>hx`<${AllRow} key=${t.id||"i"+n} t=${t} catOpts=${catOpts}/>`)}</tbody>`,$("alltx"));
   const keys=[...new Set(history.filter(t=>t.kind!=="payment").map(t=>merchantKey(t.desc)))].sort();
   $("qList").innerHTML=keys.slice(0,400).map(k=>`<option value="${esc(k)}">`).join("");
   renderQuery();
-  document.querySelectorAll("[data-an]:not(#cats [data-an])").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();openAnalysis(b.dataset.an)}));
-  $("unk").querySelectorAll("select").forEach(s=>s.addEventListener("change",()=>{if(s.value){overrides[s.dataset.k]=s.value;save();render()}}));
+  document.querySelectorAll("[data-an]:not(#cats [data-an],#top [data-an],#alltx [data-an])").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();openAnalysis(b.dataset.an)}));
 }
 
 $("run").addEventListener("click",()=>{
