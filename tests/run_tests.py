@@ -575,6 +575,21 @@ def tarayicida_veri_saklanmaz(b, info):
     a.close()
 
 
+@test
+def arayuz_kutuphanesi_gomulu_ve_ag_yok(b, info):
+    ctx = b.new_context(viewport={"width": 1000, "height": 1300})
+    pg = ctx.new_page()
+    urls = []
+    pg.on("request", lambda r: urls.append(r.url))
+    pg.goto(PAGE); pg.wait_for_function("window.libsReady"); pg.evaluate("window.libsReady")
+    bad = [u for u in urls if not u.startswith(("file:", "data:", "blob:", "about:"))]
+    assert not bad, f"ağ isteği yapıldı: {bad}"
+    eq(pg.evaluate("typeof preact.render+typeof hx"), "functionfunction", "Preact ve htm yüklenmeli")
+    out = pg.evaluate("()=>{const d=document.createElement('div');preact.render(hx`<b class=x>${1+1} ok</b>`,d);return d.innerHTML}")
+    eq(out, '<b class="x">2 ok</b>', "htm şablonu çizilmeli")
+    ctx.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
