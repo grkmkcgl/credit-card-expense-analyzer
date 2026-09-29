@@ -161,7 +161,11 @@ details.fold>summary:focus-visible{outline:3px solid var(--mustard);outline-offs
 .catlist{background:var(--paper);border-bottom:1px solid var(--line);padding:4px 10px 10px 28px}
 .catlist td{font-size:.85rem}
 .pct{color:var(--muted);font-size:.85rem;min-width:44px;text-align:right}
-.bar{height:10px;background:var(--teal);border-radius:3px}
+.bar{height:10px;background:var(--teal);border-radius:3px;transform-origin:left;transition:width .45s ease;animation:growbar .5s ease-out}
+@keyframes growbar{from{transform:scaleX(0)}}
+@keyframes popin{from{opacity:0;transform:translateY(4px)}}
+.kpi b{animation:popin .35s ease-out}
+@media (prefers-reduced-motion:reduce){.bar,.kpi b{animation:none;transition:none}}
 .mrow{display:grid;grid-template-columns:70px 1fr 110px;gap:10px;align-items:center;padding:4px 0;font-size:.9rem}
 table{width:100%;border-collapse:collapse;font-size:.9rem}
 td{padding:6px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
@@ -1270,25 +1274,29 @@ function renderQuery(){
 /* Toplamın yanındaki özet kartları: seçili kapsama göre değişir */
 function renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross}){
   const cards=[];
-  const card=(label,value,sub,cls="",attr="")=>`<${attr?"button":"div"} class="kpi ${cls}" ${attr}><small>${label}</small><b>${value}</b>${sub?`<small>${sub}</small>`:""}</${attr?"button":"div"}>`;
+  const card=(label,value,sub,cls="",extra={})=>cards.push({label,value,sub,cls,...extra});
   if(isRange){
     const days=Math.max(1,Math.round((toDate(rt)-toDate(rf))/864e5)+1);
-    cards.push(card("Günlük ortalama",fmt(total/days),`${days} gün`));
+    card("Günlük ortalama",fmt(total/days),`${days} gün`);
   }else if(p){
     const list=Object.keys(statements).filter(k=>k.slice(0,7)===p).sort();
     const diffs=list.map(reconDiff).filter(d=>d!=null);
     if(diffs.length){
       const bad=diffs.find(d=>Math.abs(d)>=1);
-      cards.push(card("Ekstre kontrolü",bad==null?"✓ Tutuyor":`Fark ${fmt2(bad)}`,bad==null?"Dönem borcuyla aynı":"Ayrıntı için tıklayın",bad==null?"good":"bad",'id="kpiRecon" title="Ekstre kontrolünü göster"'));
+      card("Ekstre kontrolü",bad==null?"✓ Tutuyor":`Fark ${fmt2(bad)}`,bad==null?"Dönem borcuyla aynı":"Ayrıntı için tıklayın",bad==null?"good":"bad",{id:"kpiRecon",title:"Ekstre kontrolünü göster",onClick:()=>{const d=$("recon").querySelector("details");if(d){d.open=true;d.scrollIntoView({behavior:"smooth",block:"start"})}}});
     }
   }else{
     const n=new Set(tx.map(periodKey).filter(Boolean)).size;
-    if(n>1)cards.push(card("Dönem başına ortalama",fmt(total/n),`${n} dönem`));
-    if(upcoming.length)cards.push(card("Gelecek taksitler",fmt(upcoming.reduce((s,t)=>s+t.amt,0)),`${upcoming.length} taksit; dönem seçerek görün`));
+    if(n>1)card("Dönem başına ortalama",fmt(total/n),`${n} dönem`);
+    if(upcoming.length)card("Gelecek taksitler",fmt(upcoming.reduce((s,t)=>s+t.amt,0)),`${upcoming.length} taksit; dönem seçerek görün`);
   }
-  if(posCats.length){const [c,v]=posCats[0];cards.push(card("En büyük kategori",esc(c),`${fmt(v)} · %${(v/gross*100).toFixed(1)}`))}
-  $("kpis").innerHTML=cards.join("");
-  if($("kpiRecon"))$("kpiRecon").addEventListener("click",()=>{const d=$("recon").querySelector("details");if(d){d.open=true;d.scrollIntoView({behavior:"smooth",block:"start"})}});
+  if(posCats.length){const [c,v]=posCats[0];card("En büyük kategori",c,`${fmt(v)} · %${(v/gross*100).toFixed(1)}`)}
+  preact.render(hx`<${preact.Fragment}>${cards.map(c=>hx`<${KpiCard} key=${c.label} ...${c}/>`)}<//>`,$("kpis"));
+}
+/* Değer değişince <b> yeniden oluşur (key) ve CSS ile kısa bir belirme animasyonu oynar */
+function KpiCard({label,value,sub,cls,id,title,onClick}){
+  const T=onClick?"button":"div";
+  return hx`<${T} class=${("kpi "+cls).trim()} id=${id} title=${title} onClick=${onClick}><small>${label}</small><b key=${value}>${value}</b>${sub?hx`<small>${sub}</small>`:null}<//>`;
 }
 function render(){
   parseRules(); updateHistInfo();
@@ -1316,8 +1324,7 @@ function render(){
   $("total").textContent=fmt(total);
   const exNow=[...excluded].map(c=>[c,allTx.filter(t=>t.cat===c).reduce((s,t)=>s+t.amt,0)]).filter(([,v])=>v!==0);
   $("totalTitle").textContent=exNow.length?"Seçili kategorilerin toplamı":"Toplam harcama";
-  $("exclInfo").innerHTML=excluded.size?`<div class="excl">Tüm harcama ${fmt(fullTotal)}`+exNow.map(([c,v])=>` − ${esc(c)} ${fmt(v)}`).join("")+` = <b>${fmt(total)}</b><button class="ghost" id="inclAll">Hepsini dahil et</button></div>`:"";
-  if(excluded.size)$("inclAll").addEventListener("click",()=>{excluded.clear();save();render()});
+  preact.render(excluded.size?hx`<div class="excl">Tüm harcama ${fmt(fullTotal)}${exNow.map(([c,v])=>` − ${c} ${fmt(v)}`)} = <b>${fmt(total)}</b><button class="ghost" id="inclAll" onClick=${()=>{excluded.clear();save();render()}}>Hepsini dahil et</button></div>`:null,$("exclInfo"));
   renderRecon(isRange?"":p);
   const ds=tx.map(t=>t.d).filter(Boolean).sort((a,b)=>a-b);
   if(isRange){
@@ -1360,7 +1367,7 @@ function render(){
   const past=Object.entries(byM).sort().filter(([k])=>k<=curM).slice(-12), fut=Object.entries(byM).sort().filter(([k])=>k>curM);
   const ms=[...past,...fut], mx=Math.max(...ms.map(m=>m[1]),1);
   $("monthsCount").textContent=ms.length?`(${ms.length} dönem)`:"";
-  $("months").innerHTML=ms.length?ms.map(([k,v])=>{return `<div class="mrow"><span>${periodLabel(k,true)}</span><div class="bar" style="width:${v/mx*100}%;${k===p?"background:var(--mustard)":k>curM?"background:transparent;border:1px dashed var(--teal)":""}"></div><b style="text-align:right">${fmt(v)}</b></div>`}).join(""):"<small>Tarih sütunu okunamadı.</small>";
+  preact.render(ms.length?ms.map(([k,v])=>hx`<div class="mrow" key=${k}><span>${periodLabel(k,true)}</span><div class="bar" style=${`width:${v/mx*100}%;`+(k===p?"background:var(--mustard)":k>curM?"background:transparent;border:1px dashed var(--teal)":"")}></div><b style="text-align:right">${fmt(v)}</b></div>`):hx`<small>Tarih sütunu okunamadı.</small>`,$("months"));
 
   const byD={}; tx.forEach(t=>{const k=norm(t.desc);byD[k]=byD[k]||{desc:t.desc,sum:0,n:0,cat:t.inst?`Taksit · ${t.sub}`:t.cat,sub:t.sub,col:col[t.cat]||GRAY};byD[k].sum+=t.amt;byD[k].n++});
   const all=Object.values(byD).sort((a,b)=>b.sum-a.sum);
