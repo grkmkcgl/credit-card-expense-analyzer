@@ -93,6 +93,10 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--mustard);outli
 .total{font-size:2.4rem;font-weight:700;letter-spacing:-.02em;margin:0}
 .strip{display:flex;height:34px;border-radius:6px;overflow:hidden;margin:14px 0 8px;gap:2px}
 .strip span{display:block;height:100%}
+.strip span{transition:width .45s ease,background-color .3s}
+.catlist{animation:slidedown .25s ease-out}
+@keyframes slidedown{from{opacity:0;transform:translateY(-6px)}}
+@media (prefers-reduced-motion:reduce){.strip span,.catlist{transition:none;animation:none}}
 .viewbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:14px 0 4px;flex-wrap:wrap}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .seg button{margin:0;border-radius:0;background:transparent;color:var(--muted);padding:6px 14px;font-size:.85rem;font-weight:600}
@@ -1298,6 +1302,25 @@ function KpiCard({label,value,sub,cls,id,title,onClick}){
   const T=onClick?"button":"div";
   return hx`<${T} class=${("kpi "+cls).trim()} id=${id} title=${title} onClick=${onClick}><small>${label}</small><b key=${value}>${value}</b>${sub?hx`<small>${sub}</small>`:null}<//>`;
 }
+/* Kategori altındaki işlem satırı; açıklamaya tıklayınca harcama analizi açılır */
+function TxRow({t}){
+  let extra=null;
+  if(t.inst){
+    extra=`${t.sub} · ${t.inst.n}/${t.inst.m}. taksit`+(t.inst.total?` (toplam ${fmt(t.inst.total)})`:"")+(t.pdate&&t.pdate.slice(0,7)!==t.date.slice(0,7)?` · alışveriş ${toDate(t.pdate).toLocaleDateString("tr-TR")}`:"")+(t.est==="past"?" · özette yok, seriden hesaplandı":t.est==="future"?" · planlanan, henüz özette yok":"");
+  }else if(t.note)extra=t.note;
+  return hx`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><button class="linkish" data-an=${t.desc} title="Bu harcamayı analiz et" onClick=${e=>{e.stopPropagation();openAnalysis(t.desc)}}>${t.desc}</button>${extra?hx`<br/><small>${extra}</small>`:null}</td><td class="n">${fmt(t.amt)}</td></tr>`;
+}
+/* Liste yeniden çizilirken satırlar eski yerinden yenisine kayar (FLIP); hareket azaltılmışsa atlanır */
+function flipList(el,draw){
+  const prev=new Map(); [...el.children].forEach(c=>{if(c.dataset.k)prev.set(c.dataset.k,c.getBoundingClientRect().top)});
+  draw();
+  if(!el.animate||matchMedia("(prefers-reduced-motion:reduce)").matches)return;
+  [...el.children].forEach(c=>{
+    const t0=prev.get(c.dataset.k); if(t0==null)return;
+    const d=t0-c.getBoundingClientRect().top;
+    if(Math.abs(d)>1)c.animate([{transform:`translateY(${d}px)`},{transform:"none"}],{duration:300,easing:"ease-out"});
+  });
+}
 function render(){
   parseRules(); updateHistInfo();
   document.body.classList.toggle("has-data",history.length>0);
@@ -1344,21 +1367,24 @@ function render(){
   const col={}; cats.forEach(([c])=>col[c]=colorOf(c));
   renderPie(posCats,col,ranked,gross,total,allTx);
   renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross});
-  $("strip").innerHTML=posCats.map(([c,v])=>`<span style="width:${v/gross*100}%;background:${col[c]}" title="${esc(c)}"></span>`).join("");
-  $("cats").innerHTML=cats.map(([c,v])=>{
+  preact.render(posCats.map(([c,v])=>hx`<span key=${c} style=${`width:${v/gross*100}%;background:${col[c]}`} title=${c}></span>`),$("strip"));
+  flipList($("cats"),()=>preact.render(cats.map(([c,v])=>{
     const open=openCats.has(c);
     const off=excluded.has(c);
     const items=open?allTx.filter(t=>t.cat===c).sort((a,b)=>b.amt-a.amt):[];
-    let subHtml="";
+    let subs=null;
     if(open&&c==="Taksitler"){
       const bs={}; items.forEach(t=>bs[t.sub]=(bs[t.sub]||0)+t.amt);
-      subHtml=`<div style="margin:6px 0 10px"><small>Taksitlerin kendi içindeki dağılımı:</small>`+Object.entries(bs).sort((a,b)=>b[1]-a[1]).map(([sc,sv])=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dashed var(--line)"><span>${esc(sc)}</span><span><small>%${(sv/v*100).toFixed(1)}</small> <b>${fmt(sv)}</b></span></div>`).join("")+`</div>`;
+      subs=hx`<div style="margin:6px 0 10px"><small>Taksitlerin kendi içindeki dağılımı:</small>${Object.entries(bs).sort((a,b)=>b[1]-a[1]).map(([sc,sv])=>hx`<div key=${sc} style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dashed var(--line)"><span>${sc}</span><span><small>%${(sv/v*100).toFixed(1)}</small> <b>${fmt(sv)}</b></span></div>`)}</div>`;
     }
-    return `<div class="catrow${off?" off":""}"><label class="inc" title="${off?"Toplama dahil et":"Toplamdan çıkar"}"><input type="checkbox" data-inc="${esc(c)}" ${off?"":"checked"} aria-label="${esc(c)} toplama dahil"></label><button class="row" data-cat="${esc(c)}" aria-expanded="${open}"><span class="dot" style="background:${col[c]}"></span><span class="nm">${esc(c)} <small>(${allTx.filter(t=>t.cat===c).length})</small></span><span class="pct">${v>0&&!off?`%${(v/gross*100).toFixed(1)}`:off?"çıkarıldı":""}</span><b class="amt">${fmt(v)}</b><span class="chev" aria-hidden="true">▶</span></button></div>`+
-      (open?`<div class="catlist">${subHtml}<table>${items.map(t=>`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><button class="linkish" data-an="${esc(t.desc)}" title="Bu harcamayı analiz et">${esc(t.desc)}</button>${t.inst?`<br><small>${esc(t.sub)} · ${t.inst.n}/${t.inst.m}. taksit${t.inst.total?` (toplam ${fmt(t.inst.total)})`:""}${t.pdate&&t.pdate.slice(0,7)!==t.date.slice(0,7)?` · alışveriş ${toDate(t.pdate).toLocaleDateString("tr-TR")}`:""}${t.est==="past"?" · özette yok, seriden hesaplandı":t.est==="future"?" · planlanan, henüz özette yok":""}</small>`:t.note?`<br><small>${esc(t.note)}</small>`:""}</td><td class="n">${fmt(t.amt)}</td></tr>`).join("")}</table></div>`:"");
-  }).join("");
-  $("cats").querySelectorAll("input[data-inc]").forEach(i=>i.addEventListener("change",()=>{const c=i.dataset.inc;i.checked?excluded.delete(c):excluded.add(c);save();render()}));
-  $("cats").querySelectorAll("button.row").forEach(b=>b.addEventListener("click",()=>{const c=b.dataset.cat;openCats.has(c)?openCats.delete(c):openCats.add(c);render()}));
+    return hx`<div class="cat" key=${c} data-k=${c}>
+      <div class=${"catrow"+(off?" off":"")}>
+        <label class="inc" title=${off?"Toplama dahil et":"Toplamdan çıkar"}><input type="checkbox" data-inc=${c} checked=${!off} aria-label=${c+" toplama dahil"} onChange=${e=>{e.target.checked?excluded.delete(c):excluded.add(c);save();render()}}/></label>
+        <button class="row" data-cat=${c} aria-expanded=${String(open)} onClick=${()=>{openCats.has(c)?openCats.delete(c):openCats.add(c);render()}}><span class="dot" style=${"background:"+col[c]}></span><span class="nm">${c} <small>(${allTx.filter(t=>t.cat===c).length})</small></span><span class="pct">${v>0&&!off?`%${(v/gross*100).toFixed(1)}`:off?"çıkarıldı":""}</span><b class="amt">${fmt(v)}</b><span class="chev" aria-hidden="true">▶</span></button>
+      </div>
+      ${open?hx`<div class="catlist">${subs}<table>${items.map((t,n)=>hx`<${TxRow} key=${t.id||n} t=${t}/>`)}</table></div>`:null}
+    </div>`;
+  }),$("cats")));
 
   const catOf=t=>t.kind==="refund"?"İadeler ve indirimler":t.inst?"Taksitler":categorize(t.desc);
   const byM={}; spend.forEach(t=>{const k=periodKey(t);if(!k||excluded.has(catOf(t)))return;byM[k]=(byM[k]||0)+t.amt});
@@ -1391,7 +1417,7 @@ function render(){
   const keys=[...new Set(history.filter(t=>t.kind!=="payment").map(t=>merchantKey(t.desc)))].sort();
   $("qList").innerHTML=keys.slice(0,400).map(k=>`<option value="${esc(k)}">`).join("");
   renderQuery();
-  document.querySelectorAll("[data-an]").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();openAnalysis(b.dataset.an)}));
+  document.querySelectorAll("[data-an]:not(#cats [data-an])").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();openAnalysis(b.dataset.an)}));
   $("unk").querySelectorAll("select").forEach(s=>s.addEventListener("change",()=>{if(s.value){overrides[s.dataset.k]=s.value;save();render()}}));
 }
 

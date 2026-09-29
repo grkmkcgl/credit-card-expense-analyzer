@@ -590,6 +590,23 @@ def arayuz_kutuphanesi_gomulu_ve_ag_yok(b, info):
     ctx.close()
 
 
+@test
+def kategori_listesi_yerinde_guncellenir(b, info):
+    a = App(b); a.import_("arti.pdf")
+    a.ev("document.querySelector('#cats input[data-inc]').dataset.isaret='1'")
+    rows = a.pg.locator("#cats button.row")
+    rows.nth(1).click(); a.pg.wait_for_timeout(100)
+    eq(rows.nth(1).get_attribute("aria-expanded"), "true", "satır açılmalı")
+    assert a.pg.is_visible("#cats .catlist"), "işlem listesi görünmeli"
+    eq(a.ev("document.querySelector('#cats input[data-inc]').dataset.isaret"), "1", "DOM yeniden yaratılmamalı, yerinde güncellenmeli")
+    calls = a.ev("()=>{window._n=0;const o=openAnalysis;openAnalysis=d=>{window._n++;return o(d)};return 0}")
+    a.pg.locator("#cats .catlist button[data-an]").first.click(); a.pg.wait_for_timeout(100)
+    eq(a.ev("window._n"), 1, "analiz tek kez açılmalı (çift dinleyici yok)")
+    rows.nth(1).click(); a.pg.wait_for_timeout(100)
+    assert not a.pg.is_visible("#cats .catlist"), "tekrar tıklayınca kapanmalı"
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
