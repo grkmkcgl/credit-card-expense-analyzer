@@ -776,6 +776,7 @@ def gelecek_taksit_takvimi(b, info):
 def kategorisiz_icin_kural_onerisi(b, info):
     a = App(b); a.import_("arti.pdf"); a.pg.click("#unkFold > summary")
     eq(a.ev("document.querySelector('#unk input[data-kw]').value"), "FATURA", "önerilen anahtar kelime (düzenlenebilir)")
+    eq(a.ev("getComputedStyle(document.querySelector('#unk .kwsug')).display"), "flex", "öneri satırının stili yüklü olmalı")
     a.pg.select_option("#unk select", "Faturalar"); a.pg.wait_for_timeout(150)
     assert "FATURA" in [l for l in a.ev("$('rules').value").split("\n") if l.startswith("Faturalar:")][0]
     eq(a.ev("Object.keys(overrides).length"), 0, "kural eklenince override gerekmez")
@@ -786,6 +787,30 @@ def kategorisiz_icin_kural_onerisi(b, info):
     a.pg.uncheck("#unk input[data-asrule]"); a.pg.select_option("#unk select", "Faturalar"); a.pg.wait_for_timeout(150)
     eq(a.ev("overrides['ORNEK YENI YER TR']"), "Faturalar", "override olarak kaydedilmeli")
     assert "ORNEK YENI" not in a.ev("$('rules').value")
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
+def geri_al(b, info):
+    a = App(b); a.import_("arti.pdf"); a.pg.click("#allFold > summary")
+    before = a.ev("JSON.stringify({h:history,o:overrides,e:[...excluded]})"); total = a.total()
+    a.pg.select_option("#alltx tbody select >> nth=0", "Market"); a.pg.wait_for_timeout(150)
+    assert "Market" in a.text("#toast") and a.pg.is_visible("#undoBtn"), a.text("#toast")
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150)
+    eq(a.ev("JSON.stringify({h:history,o:overrides,e:[...excluded]})"), before, "kategori değişikliği geri alınmalı")
+    assert "Geri alındı" in a.text("#toast")
+    a.pg.on("dialog", lambda d: d.accept())
+    n = a.ev("history.length")
+    a.pg.locator("#alltx tbody tr").filter(has_text="SHELL").locator("button.x").click(); a.pg.wait_for_timeout(150)
+    eq(a.ev("history.length"), n - 1, "silindi")
+    a.ev("document.activeElement&&document.activeElement.blur()"); a.pg.keyboard.press("Control+z"); a.pg.wait_for_timeout(150)
+    eq(a.ev("history.length"), n, "Ctrl+Z silmeyi geri almalı"); eq(a.total(), total, "toplam aynı")
+    a.pg.uncheck("input[data-inc='Akaryakıt']"); a.pg.wait_for_timeout(150)
+    assert a.total() != total
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150); eq(a.total(), total, "dışlama geri alınmalı")
+    a.pg.uncheck("input[data-inc='Akaryakıt']"); a.pg.wait_for_timeout(6300)
+    eq(a.ev("$('toast').textContent"), "", "bildirim 6 sn sonra kaybolmalı")
     assert not a.errors, a.errors
     a.close()
 

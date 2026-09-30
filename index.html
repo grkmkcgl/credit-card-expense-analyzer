@@ -215,6 +215,15 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 .instcal{margin-top:16px}
 .instcal h3{font-size:.95rem;margin:0 0 4px}
 .iend{display:block;color:var(--mustard);font-size:.75rem;margin-top:2px}
+.kwsug{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin:4px 0 0;font-size:.78rem;color:var(--muted)}
+.kwsug input[type=checkbox]{accent-color:var(--teal)}
+.kwsug input[type=text]{font:inherit;font-size:.78rem;padding:2px 6px;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink);width:auto;max-width:160px}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:20;width:max-content;max-width:calc(100% - 32px)}
+.toast{display:flex;align-items:center;gap:14px;background:#1d2322;border:1px solid var(--muted);color:var(--ink);border-radius:10px;padding:8px 10px 8px 14px;box-shadow:0 8px 24px rgba(0,0,0,.6);font-size:.9rem;animation:toastin .25s ease-out}
+.toast span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toast button{margin:0;padding:6px 12px;font-size:.85rem}
+@keyframes toastin{from{opacity:0;transform:translateY(10px)}}
+@media print{#toast{display:none}}
 .empty{display:flex;align-items:center;gap:8px;color:var(--muted);padding:10px 4px}
 .empty .tick{color:var(--teal);font-weight:700}
 .catrow.off{transition:opacity .2s}
@@ -383,6 +392,7 @@ window.libsReady=(async()=>{
 </details>
 </div>
 </section>
+<div id="toast" aria-live="polite"></div>
 </main>
 
 <script>
@@ -1164,8 +1174,9 @@ function addMissed(stmt,i){
   if(!am.length)return;
   const m=am[am.length-1]; let v=toNum(m[1].replace(/\s/g,"").replace(/^\+/,""));
   const desc=t.slice(0,am[0].index).replace(/\b(TL|TRY)\b|₺/g,"").replace(/\s+/g," ").trim()||"Ekstre kalemi";
-  history.push({id:`M|${stmt}|${norm(desc)}|${v}`,date:stmt,stmt,desc,amt:Math.round(Math.abs(v)*100)/100,note:"Ekstreden elle eklendi"});
-  S.missed.splice(i,1); save(); render();
+  undoable(`"${desc}" ekstreye eklendi`,()=>{
+    history.push({id:`M|${stmt}|${norm(desc)}|${v}`,date:stmt,stmt,desc,amt:Math.round(Math.abs(v)*100)/100,note:"Ekstreden elle eklendi"});
+    S.missed.splice(i,1)});
 }
 /* Ekstre kontrolü: önceki borç − ödemeler + harcamalar − iadeler = dönem borcu. <details> açık/kapalı durumu yeniden çizimde korunur. */
 function ReconBox({stmt,multi}){
@@ -1394,9 +1405,9 @@ function AllRow({t,catOpts}){
   const extra=txExtra(t);
   const del=()=>{
     if(!confirm(`Bu işlem silinsin mi?\n\n${t.date?toDate(t.date).toLocaleDateString("tr-TR"):""} · ${t.desc} · ${fmt2(t.amt)}\n\nSilinen işlem aynı ekstreyi tekrar yüklerseniz geri gelir.`))return;
-    history=history.filter(x=>x.id!==t.id);expandInstallments();save();render();
+    undoable(`"${t.desc}" silindi`,()=>{history=history.filter(x=>x.id!==t.id);expandInstallments()});
   };
-  const pick=e=>{const v=e.target.value,k=norm(t.desc);if(v==="Diğer")delete overrides[k];else overrides[k]=v;save();render()};
+  const pick=e=>{const v=e.target.value,k=norm(t.desc);undoable(`"${t.desc}" → ${v}`,()=>{if(v==="Diğer")delete overrides[k];else overrides[k]=v})};
   return hx`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><${AnBtn} desc=${t.desc}/>${extra?hx`<br/><small>${extra}</small>`:null}</td><td><select data-k=${norm(t.desc)} onChange=${pick}>${catOpts.map(c=>hx`<option key=${c} selected=${c===t.sub}>${c}</option>`)}</select></td><td class="n">${fmt(t.amt)}</td><td>${t.est?null:hx`<button class="x" data-id=${t.id} title="Bu işlemi sil" onClick=${del}>Sil</button>`}</td></tr>`;
 }
 /* Liste yeniden çizilirken satırlar eski yerinden yenisine kayar (FLIP); hareket azaltılmışsa atlanır */
@@ -1467,7 +1478,7 @@ function detectAnomalies(tx){
 }
 function AnomBox({list}){
   if(!list.length)return null;
-  const hide=id=>{dismissed.add(id);save();render()};
+  const hide=id=>undoable("Uyarı gizlendi",()=>dismissed.add(id));
   return hx`<div class="anom" role="status"><b>Dikkat edilmesi gereken ${list.length} harcama</b>
     ${list.map(a=>hx`<div class="arow" key=${a.id}><span class="aic" aria-hidden="true">${a.type==="dup"?"⧉":"↑"}</span><div><${AnBtn} desc=${a.t.desc}/> <small>${a.t.date?toDate(a.t.date).toLocaleDateString("tr-TR"):""}</small><br/><small>${a.type==="dup"?`Aynı gün aynı tutarda ${a.n} kez: ${fmt2(a.t.amt)}. Çift çekim olabilir, ekstreyi kontrol edin.`:`${fmt(a.t.amt)}; bu yerdeki ortalamanızın (${fmt(a.avg)}) ${Math.round(a.t.amt/a.avg)} katı.`}</small></div><button class="x" data-dismiss=${a.id} title="Bu uyarıyı bir daha gösterme" onClick=${()=>hide(a.id)}>Gösterme</button></div>`)}
   </div>`;
@@ -1486,12 +1497,15 @@ function InstCal({up}){
    kategorilenir) ya da yalnızca bu açıklama için (override) kaydedilir. Kural beklenen kategoriyi vermezse override'a düşülür. */
 function suggestKey(desc){return merchantKey(desc).toLocaleUpperCase("tr-TR")}
 function applyUnk(desc,cat,kw,asRule){
-  const k=norm(desc);
-  if(asRule&&kw){
-    const r=mergeRules($("rules").value,`${cat}: ${kw}`); $("rules").value=r.text; parseRules();
-    if(categorize(desc)===cat){delete overrides[k];save();render();return "rule"}
-  }
-  overrides[k]=cat; save(); render(); return "override";
+  const k=norm(desc); let how="override";
+  undoable(`"${desc}" → ${cat}`,()=>{
+    if(asRule&&kw){
+      const r=mergeRules($("rules").value,`${cat}: ${kw}`); $("rules").value=r.text; parseRules();
+      if(categorize(desc)===cat){delete overrides[k];how="rule";return}
+    }
+    overrides[k]=cat;
+  });
+  return how;
 }
 function UnkRow({d,catNames}){
   const pick=e=>{const tr=e.target.closest("tr"),cat=e.target.value;if(!cat)return;
@@ -1501,6 +1515,25 @@ function UnkRow({d,catNames}){
     <td class="n">${fmt(d.sum)}</td>
     <td><select data-k=${norm(d.desc)} onChange=${pick}><option value="">Seç…</option>${catNames.map(c=>hx`<option key=${c}>${c}</option>`)}</select></td></tr>`;
 }
+/* Geri al: değişiklikten önce dosyanın anlık görüntüsü alınır; 6 sn'lik bildirimden ya da Ctrl/Cmd+Z ile geri dönülür (yalnızca son değişiklik, bellekte) */
+let undoState=null, undoTimer=0;
+function undoable(label,fn){
+  const prev=snapshot(); fn(); save(); render();
+  undoState={label,prev}; clearTimeout(undoTimer); undoTimer=setTimeout(()=>{undoState=null;renderToast()},6000); renderToast();
+}
+function undo(){
+  if(!undoState)return;
+  const {prev}=undoState; undoState=null; clearTimeout(undoTimer);
+  applyData(JSON.parse(prev)); save(); render(); renderToast("Geri alındı");
+}
+function renderToast(msg){
+  const el=$("toast");
+  if(msg){preact.render(hx`<div class="toast" key="m">${msg}</div>`,el);clearTimeout(undoTimer);undoTimer=setTimeout(()=>renderToast(),2000);return}
+  preact.render(undoState?hx`<div class="toast" key=${undoState.label}><span>${undoState.label}</span><button id="undoBtn" onClick=${undo}>Geri al</button></div>`:null,el);
+}
+document.addEventListener("keydown",e=>{
+  if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==="z"&&undoState&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName||"")){e.preventDefault();undo()}
+});
 function render(){
   parseRules(); updateHistInfo();
   document.body.classList.toggle("has-data",history.length>0);
@@ -1527,7 +1560,7 @@ function render(){
   $("total").textContent=fmt(total);
   const exNow=[...excluded].map(c=>[c,allTx.filter(t=>t.cat===c).reduce((s,t)=>s+t.amt,0)]).filter(([,v])=>v!==0);
   $("totalTitle").textContent=exNow.length?"Seçili kategorilerin toplamı":"Toplam harcama";
-  preact.render(excluded.size?hx`<div class="excl">Tüm harcama ${fmt(fullTotal)}${exNow.map(([c,v])=>` − ${c} ${fmt(v)}`)} = <b>${fmt(total)}</b><button class="ghost" id="inclAll" onClick=${()=>{excluded.clear();save();render()}}>Hepsini dahil et</button></div>`:null,$("exclInfo"));
+  preact.render(excluded.size?hx`<div class="excl">Tüm harcama ${fmt(fullTotal)}${exNow.map(([c,v])=>` − ${c} ${fmt(v)}`)} = <b>${fmt(total)}</b><button class="ghost" id="inclAll" onClick=${()=>undoable("Tüm kategoriler dahil edildi",()=>excluded.clear())}>Hepsini dahil et</button></div>`:null,$("exclInfo"));
   preact.render(hx`<${AnomBox} list=${detectAnomalies(tx)}/>`,$("anom"));
   renderRecon(isRange?"":p);
   const ds=tx.map(t=>t.d).filter(Boolean).sort((a,b)=>a-b);
@@ -1565,7 +1598,7 @@ function render(){
     }
     return hx`<div class="cat" key=${c} data-k=${c}>
       <div class=${"catrow"+(off?" off":"")}>
-        <label class="inc" title=${off?"Toplama dahil et":"Toplamdan çıkar"}><input type="checkbox" data-inc=${c} checked=${!off} aria-label=${c+" toplama dahil"} onChange=${e=>{e.target.checked?excluded.delete(c):excluded.add(c);save();render()}}/></label>
+        <label class="inc" title=${off?"Toplama dahil et":"Toplamdan çıkar"}><input type="checkbox" data-inc=${c} checked=${!off} aria-label=${c+" toplama dahil"} onChange=${e=>{const on=e.target.checked;undoable(on?`${c} toplama dahil edildi`:`${c} toplamdan çıkarıldı`,()=>on?excluded.delete(c):excluded.add(c))}}/></label>
         <button class="row" data-cat=${c} aria-expanded=${String(open)} onClick=${()=>{openCats.has(c)?openCats.delete(c):openCats.add(c);render()}}><span class="dot" style=${"background:"+col[c]}></span><span class="nm">${c} <small>(${allTx.filter(t=>t.cat===c).length})</small>${cmp&&!off?hx` <${Delta} now=${v} prev=${cmp.prev[c]||0} p=${cmp.prevP}/>`:null}</span><span class="pct">${v>0&&!off?`%${(v/gross*100).toFixed(1)}`:off?"çıkarıldı":""}</span><b class="amt">${fmt(v)}</b><span class="chev" aria-hidden="true">▶</span></button>
       </div>
       ${open?hx`<div class="catlist">${subs}<table>${items.map((t,n)=>hx`<${TxRow} key=${t.id||n} t=${t}/>`)}</table></div>`:null}
