@@ -222,6 +222,9 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 .bud small{font-size:.75rem}.bud.over small{color:var(--red)}
 .budin{display:flex;align-items:center;gap:6px;margin:6px 0 8px;font-size:.85rem}
 .budin input{width:120px;padding:4px 6px}
+.kwsug{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin:4px 0 0;font-size:.78rem;color:var(--muted)}
+.kwsug input[type=checkbox]{accent-color:var(--teal)}
+.kwsug input[type=text]{font:inherit;font-size:.78rem;padding:2px 6px;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink);width:auto;max-width:160px}
 .empty{display:flex;align-items:center;gap:8px;color:var(--muted);padding:10px 4px}
 .empty .tick{color:var(--teal);font-weight:700}
 .catrow.off{transition:opacity .2s}
@@ -1499,6 +1502,25 @@ function BudInput({c}){
   const set=e=>{const v=parseFloat(e.target.value);if(v>0)budgets[c]=Math.round(v);else delete budgets[c];save();render()};
   return hx`<label class="budin">Aylık bütçe <input type="number" min="0" step="100" inputmode="numeric" placeholder="yok" data-budget=${c} value=${budgets[c]||""} onChange=${set}/> ₺</label>`;
 }
+/* Kategorisiz satır: seçilen kategori ya kural olarak (önerilen anahtar kelimeyle; aynı yerin gelecekteki işlemleri de otomatik
+   kategorilenir) ya da yalnızca bu açıklama için (override) kaydedilir. Kural beklenen kategoriyi vermezse override'a düşülür. */
+function suggestKey(desc){return merchantKey(desc).toLocaleUpperCase("tr-TR")}
+function applyUnk(desc,cat,kw,asRule){
+  const k=norm(desc);
+  if(asRule&&kw){
+    const r=mergeRules($("rules").value,`${cat}: ${kw}`); $("rules").value=r.text; parseRules();
+    if(categorize(desc)===cat){delete overrides[k];save();render();return "rule"}
+  }
+  overrides[k]=cat; save(); render(); return "override";
+}
+function UnkRow({d,catNames}){
+  const pick=e=>{const tr=e.target.closest("tr"),cat=e.target.value;if(!cat)return;
+    applyUnk(d.desc,cat,tr.querySelector("input[data-kw]").value.trim(),tr.querySelector("input[data-asrule]").checked)};
+  return hx`<tr><td>${d.desc}<br/><small>${d.n} işlem</small>
+      <label class="kwsug"><input type="checkbox" data-asrule checked/> Kural olarak ekle: <input type="text" data-kw value=${suggestKey(d.desc)} aria-label="Anahtar kelime" size="12"/></label></td>
+    <td class="n">${fmt(d.sum)}</td>
+    <td><select data-k=${norm(d.desc)} onChange=${pick}><option value="">Seç…</option>${catNames.map(c=>hx`<option key=${c}>${c}</option>`)}</select></td></tr>`;
+}
 function render(){
   parseRules(); updateHistInfo();
   document.body.classList.toggle("has-data",history.length>0);
@@ -1597,7 +1619,7 @@ function render(){
   $("rulesCount").textContent=`(${catNames.length} kategori)`;
   const unk=all.filter(d=>d.sub==="Diğer"&&d.sum>0);
   $("unkCount").textContent=unk.length?`(${unk.length})`:"";
-  preact.render(hx`<tbody>${unk.length?unk.map(d=>hx`<tr key=${norm(d.desc)}><td>${d.desc}<br/><small>${d.n} işlem</small></td><td class="n">${fmt(d.sum)}</td><td><select data-k=${norm(d.desc)} onChange=${e=>{if(e.target.value){overrides[norm(d.desc)]=e.target.value;save();render()}}}><option value="">Seç…</option>${catNames.map(c=>hx`<option key=${c}>${c}</option>`)}</select></td></tr>`):hx`<tr><td><div class="empty"><span class="tick" aria-hidden="true">✓</span><small>Hepsi kategorilendi.</small></div></td></tr>`}</tbody>`,$("unk"));
+  preact.render(hx`<tbody>${unk.length?unk.map(d=>hx`<${UnkRow} key=${norm(d.desc)} d=${d} catNames=${catNames}/>`):hx`<tr><td><div class="empty"><span class="tick" aria-hidden="true">✓</span><small>Hepsi kategorilendi.</small></div></td></tr>`}</tbody>`,$("unk"));
   const catOpts=[...new Set([...catNames,"Diğer"])];
   const list=txList(tx);
   $("allCount").textContent=list.length===tx.length?`(${tx.length} işlem)`:`(${list.length} / ${tx.length} işlem)`;

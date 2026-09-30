@@ -798,6 +798,24 @@ def kategori_butcesi(b, info):
     a.close()
 
 
+@test
+def kategorisiz_icin_kural_onerisi(b, info):
+    a = App(b); a.import_("arti.pdf"); a.pg.click("#unkFold > summary")
+    eq(a.ev("document.querySelector('#unk input[data-kw]').value"), "FATURA", "önerilen anahtar kelime (düzenlenebilir)")
+    a.pg.select_option("#unk select", "Faturalar"); a.pg.wait_for_timeout(150)
+    assert "FATURA" in [l for l in a.ev("$('rules').value").split("\n") if l.startswith("Faturalar:")][0]
+    eq(a.ev("Object.keys(overrides).length"), 0, "kural eklenince override gerekmez")
+    eq(a.ev("categorize('FATURA ODEME NOKTASI IZMIR TR')"), "Faturalar", "aynı yerin yeni işlemleri de kategorilenir")
+    assert "Hepsi kategorilendi" in a.text("#unk")
+    # işaret kaldırılırsa yalnızca bu açıklama için seçim yapılır
+    a.ev("h=>{history.push(...h);render()}", [{"id": "u1", "date": "2026-08-15", "stmt": "2026-08-26", "desc": "ORNEK YENI YER TR", "amt": 99}])
+    a.pg.uncheck("#unk input[data-asrule]"); a.pg.select_option("#unk select", "Faturalar"); a.pg.wait_for_timeout(150)
+    eq(a.ev("overrides['ORNEK YENI YER TR']"), "Faturalar", "override olarak kaydedilmeli")
+    assert "ORNEK YENI" not in a.ev("$('rules').value")
+    assert not a.errors, a.errors
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
