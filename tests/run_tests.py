@@ -772,6 +772,32 @@ def gelecek_taksit_takvimi(b, info):
     a.close()
 
 
+@test
+def kategori_butcesi(b, info):
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", _pide_history()); a.period("2026-08")
+    row = a.pg.locator("#cats button.row").filter(has_text="Kafe ve restoran")
+    row.click(); a.pg.wait_for_timeout(100)
+    a.pg.fill("input[data-budget='Kafe ve restoran']", "1500"); a.pg.dispatch_event("input[data-budget='Kafe ve restoran']", "change"); a.pg.wait_for_timeout(150)
+    bud = a.ev("document.querySelector('#cats .cat[data-k=\"Kafe ve restoran\"] .bud')")
+    assert bud is not None
+    cls = a.ev("document.querySelector('#cats .cat[data-k=\"Kafe ve restoran\"] .bud').className")
+    assert "over" in cls, cls
+    t = a.ev("document.querySelector('#cats .cat[data-k=\"Kafe ve restoran\"] .bud').textContent")
+    assert "₺1.860 / ₺1.500" in t and "₺360 aşıldı" in t, t
+    k = a.text("#kpis"); assert "Bütçe aşıldı" in k and "Kafe ve restoran" in k, k
+    eq(json.loads(a.ev("snapshot()"))["budgets"], {"Kafe ve restoran": 1500}, "bütçe dosyaya yazılmalı")
+    a.period("2026-07")
+    cls = a.ev("document.querySelector('#cats .cat[data-k=\"Kafe ve restoran\"] .bud').className"); assert "ok" in cls, cls
+    assert "Bütçe aşıldı" not in a.text("#kpis")
+    a.period("")
+    t = a.ev("document.querySelector('#cats .cat[data-k=\"Kafe ve restoran\"] .bud').textContent")
+    assert "dönem ortalaması" in t, t
+    a.pg.fill("input[data-budget='Kafe ve restoran']", ""); a.pg.dispatch_event("input[data-budget='Kafe ve restoran']", "change"); a.pg.wait_for_timeout(150)
+    eq(a.ev("document.querySelectorAll('#cats .bud').length"), 0, "bütçe silinince çubuk kalkmalı")
+    assert not a.errors, a.errors
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]

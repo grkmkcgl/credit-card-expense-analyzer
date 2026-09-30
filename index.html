@@ -73,7 +73,7 @@ body.dragging::after{content:"Dosyaları bırakın";position:fixed;inset:12px;z-
 .kpis:empty{display:none}
 .kpi{display:block;margin:0;text-align:left;background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-weight:400}
 .kpi small{display:block;line-height:1.35}
-.kpi b{display:block;font-size:1.2rem;letter-spacing:-.01em;margin:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kpi b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:1.2rem;line-height:1.25;letter-spacing:-.01em;margin:2px 0;overflow:hidden;overflow-wrap:anywhere}
 .kpi.good b{color:var(--teal)}
 .kpi.bad b{color:var(--red)}
 .kpi.up b{color:var(--red)}
@@ -215,6 +215,13 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 .instcal{margin-top:16px}
 .instcal h3{font-size:.95rem;margin:0 0 4px}
 .iend{display:block;color:var(--mustard);font-size:.75rem;margin-top:2px}
+.bud{padding:2px 4px 8px 58px;border-bottom:1px solid var(--line)}
+.budtrack{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+.budtrack span{display:block;height:100%;border-radius:2px;transition:width .45s ease}
+.bud.ok span{background:var(--teal)}.bud.near span{background:var(--mustard)}.bud.over span{background:var(--red)}
+.bud small{font-size:.75rem}.bud.over small{color:var(--red)}
+.budin{display:flex;align-items:center;gap:6px;margin:6px 0 8px;font-size:.85rem}
+.budin input{width:120px;padding:4px 6px}
 .empty{display:flex;align-items:center;gap:8px;color:var(--muted);padding:10px 4px}
 .empty .tick{color:var(--teal);font-weight:700}
 .catrow.off{transition:opacity .2s}
@@ -1349,7 +1356,7 @@ function renderQuery(){
   <//>`,out);
 }
 /* Toplamın yanındaki özet kartları: seçili kapsama göre değişir */
-function renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross,cmp,byCat}){
+function renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross,cmp,byCat,overBud}){
   const cards=[];
   const card=(label,value,sub,cls="",extra={})=>cards.push({label,value,sub,cls,...extra});
   if(isRange){
@@ -1367,6 +1374,7 @@ function renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross,cmp,byCat})
     if(n>1)card("Dönem başına ortalama",fmt(total/n),`${n} dönem`);
     if(upcoming.length)card("Gelecek taksitler",fmt(upcoming.reduce((s,t)=>s+t.amt,0)),`${upcoming.length} taksit; dönem seçerek görün`);
   }
+  if(overBud&&overBud.length)card("Bütçe aşıldı",overBud.length===1?overBud[0]:`${overBud.length} kategori`,overBud.length===1?"aylık bütçesinin üstünde":overBud.join(", "),"bad");
   if(cmp){
     const ups=Object.keys(byCat).filter(c=>!excluded.has(c)&&c!=="İadeler ve indirimler").map(c=>[c,byCat[c]-(cmp.prev[c]||0)]).sort((a,b)=>b[1]-a[1]);
     if(ups.length&&ups[0][1]>=1)card("En çok artan",ups[0][0],`+${fmt(ups[0][1])} · ${periodLabel(cmp.prevP,true)} dönemine göre`,"up");
@@ -1482,6 +1490,15 @@ function InstCal({up}){
     ${ks.map(k=>{const b=by[k];return hx`<div class="mrow" key=${k}><span>${periodLabel(k,true)}</span><div><div class="bar" style=${`width:${b.v/mx*100}%;background:transparent;border:1px dashed var(--teal)`}></div>${b.end.length?hx`<small class="iend" title=${b.end.join(", ")}>${b.end.length} seri biter</small>`:null}</div><b style="text-align:right">${fmt(b.v)}<br/><small>${b.n} taksit</small></b></div>`})}
     <p style="margin:6px 0 0"><small>Toplam kalan: <b>${fmt(up.reduce((s,t)=>s+t.amt,0))}</b></small></p></div>`;
 }
+/* Kategori bütçesi: ince ilerleme çubuğu (≤%80 teal, ≤%100 hardal, üstü kırmızı) */
+function BudBar({used,limit,avg}){
+  const r=used/limit, cls=r>1?"over":r>.8?"near":"ok";
+  return hx`<div class=${"bud "+cls} title=${`Aylık bütçe ${fmt(limit)}`}><div class="budtrack"><span style=${`width:${Math.min(100,r*100)}%`}></span></div><small>${avg?"dönem ortalaması ":""}${fmt(used)} / ${fmt(limit)}${r>1?` · ${fmt(used-limit)} aşıldı`:""}</small></div>`;
+}
+function BudInput({c}){
+  const set=e=>{const v=parseFloat(e.target.value);if(v>0)budgets[c]=Math.round(v);else delete budgets[c];save();render()};
+  return hx`<label class="budin">Aylık bütçe <input type="number" min="0" step="100" inputmode="numeric" placeholder="yok" data-budget=${c} value=${budgets[c]||""} onChange=${set}/> ₺</label>`;
+}
 function render(){
   parseRules(); updateHistInfo();
   document.body.classList.toggle("has-data",history.length>0);
@@ -1532,8 +1549,13 @@ function render(){
   const colorOf=c=>ranked.includes(c)?PAL[ranked.indexOf(c)]:GRAY;
   const col={}; cats.forEach(([c])=>col[c]=colorOf(c));
   renderPie(posCats,col,ranked,gross,total,allTx);
-  renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross,cmp,byCat});
+  
   preact.render(posCats.map(([c,v])=>hx`<span key=${c} style=${`width:${v/gross*100}%;background:${col[c]}`} title=${c}></span>`),$("strip"));
+  /* Bütçe: tek dönemde doğrudan, tüm zamanlarda dönem başına ortalama ile karşılaştırılır; tarih aralığında gösterilmez */
+  const nPer=Math.max(1,new Set(tx.map(periodKey).filter(Boolean)).size);
+  const bud=isRange?null:{avg:!p,per:v=>p?v:v/nPer};
+  const overBud=bud?Object.keys(budgets).filter(c=>byCat[c]!=null&&!excluded.has(c)&&bud.per(byCat[c])>budgets[c]):[];
+  renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross,cmp,byCat,overBud});
   flipList($("cats"),()=>preact.render(cats.map(([c,v])=>{
     const open=openCats.has(c);
     const off=excluded.has(c);
@@ -1548,7 +1570,8 @@ function render(){
         <label class="inc" title=${off?"Toplama dahil et":"Toplamdan çıkar"}><input type="checkbox" data-inc=${c} checked=${!off} aria-label=${c+" toplama dahil"} onChange=${e=>{e.target.checked?excluded.delete(c):excluded.add(c);save();render()}}/></label>
         <button class="row" data-cat=${c} aria-expanded=${String(open)} onClick=${()=>{openCats.has(c)?openCats.delete(c):openCats.add(c);render()}}><span class="dot" style=${"background:"+col[c]}></span><span class="nm">${c} <small>(${allTx.filter(t=>t.cat===c).length})</small>${cmp&&!off?hx` <${Delta} now=${v} prev=${cmp.prev[c]||0} p=${cmp.prevP}/>`:null}</span><span class="pct">${v>0&&!off?`%${(v/gross*100).toFixed(1)}`:off?"çıkarıldı":""}</span><b class="amt">${fmt(v)}</b><span class="chev" aria-hidden="true">▶</span></button>
       </div>
-      ${open?hx`<div class="catlist">${subs}<table>${items.map((t,n)=>hx`<${TxRow} key=${t.id||n} t=${t}/>`)}</table></div>`:null}
+      ${bud&&budgets[c]?hx`<${BudBar} used=${bud.per(v)} limit=${budgets[c]} avg=${bud.avg}/>`:null}
+      ${open?hx`<div class="catlist">${bud&&v>0?hx`<${BudInput} c=${c}/>`:null}${subs}<table>${items.map((t,n)=>hx`<${TxRow} key=${t.id||n} t=${t}/>`)}</table></div>`:null}
     </div>`;
   }),$("cats")));
 
