@@ -332,7 +332,7 @@ window.libsReady=(async()=>{
 </section>
 
 <section id="out" class="hide">
-<div class="periodbar"><label for="period">Dönem</label><select id="period"></select></div>
+<div class="periodbar"><label for="period">Dönem</label><select id="period"></select><label for="cardSel" id="cardLbl" class="hide">Kart</label><select id="cardSel" class="hide"></select></div>
 <div id="rangeWrap" class="hide">
 <div class="rangebox"><div><label for="rFrom">Başlangıç</label><input type="date" id="rFrom"></div><div><label for="rTo">Bitiş</label><input type="date" id="rTo"></div></div>
 <div class="presets"><button class="ghost" data-pr="7">Son 7 gün</button><button class="ghost" data-pr="30">Son 30 gün</button><button class="ghost" data-pr="90">Son 3 ay</button><button class="ghost" data-pr="month">Bu takvim ayı</button><button class="ghost" data-pr="year">Bu yıl</button></div>
@@ -451,6 +451,7 @@ let excluded=new Set(), viewMode="bar";
 let notes={}, dismissed=new Set();
 /* Tüm işlemler görünümü: arama, kategori süzgeci, sıralama (yalnızca bellekte) */
 const txView={q:"",cat:"",sort:"date",dir:-1};
+let cardSel="";   /* seçili kartın son 4 hanesi; boş = tüm kartlar (yalnızca bellekte) */
 function snapshot(){return JSON.stringify({version:1,updated:new Date().toISOString(),history,statements,overrides,excluded:[...excluded],viewMode,rules:$("rules").value,lastMap,notes,dismissed:[...dismissed]},null,1)}
 async function writeFile(name,text){const fh=await dir.getFileHandle(name,{create:true});const w=await fh.createWritable();await w.write(text);await w.close()}
 const MOBILE=!window.showDirectoryPicker;
@@ -603,7 +604,7 @@ function dateFromMatch(m){
   if(!(d>=1&&d<=31&&mo>=1&&mo<=12))return null;
   return `${String(d).padStart(2,"0")}.${String(mo).padStart(2,"0")}.${y}`;
 }
-let pdfMissed=[], pdfStmt={date:"",src:""}, pdfSummary={};
+let pdfMissed=[], pdfStmt={date:"",src:""}, pdfSummary={}, pdfCard="";
 /* Ekstre özetindeki tutarlar (etiketin sağında ya da altındaki satırda aynı sütunda) */
 const DUE_KW=["DONEMBORCU","HESAPOZETIBORCU","EKSTREBORCU","DONEMSONUBORCU","HESAPOZETITUTARI","EKSTRETUTARI","TOPLAMBORCUNUZ","TOPLAMBORC"];
 const PREV_KW=["ONCEKIDONEMBORCU","GECENDONEMBORCU","ONCEKIEKSTREBORCU","DEVREDENBORC","DEVREDENBAKIYE","ONCEKIDONEMBAKIYE","ONCEKIBAKIYE","ONCEKIHESAPOZETIBORCU"];
@@ -794,9 +795,16 @@ async function pdfToRows(buf){
   const rows=linesToRows(allLines);
   pdfStmt=findStmtDate(lineObjs,rows);
   pdfSummary={due:findLabeledAmount(lineObjs,DUE_KW,true),prev:findLabeledAmount(lineObjs,PREV_KW,false)};
+  pdfCard=findCard(allLines);
   return rows;
 }
 
+/* Maskeli kart numarasının son 4 hanesi ("5412 34** **** 5678", "**** **** **** 5678"). Ekstrede birden çok geçerse en sık geçen alınır. */
+const CARD_RE=/(?:[*•xX]\s?){4,}(?:[\s-]*[*•xX]+)*[\s-]*(\d{4})(?!\d)/g;
+function findCard(lines){
+  const c={}; lines.forEach(l=>{for(const m of l.matchAll(CARD_RE))c[m[1]]=(c[m[1]]||0)+1});
+  return Object.keys(c).sort((a,b)=>c[b]-c[a])[0]||"";
+}
 /* Satır listesinden işlemleri çıkar. Her tarih yeni bir işlem başlatır. */
 /* İşlem tablosu dışındaki bölümler (puan detayı vb.) işlem sayılmaz.
    Bölüm başlığından sonra, yeni bir işlem tablosu başlığı gelene kadar her şey atlanır. */
@@ -950,7 +958,7 @@ function parseDate(v){
 async function loadFile(f){
   await window.libsReady;
   currentFileName=f.name;
-  const buf=await f.arrayBuffer(); pdfMissed=[]; pdfSummary={}; pdfStmt={date:"",src:""};
+  const buf=await f.arrayBuffer(); pdfMissed=[]; pdfSummary={}; pdfCard=""; pdfStmt={date:"",src:""};
   const isPdfFile=/\.pdf$/i.test(f.name);
   if(isPdfFile){
     raw=await pdfToRows(buf);
@@ -1097,7 +1105,7 @@ function expandInstallments(){
       const kind=k>maxN?"future":"past";
       history.push({id:`T|${norm(ref.desc)}|${m}|${ref.inst.total||ref.amt}|${k}|${kind}`,
         date:shiftMonth(ref.date,k-ref.inst.n),stmt:ref.stmt?shiftMonth(ref.stmt,k-ref.inst.n):"",desc:ref.desc,amt:ref.amt,pdate:ref.pdate||"",
-        inst:{...ref.inst,n:k},est:kind});
+        inst:{...ref.inst,n:k},est:kind,...(ref.card?{card:ref.card}:{})});
       kind==="future"?future++:past++;
     }
   }
@@ -1121,7 +1129,7 @@ function importRows(){
   history=history.filter(t=>!t.est);
   const existing=new Set(history.map(t=>t.id)), seen={};
   let added=0, dup=0, skipped=0, pays=0, refunds=0;
-  if(isPdf&&stmt)statements[stmt]={due:pdfSummary.due,prev:pdfSummary.prev,rows:raw.slice(h+1).filter(r=>isFinite(parseAmount(r[ca]))&&parseAmount(r[ca])!==0&&String(r[cs]||"").trim()).length,
+  if(isPdf&&stmt)statements[stmt]={due:pdfSummary.due,prev:pdfSummary.prev,card:pdfCard||undefined,rows:raw.slice(h+1).filter(r=>isFinite(parseAmount(r[ca]))&&parseAmount(r[ca])!==0&&String(r[cs]||"").trim()).length,
     missed:pdfMissed.filter(t=>[...t.matchAll(ANY_DATE)].length<2&&!SKIP_RE.test(norm(t))).slice(0,40)};
   for(const r of raw.slice(h+1)){
     const amt=parseAmount(r[ca]); if(!isFinite(amt)||amt===0)continue;
@@ -1154,6 +1162,8 @@ function importRows(){
     const item={id,date,desc,amt:a}; if(note)item.note=note; if(stmt)item.stmt=stmt;
     history.push(item); existing.add(id); added++;
   }
+  /* Bu içe aktarmadan gelen (henüz kartı işlenmemiş) satırlara kart etiketi */
+  if(isPdf&&stmt&&pdfCard)history.forEach(t=>{if(t.stmt===stmt&&!t.est&&!t.card)t.card=pdfCard});
   const ex=expandInstallments();
   return {added,dup,skipped,ex,pays,refunds};
 }
@@ -1178,7 +1188,7 @@ function fillPeriods(){
 }
 
 function renderRecon(p){
-  const list=p?Object.keys(statements).filter(k=>k.slice(0,7)===p).sort():[];
+  const list=p?Object.keys(statements).filter(k=>k.slice(0,7)===p&&(!cardSel||!statements[k].card||statements[k].card===cardSel)).sort():[];
   preact.render(list.map(stmt=>hx`<${ReconBox} key=${stmt} stmt=${stmt} multi=${list.length>1}/>`),$("recon"));
 }
 /* Okunamayan satırı bu ekstreye harcama olarak ekler */
@@ -1318,7 +1328,7 @@ function renderQuery(){
   const sq2=x=>x.replace(/\s+/g,"");
   const today=iso(new Date());
   const sc=scopeInfo();
-  const base=history.filter(t=>t.kind!=="payment"&&!(t.est==="future"&&t.date>today));
+  const base=history.filter(t=>t.kind!=="payment"&&(!cardSel||t.card===cardSel)&&!(t.est==="future"&&t.date>today));
   const match=t=>{const d=norm(t.desc);return terms.some(q=>d.includes(q)||sq2(d).includes(sq2(q)))};
   const allHits=base.filter(match);
   const hits=allHits.filter(sc.in);
@@ -1577,7 +1587,11 @@ function render(){
   /* Sadece henüz özette görünmeyen ve tarihi gelmemiş planlı taksitler "gelecek" sayılır */
   const isUpcoming=t=>t.est==="future"&&t.date>today;
   const upcoming=history.filter(isUpcoming);
-  const spend=history.filter(t=>t.kind!=="payment");
+  const cards=[...new Set(history.map(t=>t.card).filter(Boolean))].sort();
+  if(cardSel&&!cards.includes(cardSel))cardSel="";
+  const cs=$("cardSel"); preact.render([hx`<option value="">Tüm kartlar</option>`,...cards.map(c=>hx`<option key=${c} value=${c}>•••• ${c}</option>`)],cs); cs.value=cardSel;
+  cs.classList.toggle("hide",cards.length<2); $("cardLbl").classList.toggle("hide",cards.length<2);
+  const spend=history.filter(t=>t.kind!=="payment"&&(!cardSel||t.card===cardSel));
   const isRange=p==="range";
   $("rangeWrap").classList.toggle("hide",!isRange);
   if(isRange&&!$("rFrom").value){const t=new Date();$("rTo").value=iso(t);t.setDate(t.getDate()-29);$("rFrom").value=iso(t)}
@@ -1683,6 +1697,7 @@ $("run").addEventListener("click",()=>{
   render(); $("out").scrollIntoView({behavior:"smooth"});
 });
 $("period").addEventListener("change",render);
+$("cardSel").addEventListener("change",()=>{cardSel=$("cardSel").value;render()});
 let txTimer; $("txq").addEventListener("input",e=>{clearTimeout(txTimer);txTimer=setTimeout(()=>{txView.q=e.target.value;render()},150)});
 $("txcat").addEventListener("change",e=>{txView.cat=e.target.value;render()});
 let qTimer; $("q").addEventListener("input",()=>{clearTimeout(qTimer);qTimer=setTimeout(renderQuery,150)});

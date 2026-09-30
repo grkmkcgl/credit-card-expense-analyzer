@@ -847,6 +847,28 @@ def islem_notu_ve_etiket(b, info):
     a.close()
 
 
+@test
+def kart_ayrimi(b, info):
+    a = App(b)
+    a.import_("kart_a.pdf"); assert not a.pg.is_visible("#cardSel"), "tek kartta seçici yok"
+    a.import_("kart_b.pdf")
+    eq(a.ev("[...new Set(history.map(t=>t.card))].sort()"), ["1234", "5678"], "kartlar okunmalı")
+    eq(a.ev("statements['2026-08-26'].card+statements['2026-08-20'].card"), "12345678", "ekstre başına kart")
+    assert a.pg.is_visible("#cardSel"), "iki kartta seçici görünmeli"
+    a.period("2026-08"); eq(a.total(), "₺2.000", "tüm kartlar")
+    a.pg.select_option("#cardSel", "1234"); a.pg.wait_for_timeout(150)
+    eq(a.total(), "₺1.500", "yalnızca 1234"); assert "Tutuyor" in a.text("#recon") and a.ev("document.querySelectorAll('#recon details').length") == 1
+    a.pg.select_option("#cardSel", "5678"); a.pg.wait_for_timeout(150)
+    eq(a.total(), "₺500", "yalnızca 5678"); assert "SINEMA" in a.text("#top") and "MIGROS" not in a.text("#top")
+    a.pg.select_option("#cardSel", ""); a.pg.wait_for_timeout(150)
+    eq(a.total(), "₺2.000", "tekrar tüm kartlar")
+    # eski dosya / kartsız ekstre: seçici çıkmaz
+    a.ev("()=>{applyData({history:[{id:'k1',date:'2026-08-01',stmt:'2026-08-26',desc:'ORNEK TR',amt:10}]});render()}")
+    assert not a.pg.is_visible("#cardSel")
+    assert not a.errors, a.errors
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
