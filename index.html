@@ -212,6 +212,9 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 .arow{display:flex;gap:10px;align-items:flex-start;padding:8px 0 2px;border-top:1px solid #3a2e14;margin-top:6px}
 .arow>div{flex:1;min-width:0;overflow-wrap:anywhere}
 .aic{color:var(--mustard);font-weight:700;width:14px}
+.instcal{margin-top:16px}
+.instcal h3{font-size:.95rem;margin:0 0 4px}
+.iend{display:block;color:var(--mustard);font-size:.75rem;margin-top:2px}
 .empty{display:flex;align-items:center;gap:8px;color:var(--muted);padding:10px 4px}
 .empty .tick{color:var(--teal);font-weight:700}
 .catrow.off{transition:opacity .2s}
@@ -349,6 +352,7 @@ window.libsReady=(async()=>{
 <p><small>Kredi kartı işlemleri, hangi ekstrede göründülerse o ekstrenin dönemine yazılır. Banka bir harcamayı birkaç gün geç işlerse (ör. 25 Temmuz'daki harcama 26 Temmuz kesiminden sonra işlendiyse) sonraki ekstrede görünür; bu normaldir.</small></p>
 <p style="margin:0 0 6px"><small id="monthsNote" class="err"></small></p>
 <div id="months"></div>
+<div id="instCal"></div>
 </details>
 
 <details class="fold" id="allFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Tüm işlemler <small id="allCount"></small></h2></summary>
@@ -1468,6 +1472,16 @@ function AnomBox({list}){
     ${list.map(a=>hx`<div class="arow" key=${a.id}><span class="aic" aria-hidden="true">${a.type==="dup"?"⧉":"↑"}</span><div><${AnBtn} desc=${a.t.desc}/> <small>${a.t.date?toDate(a.t.date).toLocaleDateString("tr-TR"):""}</small><br/><small>${a.type==="dup"?`Aynı gün aynı tutarda ${a.n} kez: ${fmt2(a.t.amt)}. Çift çekim olabilir, ekstreyi kontrol edin.`:`${fmt(a.t.amt)}; bu yerdeki ortalamanızın (${fmt(a.avg)}) ${Math.round(a.t.amt/a.avg)} katı.`}</small></div><button class="x" data-dismiss=${a.id} title="Bu uyarıyı bir daha gösterme" onClick=${()=>hide(a.id)}>Gösterme</button></div>`)}
   </div>`;
 }
+/* Gelecek taksit takvimi: henüz özette görünmeyen planlı taksitlerin dönem başına toplamı ve o dönemde biten seriler */
+function InstCal({up}){
+  if(!up.length)return null;
+  const by={}; up.forEach(t=>{const k=periodKey(t);const b=by[k]=by[k]||{v:0,n:0,end:[]};b.v+=t.amt;b.n++;if(t.inst&&t.inst.n===t.inst.m)b.end.push(t.desc)});
+  const ks=Object.keys(by).sort().slice(0,12), mx=Math.max(...ks.map(k=>by[k].v),1);
+  return hx`<div class="instcal"><h3>Gelecek taksit takvimi</h3>
+    <p style="margin:0 0 6px"><small>Önümüzdeki ekstrelerde kesinleşmiş taksit yükü. Serinin son taksidi olan dönemde "biter" yazar.</small></p>
+    ${ks.map(k=>{const b=by[k];return hx`<div class="mrow" key=${k}><span>${periodLabel(k,true)}</span><div><div class="bar" style=${`width:${b.v/mx*100}%;background:transparent;border:1px dashed var(--teal)`}></div>${b.end.length?hx`<small class="iend" title=${b.end.join(", ")}>${b.end.length} seri biter</small>`:null}</div><b style="text-align:right">${fmt(b.v)}<br/><small>${b.n} taksit</small></b></div>`})}
+    <p style="margin:6px 0 0"><small>Toplam kalan: <b>${fmt(up.reduce((s,t)=>s+t.amt,0))}</b></small></p></div>`;
+}
 function render(){
   parseRules(); updateHistInfo();
   document.body.classList.toggle("has-data",history.length>0);
@@ -1544,6 +1558,7 @@ function render(){
   const curM=iso(new Date()).slice(0,7);
   const past=Object.entries(byM).sort().filter(([k])=>k<=curM).slice(-12), fut=Object.entries(byM).sort().filter(([k])=>k>curM);
   const ms=[...past,...fut], mx=Math.max(...ms.map(m=>m[1]),1);
+  preact.render(hx`<${InstCal} up=${history.filter(t=>t.est==="future")}/>`,$("instCal"));
   $("monthsCount").textContent=ms.length?`(${ms.length} dönem)`:"";
   preact.render(ms.length?ms.map(([k,v])=>hx`<div class="mrow" key=${k}><span>${periodLabel(k,true)}</span><div class="bar" style=${`width:${v/mx*100}%;`+(k===p?"background:var(--mustard)":k>curM?"background:transparent;border:1px dashed var(--teal)":"")}></div><b style="text-align:right">${fmt(v)}</b></div>`):hx`<small>Tarih sütunu okunamadı.</small>`,$("months"));
 

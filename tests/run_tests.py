@@ -756,6 +756,22 @@ def olagandisi_harcamalar(b, info):
     a.close()
 
 
+@test
+def gelecek_taksit_takvimi(b, info):
+    H = [{"id": "i1", "date": "2026-08-01", "pdate": "2026-08-01", "stmt": "2026-09-26", "desc": "ORNEK ELEKTRONIK TR", "amt": 500, "inst": {"n": 2, "m": 4, "total": 2000}},
+         {"id": "i2", "date": "2026-09-10", "pdate": "2026-09-10", "stmt": "2026-09-26", "desc": "ORNEK GIYIM TR", "amt": 300, "inst": {"n": 1, "m": 2, "total": 600}}]
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", H); a.pg.click("#monthsFold > summary")
+    rows = a.ev("[...document.querySelectorAll('#instCal .mrow')].map(r=>r.textContent)")
+    eq(len(rows), 2, "iki gelecek dönem")
+    assert rows[0].startswith("Eki") and "₺800" in rows[0] and "2 taksit" in rows[0] and "1 seri biter" in rows[0], rows
+    assert rows[1].startswith("Kas") and "₺500" in rows[1] and "1 seri biter" in rows[1], rows
+    assert "Toplam kalan: ₺1.300" in a.text("#instCal")
+    a.ev("()=>{applyData({history:[{id:'n1',date:'2026-09-01',stmt:'2026-09-26',desc:'ORNEK MARKET TR',amt:100}]});render()}")
+    eq(a.ev("$('instCal').textContent"), "", "taksit yoksa bölüm yok")
+    assert not a.errors, a.errors
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
