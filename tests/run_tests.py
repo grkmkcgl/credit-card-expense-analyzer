@@ -869,6 +869,28 @@ def kart_ayrimi(b, info):
     a.close()
 
 
+@test
+def yazdirma_gorunumu(b, info):
+    a = App(b); a.import_("arti.pdf")
+    called = a.ev("()=>{window._p=0;window.print=()=>{window._p++};return 0}")
+    a.pg.click("#tbPrint"); eq(a.ev("window._p"), 1, "Yazdır düğmesi print çağırmalı")
+    a.pg.emulate_media(media="print")
+    css = lambda sel, prop: a.ev(f"getComputedStyle(document.querySelector('{sel}')).{prop}")
+    eq(css("body", "backgroundColor"), "rgb(255, 255, 255)", "baskıda beyaz zemin")
+    eq(css("#toolbar", "display"), "none", "araç çubuğu gizli")
+    eq(css("#rulesFold", "display"), "none", "kurallar baskıda yok")
+    assert css("body", "color") != "rgb(233, 237, 235)", "koyu tema rengi baskıda kalmamalı"
+    a.ev("window.dispatchEvent(new Event('beforeprint'))")
+    assert a.ev("document.getElementById('monthsFold').open && document.getElementById('allFold').open"), "yazdırırken bölümler açılmalı"
+    eq(css(".scroll", "maxHeight"), "none", "liste tam uzunlukta")
+    a.ev("window.dispatchEvent(new Event('afterprint'))")
+    assert not a.ev("document.getElementById('allFold').open"), "sonra eski durum"
+    a.pg.emulate_media(media="screen")
+    eq(css("#toolbar", "display") != "none", True, "ekranda görünür")
+    assert not a.errors, a.errors
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
