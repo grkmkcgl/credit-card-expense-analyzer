@@ -899,7 +899,7 @@ def main():
     selected = [t for t in TESTS if not only or only in t.__name__]
     ok = 0
     with sync_playwright() as p:
-        b = p.chromium.launch()
+        b = getattr(p, os.environ.get("BROWSER", "chromium")).launch()
         for t in selected:
             try:
                 t(b, info); ok += 1; print(f"  GEÇTİ  {t.__name__}")
