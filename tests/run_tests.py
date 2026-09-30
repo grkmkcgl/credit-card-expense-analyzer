@@ -682,6 +682,24 @@ def tum_islemler_arama_suzgec_siralama(b, info):
     a.close()
 
 
+@test
+def donem_karsilastirma(b, info):
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", _pide_history())
+    a.period("2026-08")
+    badges = a.ev("Object.fromEntries([...document.querySelectorAll('#cats .cat')].map(c=>[c.dataset.k,(c.querySelector('.delta')||{}).textContent||'']))")
+    eq(badges.get("Kafe ve restoran"), "▲ %313", "Kafe 450 → 1.860")
+    eq(badges.get("Market"), "", "değişmeyen kategoride rozet yok")
+    k = a.text("#kpis"); assert "En çok artan" in k and "Kafe ve restoran" in k and "₺1.410" in k, k
+    a.period("2026-07")
+    badges = a.ev("Object.fromEntries([...document.querySelectorAll('#cats .cat')].map(c=>[c.dataset.k,(c.querySelector('.delta')||{}).textContent||'']))")
+    eq(badges.get("Kafe ve restoran"), "yeni", "önceki dönemde yoksa 'yeni'")
+    a.period("")
+    eq(a.ev("document.querySelectorAll('#cats .delta').length"), 0, "tüm zamanlarda rozet yok")
+    assert "En çok artan" not in a.text("#kpis")
+    assert not a.errors, a.errors
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]

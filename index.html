@@ -76,6 +76,10 @@ body.dragging::after{content:"Dosyaları bırakın";position:fixed;inset:12px;z-
 .kpi b{display:block;font-size:1.2rem;letter-spacing:-.01em;margin:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kpi.good b{color:var(--teal)}
 .kpi.bad b{color:var(--red)}
+.kpi.up b{color:var(--red)}
+.delta{font-size:.72rem;font-weight:600;padding:1px 6px;border-radius:9px;white-space:nowrap;vertical-align:1px}
+.delta.up{color:var(--red);background:rgba(240,115,107,.12)}
+.delta.down{color:var(--teal);background:rgba(53,194,172,.12)}
 button.kpi:hover{border-color:var(--muted);filter:none}
 .search{display:flex;gap:8px}
 .search input{flex:1;min-width:0;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink)}
@@ -1327,7 +1331,7 @@ function renderQuery(){
   <//>`,out);
 }
 /* Toplamın yanındaki özet kartları: seçili kapsama göre değişir */
-function renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross}){
+function renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross,cmp,byCat}){
   const cards=[];
   const card=(label,value,sub,cls="",extra={})=>cards.push({label,value,sub,cls,...extra});
   if(isRange){
@@ -1344,6 +1348,10 @@ function renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross}){
     const n=new Set(tx.map(periodKey).filter(Boolean)).size;
     if(n>1)card("Dönem başına ortalama",fmt(total/n),`${n} dönem`);
     if(upcoming.length)card("Gelecek taksitler",fmt(upcoming.reduce((s,t)=>s+t.amt,0)),`${upcoming.length} taksit; dönem seçerek görün`);
+  }
+  if(cmp){
+    const ups=Object.keys(byCat).filter(c=>!excluded.has(c)&&c!=="İadeler ve indirimler").map(c=>[c,byCat[c]-(cmp.prev[c]||0)]).sort((a,b)=>b[1]-a[1]);
+    if(ups.length&&ups[0][1]>=1)card("En çok artan",ups[0][0],`+${fmt(ups[0][1])} · ${periodLabel(cmp.prevP,true)} dönemine göre`,"up");
   }
   if(posCats.length){const [c,v]=posCats[0];card("En büyük kategori",c,`${fmt(v)} · %${(v/gross*100).toFixed(1)}`)}
   preact.render(hx`<${preact.Fragment}>${cards.map(c=>hx`<${KpiCard} key=${c.label} ...${c}/>`)}<//>`,$("kpis"));
@@ -1393,6 +1401,16 @@ function txList(tx){
   return l.sort((a,b)=>{const x=key(a),y=key(b);return (x<y?-1:x>y?1:0)*txView.dir||(b.date||"").localeCompare(a.date||"")});
 }
 const txNote=t=>"";
+const catOfTx=t=>t.kind==="refund"?"İadeler ve indirimler":t.inst?"Taksitler":categorize(t.desc);
+/* Önceki döneme göre değişim rozeti: artış kırmızı, azalış teal; %5'ten küçük değişim gösterilmez */
+function Delta({now,prev,p}){
+  if(now<=0&&prev<=0)return null;
+  const tip=`${periodLabel(p,true)}: ${fmt(prev)}`;
+  if(prev<=0)return hx`<span class="delta up" title=${tip}>yeni</span>`;
+  const d=Math.round((now-prev)/prev*100);
+  if(Math.abs(d)<5)return null;
+  return hx`<span class=${"delta "+(d>0?"up":"down")} title=${tip}>${d>0?"▲":"▼"} %${Math.abs(d)}</span>`;
+}
 function render(){
   parseRules(); updateHistInfo();
   document.body.classList.toggle("has-data",history.length>0);
@@ -1429,6 +1447,10 @@ function render(){
   $("range").textContent=`${tx.length} işlem`+(ds.length?`, ${ds[0].toLocaleDateString("tr-TR")} – ${ds.at(-1).toLocaleDateString("tr-TR")}`:"");
 
   const byCat={}; allTx.forEach(t=>byCat[t.cat]=(byCat[t.cat]||0)+t.amt);
+  /* Tek dönem seçiliyse bir önceki dönemle kategori karşılaştırması */
+  const prevP=p&&!isRange?[...new Set(spend.map(periodKey))].filter(k=>k&&k<p).sort().at(-1):null;
+  const prevByCat={}; if(prevP)spend.filter(t=>periodKey(t)===prevP).forEach(t=>{const c=catOfTx(t);prevByCat[c]=(prevByCat[c]||0)+t.amt});
+  const cmp=prevP?{prevP,prev:prevByCat}:null;
   const cats=Object.entries(byCat).sort((a,b)=>(excluded.has(a[0])-excluded.has(b[0]))||b[1]-a[1]);
   const posCats=cats.filter(([c,v])=>v>0&&!excluded.has(c));
   const catOfT=t=>t.kind==="refund"?"İadeler ve indirimler":t.inst?"Taksitler":categorize(t.desc);
@@ -1438,7 +1460,7 @@ function render(){
   const colorOf=c=>ranked.includes(c)?PAL[ranked.indexOf(c)]:GRAY;
   const col={}; cats.forEach(([c])=>col[c]=colorOf(c));
   renderPie(posCats,col,ranked,gross,total,allTx);
-  renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross});
+  renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross,cmp,byCat});
   preact.render(posCats.map(([c,v])=>hx`<span key=${c} style=${`width:${v/gross*100}%;background:${col[c]}`} title=${c}></span>`),$("strip"));
   flipList($("cats"),()=>preact.render(cats.map(([c,v])=>{
     const open=openCats.has(c);
@@ -1452,7 +1474,7 @@ function render(){
     return hx`<div class="cat" key=${c} data-k=${c}>
       <div class=${"catrow"+(off?" off":"")}>
         <label class="inc" title=${off?"Toplama dahil et":"Toplamdan çıkar"}><input type="checkbox" data-inc=${c} checked=${!off} aria-label=${c+" toplama dahil"} onChange=${e=>{e.target.checked?excluded.delete(c):excluded.add(c);save();render()}}/></label>
-        <button class="row" data-cat=${c} aria-expanded=${String(open)} onClick=${()=>{openCats.has(c)?openCats.delete(c):openCats.add(c);render()}}><span class="dot" style=${"background:"+col[c]}></span><span class="nm">${c} <small>(${allTx.filter(t=>t.cat===c).length})</small></span><span class="pct">${v>0&&!off?`%${(v/gross*100).toFixed(1)}`:off?"çıkarıldı":""}</span><b class="amt">${fmt(v)}</b><span class="chev" aria-hidden="true">▶</span></button>
+        <button class="row" data-cat=${c} aria-expanded=${String(open)} onClick=${()=>{openCats.has(c)?openCats.delete(c):openCats.add(c);render()}}><span class="dot" style=${"background:"+col[c]}></span><span class="nm">${c} <small>(${allTx.filter(t=>t.cat===c).length})</small>${cmp&&!off?hx` <${Delta} now=${v} prev=${cmp.prev[c]||0} p=${cmp.prevP}/>`:null}</span><span class="pct">${v>0&&!off?`%${(v/gross*100).toFixed(1)}`:off?"çıkarıldı":""}</span><b class="amt">${fmt(v)}</b><span class="chev" aria-hidden="true">▶</span></button>
       </div>
       ${open?hx`<div class="catlist">${subs}<table>${items.map((t,n)=>hx`<${TxRow} key=${t.id||n} t=${t}/>`)}</table></div>`:null}
     </div>`;
