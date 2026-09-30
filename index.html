@@ -327,6 +327,11 @@ window.libsReady=(async()=>{
 <h2>En çok harcanan yerler</h2>
 <table id="top" class="top"></table>
 
+<details class="fold" id="recurFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Düzenli ödemeler <small id="recurCount"></small></h2></summary>
+<p><small>En az 3 ekstre döneminde benzer tutarla (±%15) tekrar eden harcamalar: abonelikler, faturalar, aidatlar. Taksitler dahil değildir. Yıllık tutar, tipik aylık tutarın 12 katıdır.</small></p>
+<table id="recur" class="top"></table>
+</details>
+
 <h2>Harcama ara</h2>
 <p><small>Bir yerin adını yazın, tüm dönemlerdeki harcamanızı görün. Birden fazla yer için virgül kullanın. Listelerdeki adlara tıklayarak da açabilirsiniz.</small></p>
 <div class="search"><input type="search" id="q" list="qList" placeholder="Harcama ara… (ör. getir)" autocomplete="off"><button class="ghost" id="qClear">Temizle</button></div>
@@ -1411,6 +1416,28 @@ function Delta({now,prev,p}){
   if(Math.abs(d)<5)return null;
   return hx`<span class=${"delta "+(d>0?"up":"down")} title=${tip}>${d>0?"▲":"▼"} %${Math.abs(d)}</span>`;
 }
+/* Düzenli ödemeler: aynı yer (merchantKey), en az 3 dönemde, tipik tutarın ±%15'i içinde. Taksit, ödeme, iade ve tahminler hariç. */
+function detectRecurring(){
+  const today=iso(new Date()).slice(0,7);
+  const real=history.filter(t=>!t.kind&&!t.inst&&!t.est&&t.amt>0);
+  const allP=[...new Set(real.map(periodKey).filter(k=>k&&k<=today))].sort();
+  const g={};
+  real.forEach(t=>{const k=merchantKey(t.desc),p=periodKey(t);if(!k||!p)return;(g[k]=g[k]||{key:k,per:{},last:t}).per[p]=(g[k].per[p]||0)+t.amt;if((t.date||"")>(g[k].last.date||""))g[k].last=t});
+  const out=[];
+  Object.values(g).forEach(x=>{
+    const ps=Object.keys(x.per).sort(); if(ps.length<3)return;
+    const vs=ps.map(p=>x.per[p]).sort((a,b)=>a-b), med=vs[Math.floor(vs.length/2)];
+    const ok=ps.filter(p=>Math.abs(x.per[p]-med)<=med*.15);
+    if(ok.length<3||ok.length<ps.length*.6)return;
+    const lastP=ps.at(-1), lastV=x.per[lastP], idx=allP.indexOf(lastP);
+    out.push({key:x.key,desc:x.last.desc,cat:categorize(x.last.desc),n:ps.length,med,lastP,lastV,
+      up:lastV>med*1.1, gone:idx>=0&&allP.length-1-idx>=2});
+  });
+  return out.sort((a,b)=>b.med-a.med);
+}
+function RecurRow({r}){
+  return hx`<tr><td><${AnBtn} desc=${r.desc}/><br/><small>${r.cat} · ${r.n} dönem · son ${periodLabel(r.lastP,true)}</small>${r.up?hx` <span class="delta up" title=${`Son dönem ${fmt(r.lastV)}`}>tutar arttı</span>`:null}${r.gone?hx` <span class="delta down">son 2 dönemde yok</span>`:null}</td><td class="n"><b>${fmt(r.med)}</b><br/><small>yılda ${fmt(r.med*12)}</small></td></tr>`;
+}
 function render(){
   parseRules(); updateHistInfo();
   document.body.classList.toggle("has-data",history.length>0);
@@ -1493,6 +1520,9 @@ function render(){
   const all=Object.values(byD).sort((a,b)=>b.sum-a.sum);
   const topMax=Math.max(all.length?all[0].sum:0,1);
   preact.render(hx`<tbody>${all.slice(0,10).map(d=>hx`<tr key=${d.desc}><td class="tdot"><span class="dot" style=${"background:"+d.col}></span></td><td><${AnBtn} desc=${d.desc}/><br/><small>${d.cat}, ${d.n} işlem</small><div class="mbar" aria-hidden="true"><span style=${`width:${Math.max(0,d.sum/topMax*100)}%;background:${d.col}`}></span></div></td><td class="n"><b>${fmt(d.sum)}</b></td></tr>`)}</tbody>`,$("top"));
+  const rec=detectRecurring(), recActive=rec.filter(r=>!r.gone);
+  $("recurCount").textContent=rec.length?`(${recActive.length} · aylık ${fmt(recActive.reduce((s,r)=>s+r.med,0))})`:"";
+  preact.render(hx`<tbody>${rec.length?rec.map(r=>hx`<${RecurRow} key=${r.key} r=${r}/>`):hx`<tr><td><div class="empty"><small>Henüz düzenli ödeme bulunmadı. En az 3 ekstre dönemi gerekir.</small></div></td></tr>`}</tbody>`,$("recur"));
 
   const catNames=[...new Set(rules.map(r=>r.cat))];
   $("rulesCount").textContent=`(${catNames.length} kategori)`;
@@ -1511,7 +1541,7 @@ function render(){
   const keys=[...new Set(history.filter(t=>t.kind!=="payment").map(t=>merchantKey(t.desc)))].sort();
   $("qList").innerHTML=keys.slice(0,400).map(k=>`<option value="${esc(k)}">`).join("");
   renderQuery();
-  document.querySelectorAll("[data-an]:not(#cats [data-an],#top [data-an],#alltx [data-an])").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();openAnalysis(b.dataset.an)}));
+  document.querySelectorAll("[data-an]:not(#cats [data-an],#top [data-an],#alltx [data-an],#recur [data-an])").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();openAnalysis(b.dataset.an)}));
 }
 
 $("run").addEventListener("click",()=>{

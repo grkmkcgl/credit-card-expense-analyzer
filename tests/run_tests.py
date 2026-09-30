@@ -700,6 +700,34 @@ def donem_karsilastirma(b, info):
     a.close()
 
 
+@test
+def duzenli_odemeler(b, info):
+    H, i = [], 0
+    def add(d, desc, amt, **kw):
+        nonlocal i; H.append({"id": f"r{i}", "date": d, "stmt": d[:7] + "-26", "desc": desc, "amt": amt, **kw}); i += 1
+    for m, net, spo, gym, kafe in [("2026-04", 199.99, 59.99, 900, 120), ("2026-05", 199.99, 59.99, 900, 800),
+                                    ("2026-06", 199.99, 59.99, 900, 60), ("2026-07", 229.99, 59.99, None, 300), ("2026-08", 229.99, 59.99, None, 45)]:
+        add(m + "-05", "NETFLIX.COM ISTANBUL TR", net); add(m + "-07", "SPOTIFY AB STOCKHOLM SE", spo)
+        if gym: add(m + "-02", "ORNEK SPOR SALONU ANKARA TR", gym)
+        add(m + "-15", "KAHVE DURAGI ANKARA TR", kafe)
+        add(m + "-20", "TAKSITLI MAGAZA TR", 500, inst={"n": 1, "m": 6, "total": 3000})
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", H)
+    a.pg.click("#recurFold > summary")
+    rows = a.ev("[...document.querySelectorAll('#recur tbody tr')].map(r=>r.textContent)")
+    names = " | ".join(rows)
+    assert "NETFLIX" in names and "SPOTIFY" in names and "ORNEK SPOR" in names, rows
+    assert "KAHVE" not in names, "değişken tutarlı kahve düzenli sayılmamalı"
+    assert "TAKSITLI" not in names, "taksitler dahil edilmemeli"
+    net = next(r for r in rows if "NETFLIX" in r); assert "tutar arttı" in net and "yılda" in net, net
+    gym = next(r for r in rows if "ORNEK SPOR" in r); assert "son 2 dönemde yok" in gym, gym
+    spo = next(r for r in rows if "SPOTIFY" in r); assert "₺60" in spo and "arttı" not in spo, spo
+    assert "(2 ·" in a.text("#recurCount"), a.text("#recurCount")
+    a.pg.locator("#recur button[data-an]").filter(has_text="SPOTIFY").click(); a.pg.wait_for_timeout(150)
+    eq(a.ev("$('q').value"), "spotify", "satır analizi açmalı")
+    assert not a.errors, a.errors
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
