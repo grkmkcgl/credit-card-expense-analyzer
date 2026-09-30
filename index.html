@@ -224,6 +224,18 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 .toast button{margin:0;padding:6px 12px;font-size:.85rem}
 @keyframes toastin{from{opacity:0;transform:translateY(10px)}}
 @media print{#toast{display:none}}
+.notecell{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.note{font-size:.8rem;color:var(--muted);font-style:italic;overflow-wrap:anywhere}
+.notebtn{margin:0;padding:0 4px;background:none;color:var(--muted);border:0;font-size:.8rem;opacity:.55;line-height:1}
+.notebtn:hover,.notebtn:focus-visible{opacity:1;color:var(--teal);filter:none}
+.noteedit input{width:100%;font:inherit;font-size:.85rem;padding:3px 6px;border:1px solid var(--teal);border-radius:4px;background:var(--field);color:var(--ink);margin-top:3px}
+.tag,.tagchip{margin:0;background:rgba(53,194,172,.12);color:var(--teal);border:0;border-radius:9px;padding:0 6px;font:inherit;font-size:.78rem;font-style:normal;cursor:pointer}
+.tagbar{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.tagchip{padding:3px 10px}
+.tagchip small{color:inherit;opacity:.75}
+.tagchip.on{background:var(--teal);color:#001512}
+.tag:hover,.tagchip:hover{filter:brightness(1.2)}
+@media print{.notebtn{display:none}}
 .empty{display:flex;align-items:center;gap:8px;color:var(--muted);padding:10px 4px}
 .empty .tick{color:var(--teal);font-weight:700}
 .catrow.off{transition:opacity .2s}
@@ -366,6 +378,7 @@ window.libsReady=(async()=>{
 
 <details class="fold" id="allFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Tüm işlemler <small id="allCount"></small></h2></summary>
 <p><small>Otomatik atanan kategoriyi buradan değiştirebilirsiniz; aynı açıklamaya sahip tüm işlemler güncellenir. Yanlışlıkla eklenen bir satırı (ör. kart ödemesi) silebilirsiniz.</small></p>
+<div id="tagbar"></div>
 <div class="txbar"><input type="search" id="txq" placeholder="İşlem ara… (ör. market, #tatil)" autocomplete="off" aria-label="İşlemlerde ara"><select id="txcat" aria-label="Kategoriye göre süz"><option value="">Tüm kategoriler</option></select></div>
 <div class="scroll"><table id="alltx"></table></div>
 </details>
@@ -1401,6 +1414,24 @@ function TxRow({t}){
   return hx`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><${AnBtn} desc=${t.desc}/>${extra?hx`<br/><small>${extra}</small>`:null}</td><td class="n">${fmt(t.amt)}</td></tr>`;
 }
 /* "Tüm işlemler" satırı: kategori seçimi ve silme */
+/* İşlem notu: satır altında not metni (#etiketler vurgulu), ✎ ile satır içi düzenleme; Enter kaydeder, Esc vazgeçer.
+   Tahmini (est) satırlarda not yok. Notlar dosyadaki notes alanına işlem id'siyle yazılır. */
+function NoteCell({t}){
+  if(t.est)return null;
+  const save1=v=>{editNote=null;v=v.trim();undoable(v?`Not kaydedildi`:`Not silindi`,()=>{if(v)notes[t.id]=v;else delete notes[t.id]})};
+  const n=notes[t.id];
+  if(editNote===t.id)return hx`<div class="noteedit"><input type="text" data-note=${t.id} value=${n||""} placeholder="Not ekle… #etiket" maxlength="200" ref=${el=>el&&setTimeout(()=>el.focus(),0)}
+    onKeyDown=${e=>{if(e.key==="Enter")save1(e.target.value);else if(e.key==="Escape"){editNote=null;render()}}} onBlur=${e=>{if(editNote===t.id)save1(e.target.value)}}/></div>`;
+  return hx`<div class="notecell">${n?hx`<span class="note">${n.split(/(#[\p{L}\p{N}_-]+)/gu).map((x,i)=>x[0]==="#"?hx`<button class="tag" key=${i} onClick=${e=>{e.stopPropagation();setTxSearch(x.toLocaleLowerCase("tr-TR"))}}>${x}</button>`:x)}</span>`:null}<button class="notebtn" title=${n?"Notu düzenle":"Not / etiket ekle"} aria-label="Not ekle" onClick=${()=>{editNote=t.id;render()}}>✎</button></div>`;
+}
+function setTxSearch(v){txView.q=v;$("txq").value=v;$("allFold").open=true;render()}
+/* Etiket çipleri: kapsamdaki işlemlerin etiket toplamları */
+function TagBar({tx}){
+  const by={}; tx.forEach(t=>{if(t.est)return;tagsOf(notes[t.id]||"").forEach(g=>{const b=by[g]=by[g]||{n:0,v:0};b.n++;b.v+=t.amt})});
+  const ks=Object.keys(by).sort((a,b)=>by[b].v-by[a].v);
+  if(!ks.length)return null;
+  return hx`<div class="tagbar">${ks.map(g=>hx`<button class=${"tagchip"+(norm(txView.q)===norm(g)?" on":"")} key=${g} data-tag=${g} onClick=${()=>setTxSearch(norm(txView.q)===norm(g)?"":g)}>${g} <small>${by[g].n} · ${fmt(by[g].v)}</small></button>`)}</div>`;
+}
 function AllRow({t,catOpts}){
   const extra=txExtra(t);
   const del=()=>{
@@ -1408,7 +1439,7 @@ function AllRow({t,catOpts}){
     undoable(`"${t.desc}" silindi`,()=>{history=history.filter(x=>x.id!==t.id);expandInstallments()});
   };
   const pick=e=>{const v=e.target.value,k=norm(t.desc);undoable(`"${t.desc}" → ${v}`,()=>{if(v==="Diğer")delete overrides[k];else overrides[k]=v})};
-  return hx`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><${AnBtn} desc=${t.desc}/>${extra?hx`<br/><small>${extra}</small>`:null}</td><td><select data-k=${norm(t.desc)} onChange=${pick}>${catOpts.map(c=>hx`<option key=${c} selected=${c===t.sub}>${c}</option>`)}</select></td><td class="n">${fmt(t.amt)}</td><td>${t.est?null:hx`<button class="x" data-id=${t.id} title="Bu işlemi sil" onClick=${del}>Sil</button>`}</td></tr>`;
+  return hx`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><${AnBtn} desc=${t.desc}/>${extra?hx`<br/><small>${extra}</small>`:null}<${NoteCell} t=${t}/></td><td><select data-k=${norm(t.desc)} onChange=${pick}>${catOpts.map(c=>hx`<option key=${c} selected=${c===t.sub}>${c}</option>`)}</select></td><td class="n">${fmt(t.amt)}</td><td>${t.est?null:hx`<button class="x" data-id=${t.id} title="Bu işlemi sil" onClick=${del}>Sil</button>`}</td></tr>`;
 }
 /* Liste yeniden çizilirken satırlar eski yerinden yenisine kayar (FLIP); hareket azaltılmışsa atlanır */
 function flipList(el,draw){
@@ -1429,7 +1460,9 @@ function txList(tx){
   const key={date:t=>t.date||"",desc:t=>norm(t.desc),cat:t=>norm(t.sub||t.cat),amt:t=>t.amt}[txView.sort];
   return l.sort((a,b)=>{const x=key(a),y=key(b);return (x<y?-1:x>y?1:0)*txView.dir||(b.date||"").localeCompare(a.date||"")});
 }
-const txNote=t=>"";
+const txNote=t=>notes[t.id]||"";
+const tagsOf=n=>(String(n).match(/#[\p{L}\p{N}_-]+/gu)||[]).map(x=>x.toLocaleLowerCase("tr-TR"));
+let editNote=null;   /* düzenlenen işlemin id'si (yalnızca bellekte) */
 const catOfTx=t=>t.kind==="refund"?"İadeler ve indirimler":t.inst?"Taksitler":categorize(t.desc);
 /* Önceki döneme göre değişim rozeti: artış kırmızı, azalış teal; %5'ten küçük değişim gösterilmez */
 function Delta({now,prev,p}){
@@ -1631,6 +1664,7 @@ function render(){
   const catOpts=[...new Set([...catNames,"Diğer"])];
   const list=txList(tx);
   $("allCount").textContent=list.length===tx.length?`(${tx.length} işlem)`:`(${list.length} / ${tx.length} işlem)`;
+  preact.render(hx`<${TagBar} tx=${tx}/>`,$("tagbar"));
   const tc=$("txcat"), cats0=[...new Set(tx.map(t=>t.cat))].sort((a,b)=>a.localeCompare(b,"tr"));
   if(txView.cat&&!cats0.includes(txView.cat))cats0.push(txView.cat);
   preact.render([hx`<option value="">Tüm kategoriler</option>`,...cats0.map(c=>hx`<option key=${c} value=${c}>${c}</option>`)],tc); tc.value=txView.cat;

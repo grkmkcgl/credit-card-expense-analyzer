@@ -815,6 +815,38 @@ def geri_al(b, info):
     a.close()
 
 
+@test
+def islem_notu_ve_etiket(b, info):
+    a = App(b); a.import_("arti.pdf"); a.pg.click("#allFold > summary")
+    tr = a.pg.locator("#alltx tbody tr").filter(has_text="SHELL")
+    tr.locator(".notebtn").click(); a.pg.wait_for_timeout(100)
+    a.pg.fill("#alltx input[data-note]", "Yaz tatili yolu #tatil #araba"); a.pg.keyboard.press("Enter"); a.pg.wait_for_timeout(200)
+    assert "Yaz tatili yolu" in tr.inner_text(), tr.inner_text()
+    n = json.loads(a.ev("snapshot()"))["notes"]; eq(list(n.values()), ["Yaz tatili yolu #tatil #araba"], "not dosyaya yazılmalı")
+    chips = a.ev("[...document.querySelectorAll('#tagbar .tagchip')].map(c=>c.textContent)")
+    assert len(chips) == 2 and chips[0].startswith("#tatil") and "₺2.000" in chips[0], chips
+    a.pg.fill("#txq", "yaz tatili"); a.pg.wait_for_timeout(300)   # not içinde arama
+    eq(a.ev("[...document.querySelectorAll('#alltx tbody button[data-an]')].map(b=>b.textContent)"), ["SHELL ORNEK ANKARA TR"], "not aranabilmeli")
+    a.pg.fill("#txq", ""); a.pg.wait_for_timeout(300)
+    a.pg.click("#tagbar .tagchip >> nth=0"); a.pg.wait_for_timeout(200)
+    eq(a.ev("$('txq').value"), "#tatil", "çip aramayı doldurur")
+    eq(a.ev("document.querySelectorAll('#alltx tbody button[data-an]').length"), 1, "yalnızca etiketli işlem")
+    a.pg.click("#tagbar .tagchip.on"); a.pg.wait_for_timeout(200)
+    assert a.ev("document.querySelectorAll('#alltx tbody button[data-an]').length") > 1
+    # Esc vazgeçer, boş kaydetmek notu siler, geri al notu döndürür
+    tr.locator(".notebtn").click(); a.pg.keyboard.press("Escape"); a.pg.wait_for_timeout(100)
+    eq(len(json.loads(a.ev("snapshot()"))["notes"]), 1, "Esc notu değiştirmemeli")
+    tr.locator(".notebtn").click(); a.pg.fill("#alltx input[data-note]", ""); a.pg.keyboard.press("Enter"); a.pg.wait_for_timeout(200)
+    eq(json.loads(a.ev("snapshot()"))["notes"], {}, "boş not silinir")
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150)
+    eq(len(json.loads(a.ev("snapshot()"))["notes"]), 1, "geri al notu döndürür")
+    # yeniden açınca not durur
+    data = json.loads(a.ev("snapshot()")); a.ev("d=>{applyData(d);render()}", data)
+    assert "Yaz tatili yolu" in a.text("#alltx")
+    assert not a.errors, a.errors
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
