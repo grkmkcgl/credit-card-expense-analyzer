@@ -513,7 +513,7 @@ def islem_silmeden_once_onay_sorulur(b, info):
         msgs.append(d.message); d.accept() if answers.pop(0) else d.dismiss()
     a.pg.on("dialog", dlg)
     a.pg.click("#allFold > summary"); a.pg.wait_for_timeout(100)
-    desc = a.pg.locator("#alltx tr").first.locator("button[data-an]").inner_text()
+    desc = a.pg.locator("#alltx tbody tr").first.locator("button[data-an]").inner_text()
     a.pg.locator("#alltx button.x").first.click(); a.pg.wait_for_timeout(100)
     eq(a.ev(real), n, "vazgeçince silinmemeli")
     assert "silinsin mi" in msgs[0] and desc in msgs[0], msgs
@@ -528,7 +528,7 @@ def katlanir_bolumler(b, info):
     for fid in ("allFold", "unkFold", "monthsFold", "rulesFold"):
         eq(a.ev(f"$('{fid}').open"), False, f"{fid} başta kapalı")
     assert not a.pg.is_visible("#alltx"), "kapalıyken tablo görünmemeli"
-    n = a.ev("$('alltx').rows.length")
+    n = a.ev("$('alltx').tBodies[0].rows.length")
     assert n > 0
     eq(a.text("#allCount"), f"({n} işlem)", "başlıktaki sayı")
     unk = a.ev("[...document.querySelectorAll('#unk select')].length")
@@ -654,6 +654,32 @@ def pasta_grafik_hareket_azaltilinca_animasyonsuz(b, info):
     eq(pg.evaluate("document.querySelectorAll('#donut path').length"), 3, "hemen son durumda olmalı")
     assert not errs, errs
     ctx.close()
+
+
+@test
+def tum_islemler_arama_suzgec_siralama(b, info):
+    a = App(b); a.import_("arti.pdf"); a.pg.click("#allFold > summary")
+    rows = lambda: a.ev("[...document.querySelectorAll('#alltx tbody button[data-an]')].map(b=>b.textContent)")
+    n = len(rows()); assert n >= 5, rows()
+    a.pg.fill("#txq", "teknosa"); a.pg.wait_for_timeout(300)
+    r = rows(); assert r and all("TEKNOSA" in x for x in r), r
+    assert "/" in a.text("#allCount"), a.text("#allCount")
+    a.pg.fill("#txq", "akaryakıt"); a.pg.wait_for_timeout(300)
+    assert rows() == ["SHELL ORNEK ANKARA TR"], rows()
+    a.pg.fill("#txq", ""); a.pg.wait_for_timeout(300); eq(len(rows()), n, "arama temizlenince hepsi")
+    a.pg.select_option("#txcat", "Ulaşım"); a.pg.wait_for_timeout(100)
+    eq(rows(), ["OTOPARK B ISTANBUL TR"], "kategori süzgeci")
+    a.pg.select_option("#txcat", ""); a.pg.wait_for_timeout(100)
+    a.pg.click("#alltx button[data-sort=amt]"); a.pg.wait_for_timeout(100)
+    amts = a.ev("[...document.querySelectorAll('#alltx tbody tr')].map(r=>r.cells[3].textContent)")
+    first_desc = rows()[0]
+    a.pg.click("#alltx button[data-sort=amt]"); a.pg.wait_for_timeout(100)
+    assert rows()[0] != first_desc and rows()[-1] == first_desc, "tekrar tıklayınca ters sıralanmalı"
+    assert "ZARA" in rows()[0], rows()
+    a.pg.fill("#txq", "yokboyleyer"); a.pg.wait_for_timeout(300)
+    assert "uyan işlem yok" in a.text("#alltx")
+    assert not a.errors, a.errors
+    a.close()
 
 
 # ----------------------------------------------------------------

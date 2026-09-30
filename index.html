@@ -195,6 +195,14 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 #out:not(.hide){animation:fadein .3s ease-out}
 @keyframes fadein{from{opacity:0}}
 #msg .ok,#msg .err,#msg .flist{animation:fadein .3s ease-out}
+.txbar{display:flex;gap:8px;margin:0 0 8px;flex-wrap:wrap}
+.txbar input{flex:1 1 200px;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink)}
+.txbar select{flex:0 1 200px;width:auto}
+#alltx th{text-align:left;font-weight:400;border-bottom:1px solid var(--line);padding:4px;position:sticky;top:0;background:var(--bg);z-index:1}
+#alltx th.n{text-align:right}
+.sortbtn{background:none;border:0;margin:0;padding:2px 0;color:var(--muted);font:inherit;font-size:.8rem;font-weight:600;cursor:pointer}
+.sortbtn:hover{color:var(--ink);filter:none}
+#alltx th[aria-sort] .sortbtn{color:var(--teal)}
 .empty{display:flex;align-items:center;gap:8px;color:var(--muted);padding:10px 4px}
 .empty .tick{color:var(--teal);font-weight:700}
 .catrow.off{transition:opacity .2s}
@@ -330,6 +338,7 @@ window.libsReady=(async()=>{
 
 <details class="fold" id="allFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Tüm işlemler <small id="allCount"></small></h2></summary>
 <p><small>Otomatik atanan kategoriyi buradan değiştirebilirsiniz; aynı açıklamaya sahip tüm işlemler güncellenir. Yanlışlıkla eklenen bir satırı (ör. kart ödemesi) silebilirsiniz.</small></p>
+<div class="txbar"><input type="search" id="txq" placeholder="İşlem ara… (ör. market, #tatil)" autocomplete="off" aria-label="İşlemlerde ara"><select id="txcat" aria-label="Kategoriye göre süz"><option value="">Tüm kategoriler</option></select></div>
 <div class="scroll"><table id="alltx"></table></div>
 </details>
 
@@ -396,6 +405,8 @@ const DATA_FILE="harcama-verisi.json", PREV_FILE="harcama-verisi.onceki.json";
 let dir=null; const openCats=new Set();
 let statements={};
 let excluded=new Set(), viewMode="bar";
+/* Tüm işlemler görünümü: arama, kategori süzgeci, sıralama (yalnızca bellekte) */
+const txView={q:"",cat:"",sort:"date",dir:-1};
 function snapshot(){return JSON.stringify({version:1,updated:new Date().toISOString(),history,statements,overrides,excluded:[...excluded],viewMode,rules:$("rules").value,lastMap},null,1)}
 async function writeFile(name,text){const fh=await dir.getFileHandle(name,{create:true});const w=await fh.createWritable();await w.write(text);await w.close()}
 const MOBILE=!window.showDirectoryPicker;
@@ -1373,6 +1384,15 @@ function flipList(el,draw){
     if(Math.abs(d)>1)c.animate([{transform:`translateY(${d}px)`},{transform:"none"}],{duration:300,easing:"ease-out"});
   });
 }
+/* Tüm işlemler: arama (açıklama, kategori, not; Türkçe harf duyarsız) + kategori süzgeci + sıralama */
+function txList(tx){
+  const q=norm(txView.q).trim(), terms=q?q.split(/\s+/):[];
+  const hay=t=>norm(`${t.desc} ${t.cat} ${t.sub} ${txNote(t)}`);
+  let l=tx.filter(t=>(!txView.cat||t.cat===txView.cat)&&terms.every(w=>hay(t).includes(w)));
+  const key={date:t=>t.date||"",desc:t=>norm(t.desc),cat:t=>norm(t.sub||t.cat),amt:t=>t.amt}[txView.sort];
+  return l.sort((a,b)=>{const x=key(a),y=key(b);return (x<y?-1:x>y?1:0)*txView.dir||(b.date||"").localeCompare(a.date||"")});
+}
+const txNote=t=>"";
 function render(){
   parseRules(); updateHistInfo();
   document.body.classList.toggle("has-data",history.length>0);
@@ -1458,9 +1478,14 @@ function render(){
   $("unkCount").textContent=unk.length?`(${unk.length})`:"";
   preact.render(hx`<tbody>${unk.length?unk.map(d=>hx`<tr key=${norm(d.desc)}><td>${d.desc}<br/><small>${d.n} işlem</small></td><td class="n">${fmt(d.sum)}</td><td><select data-k=${norm(d.desc)} onChange=${e=>{if(e.target.value){overrides[norm(d.desc)]=e.target.value;save();render()}}}><option value="">Seç…</option>${catNames.map(c=>hx`<option key=${c}>${c}</option>`)}</select></td></tr>`):hx`<tr><td><div class="empty"><span class="tick" aria-hidden="true">✓</span><small>Hepsi kategorilendi.</small></div></td></tr>`}</tbody>`,$("unk"));
   const catOpts=[...new Set([...catNames,"Diğer"])];
-  const list=tx.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  $("allCount").textContent=`(${list.length} işlem)`;
-  preact.render(hx`<tbody>${list.map((t,n)=>hx`<${AllRow} key=${t.id||"i"+n} t=${t} catOpts=${catOpts}/>`)}</tbody>`,$("alltx"));
+  const list=txList(tx);
+  $("allCount").textContent=list.length===tx.length?`(${tx.length} işlem)`:`(${list.length} / ${tx.length} işlem)`;
+  const tc=$("txcat"), cats0=[...new Set(tx.map(t=>t.cat))].sort((a,b)=>a.localeCompare(b,"tr"));
+  if(txView.cat&&!cats0.includes(txView.cat))cats0.push(txView.cat);
+  preact.render([hx`<option value="">Tüm kategoriler</option>`,...cats0.map(c=>hx`<option key=${c} value=${c}>${c}</option>`)],tc); tc.value=txView.cat;
+  const th=(k,l,cls)=>hx`<th class=${cls} aria-sort=${txView.sort===k?(txView.dir<0?"descending":"ascending"):null}><button class="sortbtn" data-sort=${k} onClick=${()=>{if(txView.sort===k)txView.dir=-txView.dir;else{txView.sort=k;txView.dir=k==="cat"?1:-1}render()}}>${l}${txView.sort===k?(txView.dir<0?" ↓":" ↑"):""}</button></th>`;
+  preact.render([hx`<thead key="h"><tr>${th("date","Tarih")}${th("desc","Açıklama")}${th("cat","Kategori")}${th("amt","Tutar","n")}<th></th></tr></thead>`,
+    hx`<tbody key="b">${list.length?list.map((t,n)=>hx`<${AllRow} key=${t.id||"i"+n} t=${t} catOpts=${catOpts}/>`):hx`<tr><td colspan="5"><div class="empty"><small>Aramaya uyan işlem yok.</small></div></td></tr>`}</tbody>`],$("alltx"));
   const keys=[...new Set(history.filter(t=>t.kind!=="payment").map(t=>merchantKey(t.desc)))].sort();
   $("qList").innerHTML=keys.slice(0,400).map(k=>`<option value="${esc(k)}">`).join("");
   renderQuery();
@@ -1473,6 +1498,8 @@ $("run").addEventListener("click",()=>{
   render(); $("out").scrollIntoView({behavior:"smooth"});
 });
 $("period").addEventListener("change",render);
+let txTimer; $("txq").addEventListener("input",e=>{clearTimeout(txTimer);txTimer=setTimeout(()=>{txView.q=e.target.value;render()},150)});
+$("txcat").addEventListener("change",e=>{txView.cat=e.target.value;render()});
 let qTimer; $("q").addEventListener("input",()=>{clearTimeout(qTimer);qTimer=setTimeout(renderQuery,150)});
 $("qClear").addEventListener("click",()=>{$("q").value="";renderQuery()});
 $("vBar").addEventListener("click",()=>{viewMode="bar";save();render()});
