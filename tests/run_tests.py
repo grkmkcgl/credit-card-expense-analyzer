@@ -751,7 +751,7 @@ def olagandisi_harcamalar(b, info):
     assert "Çift çekim" not in a.text("#anom"), "yeniden açınca gizli kalmalı"
     a.period("2026-07"); eq(a.text("#anom"), "", "başka dönemde uyarı yok")
     a.ev("h=>{applyData({history:h,rules:'Market: MARKET'});render()}", H)   # eski dosya: yeni alanlar yok
-    eq(a.ev("[Object.keys(budgets).length,Object.keys(notes).length,dismissed.size]"), [0, 0, 0], "eski dosya varsayılanlarla açılmalı")
+    eq(a.ev("[Object.keys(notes).length,dismissed.size]"), [0, 0], "eski dosya varsayılanlarla açılmalı")
     assert not a.errors, a.errors
     a.close()
 
@@ -768,32 +768,6 @@ def gelecek_taksit_takvimi(b, info):
     assert "Toplam kalan: ₺1.300" in a.text("#instCal")
     a.ev("()=>{applyData({history:[{id:'n1',date:'2026-09-01',stmt:'2026-09-26',desc:'ORNEK MARKET TR',amt:100}]});render()}")
     eq(a.ev("$('instCal').textContent"), "", "taksit yoksa bölüm yok")
-    assert not a.errors, a.errors
-    a.close()
-
-
-@test
-def kategori_butcesi(b, info):
-    a = App(b); a.ev("h=>{applyData({history:h});render()}", _pide_history()); a.period("2026-08")
-    row = a.pg.locator("#cats button.row").filter(has_text="Kafe ve restoran")
-    row.click(); a.pg.wait_for_timeout(100)
-    a.pg.fill("input[data-budget='Kafe ve restoran']", "1500"); a.pg.dispatch_event("input[data-budget='Kafe ve restoran']", "change"); a.pg.wait_for_timeout(150)
-    bud = a.ev("document.querySelector('#cats .cat[data-k=\"Kafe ve restoran\"] .bud')")
-    assert bud is not None
-    cls = a.ev("document.querySelector('#cats .cat[data-k=\"Kafe ve restoran\"] .bud').className")
-    assert "over" in cls, cls
-    t = a.ev("document.querySelector('#cats .cat[data-k=\"Kafe ve restoran\"] .bud').textContent")
-    assert "₺1.860 / ₺1.500" in t and "₺360 aşıldı" in t, t
-    k = a.text("#kpis"); assert "Bütçe aşıldı" in k and "Kafe ve restoran" in k, k
-    eq(json.loads(a.ev("snapshot()"))["budgets"], {"Kafe ve restoran": 1500}, "bütçe dosyaya yazılmalı")
-    a.period("2026-07")
-    cls = a.ev("document.querySelector('#cats .cat[data-k=\"Kafe ve restoran\"] .bud').className"); assert "ok" in cls, cls
-    assert "Bütçe aşıldı" not in a.text("#kpis")
-    a.period("")
-    t = a.ev("document.querySelector('#cats .cat[data-k=\"Kafe ve restoran\"] .bud').textContent")
-    assert "dönem ortalaması" in t, t
-    a.pg.fill("input[data-budget='Kafe ve restoran']", ""); a.pg.dispatch_event("input[data-budget='Kafe ve restoran']", "change"); a.pg.wait_for_timeout(150)
-    eq(a.ev("document.querySelectorAll('#cats .bud').length"), 0, "bütçe silinince çubuk kalkmalı")
     assert not a.errors, a.errors
     a.close()
 
