@@ -891,6 +891,128 @@ def yazdirma_gorunumu(b, info):
     a.close()
 
 
+def _rules_app(b):
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", _pide_history()); a.pg.click("#rulesFold > summary")
+    return a
+
+
+def _card(a, name):
+    row = a.pg.locator(f"#rulesEd .rcard[data-k='{name}'] button.rhead")
+    if row.get_attribute("aria-expanded") != "true": row.click(); a.pg.wait_for_timeout(100)
+
+
+@test
+def kural_duzenleyici_ekle_sil(b, info):
+    a = _rules_app(b)
+    assert a.pg.locator("#rulesEd .rcard").count() >= 10, "kategori kartları listelenmeli"
+    eq(a.ev("categorize('ZZYX DUKKANI ANKARA TR')"), "Diğer")
+    _card(a, "Market")
+    a.pg.fill("input[data-addkey='Market']", "zzyx dukkani, ikinci yer"); a.pg.keyboard.press("Enter"); a.pg.wait_for_timeout(150)
+    eq(a.ev("categorize('ZZYX DUKKANI ANKARA TR')"), "Market", "yeni kelime kategoriyi değiştirmeli")
+    line = [l for l in a.ev("$('rules').value").split("\n") if l.startswith("Market:")][0]
+    assert "ZZYX DUKKANI" in line and "IKINCI YER" in line, line
+    assert "ZZYX DUKKANI" in json.loads(a.ev("snapshot()"))["rules"], "dosyaya yazılmalı"
+    a.pg.locator("#rulesEd .rcard[data-k='Market'] .kchip").filter(has_text="ZZYX DUKKANI").locator("button.kx").click(); a.pg.wait_for_timeout(150)
+    eq(a.ev("categorize('ZZYX DUKKANI ANKARA TR')"), "Diğer", "silince eski hâl")
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150)
+    eq(a.ev("categorize('ZZYX DUKKANI ANKARA TR')"), "Market", "geri al kelimeyi döndürmeli")
+    # varsayılan bir kelimeyi silince yeniden açınca geri gelmemeli
+    a.pg.locator("#rulesEd .rcard[data-k='Market'] .kchip").filter(has_text="MIGROS").first.locator("button.kx").click(); a.pg.wait_for_timeout(150)
+    data = json.loads(a.ev("snapshot()")); assert "Market|MIGROS" in data["removedDefaults"], data["removedDefaults"]
+    a.ev("d=>{applyData(d);render()}", data)
+    assert "MIGROS" not in [l for l in a.ev("$('rules').value").split("\n") if l.startswith("Market:")][0], "silinen varsayılan geri gelmemeli"
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
+def kural_duzenleyici_cakisma_ve_tasi(b, info):
+    a = _rules_app(b)
+    src = [l for l in a.ev("$('rules').value").split("\n") if "MIGROS" in l][0].split(":")[0]
+    _card(a, "Faturalar")
+    a.pg.fill("input[data-addkey='Faturalar']", "migros"); a.pg.keyboard.press("Enter"); a.pg.wait_for_timeout(150)
+    assert f'"{src}"' in a.text("#rulesEd .rcard[data-k='Faturalar'] .rmsg"), a.text("#rulesEd")
+    eq(a.ev("categorize('MIGROS ANKARA TR')"), src, "çakışmada ekleme yapılmamalı")
+    a.pg.click("#rulesEd [data-move]"); a.pg.wait_for_timeout(150)
+    eq(a.ev("categorize('MIGROS ANKARA TR')"), "Faturalar", "taşınınca yeni kategori")
+    assert "MIGROS" not in [l for l in a.ev("$('rules').value").split("\n") if l.startswith(src + ":")][0]
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150)
+    eq(a.ev("categorize('MIGROS ANKARA TR')"), src, "geri al taşımayı geri almalı")
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
+def kural_duzenleyici_kategori_yeniden_adlandir_sil(b, info):
+    a = _rules_app(b)
+    a.ev("()=>{overrides[norm('ORNEK BUTIK')]='Kafe ve restoran';excluded.add('Kafe ve restoran');render()}")
+    _card(a, "Kafe ve restoran")
+    a.pg.fill("#rulesEd input[data-rename='Kafe ve restoran']", "Yeme içme"); a.pg.keyboard.press("Enter"); a.pg.wait_for_timeout(200)
+    eq(a.ev("overrides[norm('ORNEK BUTIK')]"), "Yeme içme", "override değeri güncellenmeli")
+    eq(a.ev("[...excluded]"), ["Yeme içme"], "hariç tutulan ad güncellenmeli")
+    assert a.ev("$('rules').value").count("Yeme içme:") == 1 and "Kafe ve restoran:" not in a.ev("$('rules').value")
+    data = json.loads(a.ev("snapshot()")); assert "Kafe ve restoran|*" in data["removedDefaults"]
+    a.ev("d=>{applyData(d);render()}", data)
+    assert "Kafe ve restoran:" not in a.ev("$('rules').value"), "eski ad varsayılanlarla geri gelmemeli"
+    a.pg.click("#addCat") if False else None
+    _card(a, "Yeme içme")
+    a.pg.on("dialog", lambda d: d.accept())
+    a.pg.locator("#rulesEd .rcard[data-k='Yeme içme'] [data-delcat]").click(); a.pg.wait_for_timeout(200)
+    assert "Yeme içme" not in a.ev("$('rules').value"), "kategori silinmeli"
+    eq(a.ev("overrides[norm('ORNEK BUTIK')]"), None, "kategoriye bağlı override temizlenmeli")
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(200)
+    assert "Yeme içme:" in a.ev("$('rules').value") and a.ev("overrides[norm('ORNEK BUTIK')]") == "Yeme içme", "geri al hepsini döndürmeli"
+    # özel ad ve çift ad reddedilir, yeni kategori eklenir
+    a.pg.fill("#newCat", "Diğer"); a.pg.click("#addCat"); a.pg.wait_for_timeout(100)
+    assert "özel bir kategori" in a.text("#rulesEd"), a.text("#rulesEd")
+    a.pg.fill("#newCat", "Hobi"); a.pg.fill("#newKey", "ornekhobi, oyuncak"); a.pg.click("#addCat"); a.pg.wait_for_timeout(200)
+    eq(a.ev("categorize('ORNEKHOBI TR')"), "Hobi", "yeni kategori kuralı çalışmalı")
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150)
+    assert "Hobi:" not in a.ev("$('rules').value"), "tek geri al kategoriyi ve kelimeleri birlikte kaldırmalı"
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
+def kural_duzenleyici_arama_ve_dene(b, info):
+    a = _rules_app(b)
+    a.pg.fill("#rq", "migros"); a.pg.wait_for_timeout(150)
+    assert 1 <= a.pg.locator("#rulesEd .rcard").count() <= 3, "yalnızca eşleşen kategoriler"
+    assert a.pg.is_visible("#rulesEd .kchip.hit"), "eşleşen kelime vurgulanmalı"
+    a.pg.fill("#rq", "yokyokyok"); a.pg.wait_for_timeout(150)
+    assert "Eşleşen kategori ya da anahtar kelime yok" in a.text("#rulesEd")
+    a.pg.fill("#rq", "")
+    a.pg.fill("#rtest", "MIGROS ANKARA TR"); a.pg.wait_for_timeout(150)
+    t = a.text("#rtestRes"); assert "MIGROS" in t and "eşleşti" in t, t
+    a.pg.fill("#rtest", "TAMAMEN BILINMEYEN YER"); a.pg.wait_for_timeout(150)
+    assert "Diğer" in a.text("#rtestRes") and "eşleşen anahtar kelime yok" in a.text("#rtestRes")
+    a.ev("()=>{overrides[norm('ORNEK BUTIK')]='Giyim';render()}")
+    a.pg.fill("#rtest", "ORNEK BUTIK"); a.pg.wait_for_timeout(150)
+    assert "Kendi seçiminiz" in a.text("#rtestRes") and "Giyim" in a.text("#rtestRes"), a.text("#rtestRes")
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
+def kural_duzenleyici_metin_ve_varsayilan(b, info):
+    a = _rules_app(b)
+    a.pg.click("#rulesText > summary")
+    a.ev("()=>{$('rules').value+='\\nHobi: ORNEKHOBI'}"); a.pg.click("#reapply"); a.pg.wait_for_timeout(200)
+    assert a.pg.locator("#rulesEd .rcard[data-k='Hobi']").count() == 1, "metin değişikliği kartlara yansımalı"
+    a.pg.locator("#rulesEd .rcard[data-k='Market'] button.rhead").click(); a.pg.wait_for_timeout(100)
+    a.pg.locator("#rulesEd .rcard[data-k='Market'] .kchip").first.locator("button.kx").click(); a.pg.wait_for_timeout(150)
+    n_before = len(a.ev("$('rules').value")); assert a.ev("removedDefaults.size") == 1
+    a.pg.click("#completeDef"); a.pg.wait_for_timeout(200)
+    eq(a.ev("removedDefaults.size"), 0, "tamamla, silinen varsayılanları geri getirir")
+    assert len(a.ev("$('rules').value")) > n_before and "Hobi: ORNEKHOBI" in a.ev("$('rules').value"), "özel kurallar korunmalı"
+    eq(a.ev("[Object.keys(overrides).length, typeof notes, dismissed.size]"), [0, "object", 0])
+    # eski dosya (removedDefaults yok) açılır
+    a.ev("()=>{applyData({history:[],rules:'Market: MIGROS'});render()}")
+    assert "MIGROS" in a.ev("$('rules').value")
+    assert not a.errors, a.errors
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]

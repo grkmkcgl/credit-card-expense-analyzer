@@ -252,6 +252,35 @@ h2{break-after:avoid}
 #alltx th{position:static;background:#fff}
 a{color:inherit}
 }
+.rtext>summary{cursor:pointer;color:var(--muted);font-size:.85rem;margin:14px 0 6px}
+.rbar input,.rnew input,.rtest input,.keyadd input,.rren{font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink);width:100%}
+.rbar{margin:0 0 8px}
+.rlist{display:grid;gap:6px}
+.rcard{background:var(--paper);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.rhead{display:flex;align-items:center;gap:10px;width:100%;margin:0;background:none;color:var(--ink);text-align:left;font-weight:400;padding:10px 12px;border-radius:0}
+.rhead:hover{background:var(--field);filter:none}
+.rname{flex:1;min-width:0;font-weight:600;overflow-wrap:anywhere}
+.rhead .chev{color:var(--muted);font-size:.8rem;transition:transform .15s}
+.rhead[aria-expanded=true] .chev{transform:rotate(90deg)}
+.rbody{padding:4px 12px 12px;border-top:1px solid var(--line);animation:slidedown .25s ease-out}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.kchip{display:inline-flex;align-items:center;gap:2px;background:var(--field);border:1px solid var(--line);border-radius:14px;padding:2px 4px 2px 10px;font-size:.82rem}
+.kchip.hit{border-color:var(--teal);color:var(--teal)}
+.kchip i{font-style:normal;color:var(--mustard);margin-left:2px}
+.kx{margin:0;padding:0 6px;background:none;border:0;color:var(--muted);font-size:.75rem;line-height:1.6}
+.kx:hover{color:var(--red);filter:none}
+.keyadd,.rnew,.rtools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.keyadd input,.rnew input,.rren{flex:1 1 180px;width:auto}
+.keyadd button,.rnew button,.rtools button{margin:0}
+.rnew{margin-top:12px}
+.rmsg{margin:8px 0 0;font-size:.85rem}.rmsg button{margin:0 0 0 8px;padding:3px 10px;font-size:.8rem}
+.rhint{display:block;margin:8px 0}
+.rsamp{display:flex;flex-direction:column;gap:2px;margin:8px 0;font-size:.85rem}
+.rtools{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.rtest{margin:14px 0 10px}
+.rtest label{margin-bottom:4px}
+.rres{margin:8px 0 0;font-size:.9rem}
+#completeDef{margin-top:4px}
 .empty{display:flex;align-items:center;gap:8px;color:var(--muted);padding:10px 4px}
 .empty .tick{color:var(--teal);font-weight:700}
 .catrow.off{transition:opacity .2s}
@@ -405,9 +434,13 @@ window.libsReady=(async()=>{
 </details>
 
 <details class="fold" id="rulesFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategori kuralları <small id="rulesCount"></small></h2></summary>
-<p><small>Her satır: <code>Kategori: ANAHTAR1, ANAHTAR2</code>. Açıklamada anahtar kelime geçerse o kategoriye atanır. Düzenleyip yeniden uygulayabilirsiniz.</small></p>
+<p><small>Bir kategoriye tıklayıp anahtar kelime ekleyin ya da silin. Açıklamada anahtar kelime geçerse işlem o kategoriye atanır; birden çok kelime eşleşirse en uzunu kazanır.</small></p>
+<div id="rulesEd"></div>
+<details id="rulesText" class="rtext"><summary>Metin olarak düzenle (gelişmiş)</summary>
+<p><small>Her satır: <code>Kategori: ANAHTAR1, ANAHTAR2</code>. Düzenleyip yeniden uygulayabilirsiniz.</small></p>
 <textarea id="rules" rows="12"></textarea>
 <button class="ghost" id="reapply">Kuralları uygula</button>
+</details>
 <p><small>Başka biriyle kategori paylaşmak için: "Kategorileri paylaş" yalnızca kuralları ve yer seçimlerini içeren bir dosya indirir (işlem ve tutar içermez). Karşı taraf bu dosyayı "Kategorileri içe aktar" ile açar; eklenecekler listelenir ve yalnızca onayladıkları kaydedilir.</small></p>
 <button class="ghost" id="shareCats">Kategorileri paylaş</button>
 <label class="btn ghost">Kategorileri içe aktar<input type="file" id="importCats" accept=".json,application/json" style="display:none"></label>
@@ -464,11 +497,11 @@ let dir=null; const openCats=new Set();
 let statements={};
 let excluded=new Set(), viewMode="bar";
 /* İsteğe bağlı dosya alanları (eski dosyalarda yok): işlem notları, gizlenen uyarılar */
-let notes={}, dismissed=new Set();
+let notes={}, dismissed=new Set(), removedDefaults=new Set();   /* kullanıcının sildiği varsayılan kurallar ("Kategori|ANAHTAR" ya da "Kategori|*"); yükleme sırasında geri eklenmesin */
 /* Tüm işlemler görünümü: arama, kategori süzgeci, sıralama (yalnızca bellekte) */
 const txView={q:"",cat:"",sort:"date",dir:-1};
 let cardSel="";   /* seçili kartın son 4 hanesi; boş = tüm kartlar (yalnızca bellekte) */
-function snapshot(){return JSON.stringify({version:1,updated:new Date().toISOString(),history,statements,overrides,excluded:[...excluded],viewMode,rules:$("rules").value,lastMap,notes,dismissed:[...dismissed]},null,1)}
+function snapshot(){return JSON.stringify({version:1,updated:new Date().toISOString(),history,statements,overrides,excluded:[...excluded],viewMode,rules:$("rules").value,lastMap,notes,dismissed:[...dismissed],removedDefaults:[...removedDefaults]},null,1)}
 async function writeFile(name,text){const fh=await dir.getFileHandle(name,{create:true});const w=await fh.createWritable();await w.write(text);await w.close()}
 const MOBILE=!window.showDirectoryPicker;
 let mobileReady=false;
@@ -489,9 +522,9 @@ async function save(){
 }
 function applyData(d){
   history=d.history||[];statements=d.statements||{};excluded=new Set(d.excluded||[]);viewMode=d.viewMode||"bar";overrides=d.overrides||{};lastMap=d.lastMap||null;
-  notes=d.notes||{};dismissed=new Set(d.dismissed||[]);
+  notes=d.notes||{};dismissed=new Set(d.dismissed||[]);removedDefaults=new Set(d.removedDefaults||[]);
   /* Kayıtlı kurallara, yeni sürümde eklenen kategori ve anahtar kelimeleri ekle */
-  $("rules").value=mergeRules(d.rules||DEFAULT_RULES,DEFAULT_RULES).text;
+  $("rules").value=mergeRules(d.rules||DEFAULT_RULES,defaultsText()).text;
   migrate(); expandInstallments();
 }
 /* base kurallarına incoming'deki eksik anahtar kelimeleri ve kategorileri ekler; base'deki hiçbir şey silinmez. */
@@ -555,7 +588,7 @@ $("pick").addEventListener("click",async()=>{
   if(!window.showDirectoryPicker){$("msg").innerHTML='<span class="err">Bu tarayıcı klasöre kaydetmeyi desteklemiyor. Dosyayı bilgisayarda Chrome veya Edge ile açın.</span>';return}
   try{
     dir=await window.showDirectoryPicker({id:"harcamalar",mode:"readwrite",startIn:"desktop"});
-    history=[];overrides={};lastMap=null;notes={};dismissed=new Set();$("rules").value=DEFAULT_RULES;
+    history=[];overrides={};lastMap=null;notes={};dismissed=new Set();removedDefaults=new Set();$("rules").value=DEFAULT_RULES;
     let found=false;
     try{applyData(JSON.parse(await (await (await dir.getFileHandle(DATA_FILE)).getFile()).text()));found=true}catch(e){}
     $("folderInfo").textContent=`Seçili klasör: ${dir.name}. `+(found?"Kayıtlı veriler yüklendi.":"Burada henüz kayıt yok; ilk dökümle oluşturulacak.");
@@ -583,7 +616,7 @@ if(MOBILE){
     catch(err){$("msg").innerHTML='<span class="err">Bu dosya okunamadı. Bu araçla kaydedilmiş harcama-verisi.json dosyasını seçin.</span>'}
     e.target.value="";
   });
-  $("fresh").addEventListener("click",()=>{dataName="";history=[];overrides={};lastMap=null;notes={};dismissed=new Set();$("rules").value=DEFAULT_RULES;startMobile("Boş kayıtla başlandı. İşiniz bitince Kaydet'e basmayı unutmayın.")});
+  $("fresh").addEventListener("click",()=>{dataName="";history=[];overrides={};lastMap=null;notes={};dismissed=new Set();removedDefaults=new Set();$("rules").value=DEFAULT_RULES;startMobile("Boş kayıtla başlandı. İşiniz bitince Kaydet'e basmayı unutmayın.")});
   $("dl").addEventListener("click",downloadData);
   window.addEventListener("beforeunload",e=>{if(!$("saveBar").classList.contains("hide")){e.preventDefault();e.returnValue=""}});
 }
@@ -1593,6 +1626,150 @@ function renderToast(msg){
 document.addEventListener("keydown",e=>{
   if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==="z"&&undoState&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName||"")){e.preventDefault();undo()}
 });
+/* ---------- Kategori kuralları düzenleyicisi ----------
+   Metin ($("rules")) tek doğruluk kaynağı kalır; düzenleyici onu okuyup yazar, her değişiklik undoable. */
+const SPECIAL_CATS=["Diğer","Taksitler","İadeler ve indirimler"];
+const linesToList=text=>{
+  const m=new Map();
+  String(text).split("\n").forEach(l=>{const i=l.indexOf(":");if(i<=0)return;const c=l.slice(0,i).trim();if(!c)return;
+    if(!m.has(c))m.set(c,[]); const a=m.get(c);
+    l.slice(i+1).split(",").map(x=>x.trim()).filter(Boolean).forEach(k=>{if(!a.some(x=>norm(x)===norm(k)))a.push(k)})});
+  return [...m].map(([cat,keys])=>({cat,keys}));
+};
+const rulesToList=()=>linesToList($("rules").value);
+const serializeRules=list=>list.map(r=>`${r.cat}: ${r.keys.join(", ")}`).join("\n");
+let defListCache; const defaultList=()=>defListCache||(defListCache=linesToList(DEFAULT_RULES));
+/* Varsayılan kurallardan kullanıcının sildikleri çıkarılmış metin (yüklemede eksik varsayılanlar eklenirken kullanılır) */
+function defaultsText(){
+  if(!removedDefaults.size)return DEFAULT_RULES;
+  return serializeRules(defaultList().filter(r=>!removedDefaults.has(r.cat+"|*")).map(r=>({cat:r.cat,keys:r.keys.filter(k=>!removedDefaults.has(r.cat+"|"+norm(k)))})));
+}
+const isDefaultKey=(cat,key)=>defaultList().some(r=>r.cat===cat&&r.keys.some(k=>norm(k)===norm(key)));
+const isDefaultCat=cat=>defaultList().some(r=>r.cat===cat);
+const rulesEd={q:"",open:new Set(),test:"",msg:null,newCat:"",newKey:""};
+function setRulesList(list,label,extra){undoable(label,()=>{$("rules").value=serializeRules(list);parseRules();if(extra)extra()})}
+/* Girilen anahtar kelimeleri ayırır; başka kategoride zaten olan ilk kelimede durur (çakışma) */
+function splitKeys(list,cat,text,have){
+  const ks=String(text).split(",").map(x=>norm(x)).filter(Boolean), add=[];   /* varsayılanlar gibi ASCII büyük harf (İ→I, Ş→S…) */
+  for(const k of ks){
+    if(have.some(x=>norm(x)===norm(k))||add.includes(k))continue;
+    const other=list.find(x=>x.cat!==cat&&x.keys.some(y=>norm(y)===norm(k)));
+    if(other)return {add,conflict:{from:other.cat,to:cat,key:k}};
+    add.push(k);
+  }
+  return {add,conflict:null};
+}
+function addKeys(cat,text){
+  const list=rulesToList(), r=list.find(x=>x.cat===cat); if(!r)return;
+  const {add,conflict}=splitKeys(list,cat,text,r.keys); rulesEd.msg=null;
+  if(conflict){rulesEd.msg={cat,text:`"${conflict.key}" zaten "${conflict.from}" kategorisinde.`,move:conflict};renderRulesEd();return false}
+  if(!add.length){renderRulesEd();return true}
+  r.keys.push(...add);
+  setRulesList(list,`${add.join(", ")} → ${cat}`,()=>add.forEach(k=>removedDefaults.delete(cat+"|"+norm(k))));
+  return true;
+}
+function removeKey(cat,key){
+  const list=rulesToList(), r=list.find(x=>x.cat===cat); if(!r)return;
+  r.keys=r.keys.filter(x=>norm(x)!==norm(key));
+  setRulesList(list,`"${key}" kaldırıldı`,()=>{if(isDefaultKey(cat,key))removedDefaults.add(cat+"|"+norm(key))});
+}
+function moveKey({from,to,key}){
+  const list=rulesToList(), a=list.find(x=>x.cat===from), b=list.find(x=>x.cat===to); if(!a||!b)return;
+  a.keys=a.keys.filter(x=>norm(x)!==norm(key)); b.keys.push(norm(key)); rulesEd.msg=null;
+  setRulesList(list,`"${key}" → ${to}`,()=>{if(isDefaultKey(from,key))removedDefaults.add(from+"|"+norm(key));removedDefaults.delete(to+"|"+norm(key))});
+}
+function catNameError(name,except){
+  if(!name)return "Kategori adı boş olamaz.";
+  if(SPECIAL_CATS.includes(name))return `"${name}" özel bir kategoridir, kural alamaz.`;
+  if(rulesToList().some(r=>r.cat===name&&r.cat!==except))return `"${name}" adıyla bir kategori zaten var.`;
+  return "";
+}
+const cleanCat=v=>String(v).replace(/[:,\n]/g," ").replace(/\s+/g," ").trim();
+function renameCat(old,raw){
+  const name=cleanCat(raw); if(!name||name===old){renderRulesEd();return}
+  const err=catNameError(name,old); if(err){rulesEd.msg={cat:old,text:err};renderRulesEd();return}
+  const list=rulesToList(); list.find(x=>x.cat===old).cat=name; rulesEd.msg=null;
+  setRulesList(list,`"${old}" → "${name}" olarak adlandırıldı`,()=>{
+    Object.keys(overrides).forEach(k=>{if(overrides[k]===old)overrides[k]=name});
+    if(excluded.delete(old))excluded.add(name);
+    if(txView.cat===old)txView.cat=name;
+    if(rulesEd.open.delete(old))rulesEd.open.add(name);
+    if(isDefaultCat(old))removedDefaults.add(old+"|*");
+    removedDefaults.delete(name+"|*");
+  });
+}
+function deleteCat(cat){
+  const list=rulesToList().filter(x=>x.cat!==cat); rulesEd.msg=null;
+  setRulesList(list,`"${cat}" kategorisi silindi`,()=>{
+    Object.keys(overrides).forEach(k=>{if(overrides[k]===cat)delete overrides[k]});
+    excluded.delete(cat); if(txView.cat===cat)txView.cat="";
+    if(isDefaultCat(cat))removedDefaults.add(cat+"|*");
+  });
+}
+function addCat(nameRaw,keyRaw){
+  const name=cleanCat(nameRaw), err=catNameError(name,null); if(err){rulesEd.msg={cat:"",text:err};renderRulesEd();return false}
+  const list=rulesToList(), {add,conflict}=splitKeys(list,name,keyRaw,[]);
+  if(conflict){rulesEd.msg={cat:"",text:`"${conflict.key}" zaten "${conflict.from}" kategorisinde; önce oradan kaldırın ya da o kategoride "Buraya taşı"yı kullanın.`};renderRulesEd();return false}
+  list.push({cat:name,keys:add}); rulesEd.msg=null; rulesEd.open.add(name);
+  setRulesList(list,`"${name}" kategorisi eklendi`,()=>{removedDefaults.delete(name+"|*");add.forEach(k=>removedDefaults.delete(name+"|"+norm(k)))});
+  return true;
+}
+function completeDefaults(){
+  const r=mergeRules($("rules").value,DEFAULT_RULES); rulesEd.msg={cat:"",text:r.keys||r.cats?`${r.cats} kategori, ${r.keys} anahtar kelime eklendi.`:"Eksik varsayılan kural yok."};
+  undoable("Varsayılan kurallar tamamlandı",()=>{removedDefaults.clear();$("rules").value=r.text;parseRules()});
+}
+/* "Kural dene": bir açıklamanın hangi kategoriye, hangi anahtar kelimeyle düşeceğini gösterir */
+function explainCategory(desc){
+  const d=norm(desc); if(!d)return null;
+  if(overrides[d])return {kind:"override",cat:overrides[d]};
+  const hits=[]; rules.forEach(r=>r.keys.forEach(k=>{if(kwMatch(d,k))hits.push({cat:r.cat,key:k})}));
+  hits.sort((a,b)=>b.key.length-a.key.length);
+  return hits.length?{kind:"rule",cat:hits[0].cat,key:hits[0].key,others:hits.slice(1,4)}:{kind:"none",cat:"Diğer"};
+}
+function KeyAdder({cat}){
+  const go=e=>{const v=e.target.value; if(!v.trim())return; if(addKeys(cat,v)!==false)e.target.value=""};
+  return hx`<div class="keyadd"><input type="text" data-addkey=${cat} placeholder="Anahtar kelime ekle (virgülle birden çok)" aria-label=${cat+" için anahtar kelime ekle"} onKeyDown=${e=>{if(e.key==="Enter"){e.preventDefault();go(e)}}}/>
+    <button class="ghost" onClick=${e=>go({target:e.currentTarget.previousElementSibling})}>Ekle</button></div>`;
+}
+function RuleCard({r,count,samples,open,q}){
+  const nq=norm(q), hitKey=k=>nq&&norm(k).includes(nq);
+  const toggle=()=>{rulesEd.open.has(r.cat)?rulesEd.open.delete(r.cat):rulesEd.open.add(r.cat);rulesEd.msg=null;renderRulesEd()};
+  const msg=rulesEd.msg&&rulesEd.msg.cat===r.cat?rulesEd.msg:null;
+  return hx`<div class="rcard" key=${r.cat} data-k=${r.cat}>
+    <button class="rhead" aria-expanded=${String(open)} onClick=${toggle}><span class="rname">${r.cat}</span><small>${r.keys.length} kelime · ${count} işlem</small><span class="chev" aria-hidden="true">▶</span></button>
+    ${open?hx`<div class="rbody">
+      <div class="chips">${r.keys.length?r.keys.map(k=>hx`<span class=${"kchip"+(hitKey(k)?" hit":"")} key=${k}>${k}${norm(k).length<=4?hx`<i title="4 harf ve altı: yalnızca tam kelime olarak eşleşir">·</i>`:null}<button class="kx" aria-label=${k+" kaldır"} data-rmkey=${k} onClick=${()=>removeKey(r.cat,k)}>✕</button></span>`):hx`<small>Henüz anahtar kelime yok.</small>`}</div>
+      <${KeyAdder} cat=${r.cat}/>
+      ${msg?hx`<p class="rmsg err">${msg.text}${msg.move?hx` <button class="ghost" data-move onClick=${()=>moveKey(msg.move)}>Buraya taşı</button>`:null}</p>`:null}
+      <small class="rhint">4 harf ve altındaki kelimeler (noktalı) yalnızca tam kelime olarak eşleşir; örn. PET, PETROL'ü yakalamaz.</small>
+      ${samples.length?hx`<div class="rsamp"><small>Bu kategoriye düşen yerler:</small>${samples.map(d=>hx`<${AnBtn} desc=${d} key=${d}/>`)}</div>`:null}
+      <div class="rtools"><input type="text" class="rren" data-rename=${r.cat} value=${r.cat} aria-label="Kategori adı" onKeyDown=${e=>{if(e.key==="Enter")renameCat(r.cat,e.target.value)}}/>
+        <button class="ghost" onClick=${e=>renameCat(r.cat,e.currentTarget.previousElementSibling.value)}>Adı değiştir</button>
+        <button class="ghost danger" data-delcat onClick=${()=>{if(confirm(`"${r.cat}" kategorisi ve ${r.keys.length} anahtar kelimesi silinsin mi?\n\nBu kategoriye elle atadığınız yerler de serbest kalır. "Geri al" ile döndürebilirsiniz.`))deleteCat(r.cat)}}>Kategoriyi sil</button></div>
+    </div>`:null}
+  </div>`;
+}
+function RulesEditor(){
+  const list=rulesToList(), q=rulesEd.q, nq=norm(q);
+  const counts={}, samples={};
+  history.forEach(t=>{if(t.kind||t.est)return;const c=categorize(t.desc);counts[c]=(counts[c]||0)+1;const a=samples[c]=samples[c]||[];if(a.length<5&&!a.includes(t.desc))a.push(t.desc)});
+  const shown=list.filter(r=>!nq||norm(r.cat).includes(nq)||r.keys.some(k=>norm(k).includes(nq)));
+  const ex=explainCategory(rulesEd.test);
+  const gm=rulesEd.msg&&rulesEd.msg.cat===""?rulesEd.msg:null;
+  return hx`<div class="reditor">
+    <div class="rbar"><input type="search" id="rq" placeholder="Kategori ya da anahtar kelime ara…" value=${q} aria-label="Kurallarda ara" onInput=${e=>{rulesEd.q=e.target.value;renderRulesEd()}}/></div>
+    <div class="rlist">${shown.length?shown.map(r=>hx`<${RuleCard} key=${r.cat} r=${r} count=${counts[r.cat]||0} samples=${samples[r.cat]||[]} open=${rulesEd.open.has(r.cat)||(!!nq&&shown.length<=6)} q=${q}/>`):hx`<div class="empty"><small>Eşleşen kategori ya da anahtar kelime yok.</small></div>`}</div>
+    <div class="rnew"><input type="text" id="newCat" placeholder="Yeni kategori adı" value=${rulesEd.newCat} aria-label="Yeni kategori adı" onInput=${e=>{rulesEd.newCat=e.target.value}}/>
+      <input type="text" id="newKey" placeholder="İlk anahtar kelime (isteğe bağlı)" value=${rulesEd.newKey} aria-label="İlk anahtar kelime" onInput=${e=>{rulesEd.newKey=e.target.value}} onKeyDown=${e=>{if(e.key==="Enter")addNew()}}/>
+      <button class="ghost" id="addCat" onClick=${addNew}>Kategori ekle</button></div>
+    ${gm?hx`<p class="rmsg err">${gm.text}</p>`:null}
+    <div class="rtest"><label for="rtest">Kural dene</label><input type="text" id="rtest" placeholder="Bir açıklama yazın (ör. MIGROS ANKARA TR)" value=${rulesEd.test} onInput=${e=>{rulesEd.test=e.target.value;renderRulesEd()}}/>
+      ${ex?hx`<p class="rres" id="rtestRes">${ex.kind==="override"?hx`Kendi seçiminiz: <b>${ex.cat}</b> (bu açıklama için elle seçilmiş)`:ex.kind==="none"?hx`<b>Diğer</b>: eşleşen anahtar kelime yok`:hx`<b>${ex.cat}</b>: "${ex.key}" anahtar kelimesi eşleşti${ex.others.length?hx` <small>(diğer eşleşmeler: ${ex.others.map(o=>`${o.key} → ${o.cat}`).join(", ")}; en uzun anahtar kelime kazanır)</small>`:null}`}</p>`:null}</div>
+    <button class="ghost" id="completeDef" onClick=${completeDefaults}>Varsayılan kuralları tamamla</button>
+  </div>`;
+}
+function addNew(){if(addCat(rulesEd.newCat,rulesEd.newKey)!==false){rulesEd.newCat="";rulesEd.newKey=""}}
+function renderRulesEd(){preact.render(hx`<${RulesEditor}/>`,$("rulesEd"))}
 function render(){
   parseRules(); updateHistInfo();
   document.body.classList.toggle("has-data",history.length>0);
@@ -1688,6 +1865,7 @@ function render(){
 
   const catNames=[...new Set(rules.map(r=>r.cat))];
   $("rulesCount").textContent=`(${catNames.length} kategori)`;
+  renderRulesEd();
   const unk=all.filter(d=>d.sub==="Diğer"&&d.sum>0);
   $("unkCount").textContent=unk.length?`(${unk.length})`:"";
   preact.render(hx`<tbody>${unk.length?unk.map(d=>hx`<${UnkRow} key=${norm(d.desc)} d=${d} catNames=${catNames}/>`):hx`<tr><td><div class="empty"><span class="tick" aria-hidden="true">✓</span><small>Hepsi kategorilendi.</small></div></td></tr>`}</tbody>`,$("unk"));
