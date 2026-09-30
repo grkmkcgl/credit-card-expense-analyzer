@@ -728,6 +728,34 @@ def duzenli_odemeler(b, info):
     a.close()
 
 
+@test
+def olagandisi_harcamalar(b, info):
+    H, i = [], 0
+    def add(d, desc, amt, **kw):
+        nonlocal i; H.append({"id": f"a{i}", "date": d, "stmt": d[:7] + "-26", "desc": desc, "amt": amt, **kw}); i += 1
+    for m in ["2026-05", "2026-06", "2026-07"]:
+        add(m + "-03", "ORNEK MARKET ANKARA TR", 400)
+    add("2026-08-04", "ORNEK MARKET ANKARA TR", 1500)            # ortalamanın 3,75 katı
+    add("2026-08-10", "ORNEK MARKET ANKARA TR", 450)             # normal
+    add("2026-08-12", "KAFE ORNEK TR", 180); add("2026-08-12", "KAFE ORNEK TR", 180)  # çift çekim
+    add("2026-08-20", "TEK SEFERLIK ALIS TR", 9000)              # geçmişi yok: uyarı yok
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", H); a.period("2026-08")
+    t = a.text("#anom")
+    assert "2 harcama" in t and "Çift çekim" in t and "ORNEK MARKET" in t and "4 katı" in t, t
+    assert "TEK SEFERLIK" not in t, t
+    a.pg.click("#anom button[data-dismiss^='D|']"); a.pg.wait_for_timeout(150)
+    t = a.text("#anom"); assert "1 harcama" in t and "Çift çekim" not in t, t
+    data = json.loads(a.ev("snapshot()"))
+    eq(len(data["dismissed"]), 1, "gizlenen uyarı dosyaya yazılmalı")
+    a.ev("d=>{applyData(d);render()}", data); a.period("2026-08")
+    assert "Çift çekim" not in a.text("#anom"), "yeniden açınca gizli kalmalı"
+    a.period("2026-07"); eq(a.text("#anom"), "", "başka dönemde uyarı yok")
+    a.ev("h=>{applyData({history:h,rules:'Market: MARKET'});render()}", H)   # eski dosya: yeni alanlar yok
+    eq(a.ev("[Object.keys(budgets).length,Object.keys(notes).length,dismissed.size]"), [0, 0, 0], "eski dosya varsayılanlarla açılmalı")
+    assert not a.errors, a.errors
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]

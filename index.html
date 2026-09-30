@@ -207,6 +207,11 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 .sortbtn{background:none;border:0;margin:0;padding:2px 0;color:var(--muted);font:inherit;font-size:.8rem;font-weight:600;cursor:pointer}
 .sortbtn:hover{color:var(--ink);filter:none}
 #alltx th[aria-sort] .sortbtn{color:var(--teal)}
+.anom{background:#241a0a;border:1px solid #5a4418;border-radius:10px;padding:10px 12px;margin:10px 0 0;font-size:.9rem;animation:fadein .3s ease-out}
+.anom>b{color:var(--mustard)}
+.arow{display:flex;gap:10px;align-items:flex-start;padding:8px 0 2px;border-top:1px solid #3a2e14;margin-top:6px}
+.arow>div{flex:1;min-width:0;overflow-wrap:anywhere}
+.aic{color:var(--mustard);font-weight:700;width:14px}
 .empty{display:flex;align-items:center;gap:8px;color:var(--muted);padding:10px 4px}
 .empty .tick{color:var(--teal);font-weight:700}
 .catrow.off{transition:opacity .2s}
@@ -316,6 +321,7 @@ window.libsReady=(async()=>{
 <div class="kpis" id="kpis"></div>
 </div>
 <div id="exclInfo"></div>
+<div id="anom"></div>
 <div id="recon"></div>
 <div class="viewbar"><small id="viewHint">Kutucuğu kaldırarak bir kategoriyi toplamdan çıkarabilirsiniz.</small>
 <div class="seg" role="group" aria-label="Dağılım görünümü"><button id="vBar" aria-pressed="true">Çubuk</button><button id="vPie" aria-pressed="false">Pasta grafik</button></div></div>
@@ -414,9 +420,11 @@ const DATA_FILE="harcama-verisi.json", PREV_FILE="harcama-verisi.onceki.json";
 let dir=null; const openCats=new Set();
 let statements={};
 let excluded=new Set(), viewMode="bar";
+/* İsteğe bağlı dosya alanları (eski dosyalarda yok): kategori bütçeleri, işlem notları, gizlenen uyarılar */
+let budgets={}, notes={}, dismissed=new Set();
 /* Tüm işlemler görünümü: arama, kategori süzgeci, sıralama (yalnızca bellekte) */
 const txView={q:"",cat:"",sort:"date",dir:-1};
-function snapshot(){return JSON.stringify({version:1,updated:new Date().toISOString(),history,statements,overrides,excluded:[...excluded],viewMode,rules:$("rules").value,lastMap},null,1)}
+function snapshot(){return JSON.stringify({version:1,updated:new Date().toISOString(),history,statements,overrides,excluded:[...excluded],viewMode,rules:$("rules").value,lastMap,budgets,notes,dismissed:[...dismissed]},null,1)}
 async function writeFile(name,text){const fh=await dir.getFileHandle(name,{create:true});const w=await fh.createWritable();await w.write(text);await w.close()}
 const MOBILE=!window.showDirectoryPicker;
 let mobileReady=false;
@@ -437,6 +445,7 @@ async function save(){
 }
 function applyData(d){
   history=d.history||[];statements=d.statements||{};excluded=new Set(d.excluded||[]);viewMode=d.viewMode||"bar";overrides=d.overrides||{};lastMap=d.lastMap||null;
+  budgets=d.budgets||{};notes=d.notes||{};dismissed=new Set(d.dismissed||[]);
   /* Kayıtlı kurallara, yeni sürümde eklenen kategori ve anahtar kelimeleri ekle */
   $("rules").value=mergeRules(d.rules||DEFAULT_RULES,DEFAULT_RULES).text;
   migrate(); expandInstallments();
@@ -502,7 +511,7 @@ $("pick").addEventListener("click",async()=>{
   if(!window.showDirectoryPicker){$("msg").innerHTML='<span class="err">Bu tarayıcı klasöre kaydetmeyi desteklemiyor. Dosyayı bilgisayarda Chrome veya Edge ile açın.</span>';return}
   try{
     dir=await window.showDirectoryPicker({id:"harcamalar",mode:"readwrite",startIn:"desktop"});
-    history=[];overrides={};lastMap=null;$("rules").value=DEFAULT_RULES;
+    history=[];overrides={};lastMap=null;budgets={};notes={};dismissed=new Set();$("rules").value=DEFAULT_RULES;
     let found=false;
     try{applyData(JSON.parse(await (await (await dir.getFileHandle(DATA_FILE)).getFile()).text()));found=true}catch(e){}
     $("folderInfo").textContent=`Seçili klasör: ${dir.name}. `+(found?"Kayıtlı veriler yüklendi.":"Burada henüz kayıt yok; ilk dökümle oluşturulacak.");
@@ -530,7 +539,7 @@ if(MOBILE){
     catch(err){$("msg").innerHTML='<span class="err">Bu dosya okunamadı. Bu araçla kaydedilmiş harcama-verisi.json dosyasını seçin.</span>'}
     e.target.value="";
   });
-  $("fresh").addEventListener("click",()=>{dataName="";history=[];overrides={};lastMap=null;$("rules").value=DEFAULT_RULES;startMobile("Boş kayıtla başlandı. İşiniz bitince Kaydet'e basmayı unutmayın.")});
+  $("fresh").addEventListener("click",()=>{dataName="";history=[];overrides={};lastMap=null;budgets={};notes={};dismissed=new Set();$("rules").value=DEFAULT_RULES;startMobile("Boş kayıtla başlandı. İşiniz bitince Kaydet'e basmayı unutmayın.")});
   $("dl").addEventListener("click",downloadData);
   window.addEventListener("beforeunload",e=>{if(!$("saveBar").classList.contains("hide")){e.preventDefault();e.returnValue=""}});
 }
@@ -1438,6 +1447,27 @@ function detectRecurring(){
 function RecurRow({r}){
   return hx`<tr><td><${AnBtn} desc=${r.desc}/><br/><small>${r.cat} · ${r.n} dönem · son ${periodLabel(r.lastP,true)}</small>${r.up?hx` <span class="delta up" title=${`Son dönem ${fmt(r.lastV)}`}>tutar arttı</span>`:null}${r.gone?hx` <span class="delta down">son 2 dönemde yok</span>`:null}</td><td class="n"><b>${fmt(r.med)}</b><br/><small>yılda ${fmt(r.med*12)}</small></td></tr>`;
 }
+/* Olağandışı harcamalar (seçili kapsamda): aynı ekstre + gün + açıklama + tutar birden fazla (çift çekim şüphesi)
+   ve yerin kendi ortalamasının en az 3 katı olan, ₺500 ve üzeri tek harcamalar. Kullanıcı "gösterme" derse dismissed'e yazılır. */
+function detectAnomalies(tx){
+  const out=[], buy=t=>!t.kind&&!t.est&&t.amt>0;
+  const dup={}; tx.filter(buy).forEach(t=>{const k=`${t.stmt||""}|${t.date}|${norm(t.desc)}|${t.amt}`;(dup[k]=dup[k]||[]).push(t)});
+  Object.entries(dup).forEach(([k,l])=>{if(l.length>1)out.push({id:"D|"+k,type:"dup",t:l[0],n:l.length})});
+  const hist={}; history.filter(t=>buy(t)&&!t.inst).forEach(t=>{const k=merchantKey(t.desc);(hist[k]=hist[k]||[]).push(t)});
+  tx.filter(t=>buy(t)&&!t.inst&&t.amt>=500).forEach(t=>{
+    const others=(hist[merchantKey(t.desc)]||[]).filter(x=>x.id!==t.id); if(others.length<3)return;
+    const avg=others.reduce((s,x)=>s+x.amt,0)/others.length;
+    if(t.amt>=avg*3)out.push({id:"B|"+t.id,type:"big",t,avg});
+  });
+  return out.filter(a=>!dismissed.has(a.id));
+}
+function AnomBox({list}){
+  if(!list.length)return null;
+  const hide=id=>{dismissed.add(id);save();render()};
+  return hx`<div class="anom" role="status"><b>Dikkat edilmesi gereken ${list.length} harcama</b>
+    ${list.map(a=>hx`<div class="arow" key=${a.id}><span class="aic" aria-hidden="true">${a.type==="dup"?"⧉":"↑"}</span><div><${AnBtn} desc=${a.t.desc}/> <small>${a.t.date?toDate(a.t.date).toLocaleDateString("tr-TR"):""}</small><br/><small>${a.type==="dup"?`Aynı gün aynı tutarda ${a.n} kez: ${fmt2(a.t.amt)}. Çift çekim olabilir, ekstreyi kontrol edin.`:`${fmt(a.t.amt)}; bu yerdeki ortalamanızın (${fmt(a.avg)}) ${Math.round(a.t.amt/a.avg)} katı.`}</small></div><button class="x" data-dismiss=${a.id} title="Bu uyarıyı bir daha gösterme" onClick=${()=>hide(a.id)}>Gösterme</button></div>`)}
+  </div>`;
+}
 function render(){
   parseRules(); updateHistInfo();
   document.body.classList.toggle("has-data",history.length>0);
@@ -1465,6 +1495,7 @@ function render(){
   const exNow=[...excluded].map(c=>[c,allTx.filter(t=>t.cat===c).reduce((s,t)=>s+t.amt,0)]).filter(([,v])=>v!==0);
   $("totalTitle").textContent=exNow.length?"Seçili kategorilerin toplamı":"Toplam harcama";
   preact.render(excluded.size?hx`<div class="excl">Tüm harcama ${fmt(fullTotal)}${exNow.map(([c,v])=>` − ${c} ${fmt(v)}`)} = <b>${fmt(total)}</b><button class="ghost" id="inclAll" onClick=${()=>{excluded.clear();save();render()}}>Hepsini dahil et</button></div>`:null,$("exclInfo"));
+  preact.render(hx`<${AnomBox} list=${detectAnomalies(tx)}/>`,$("anom"));
   renderRecon(isRange?"":p);
   const ds=tx.map(t=>t.d).filter(Boolean).sort((a,b)=>a-b);
   if(isRange){
@@ -1541,7 +1572,7 @@ function render(){
   const keys=[...new Set(history.filter(t=>t.kind!=="payment").map(t=>merchantKey(t.desc)))].sort();
   $("qList").innerHTML=keys.slice(0,400).map(k=>`<option value="${esc(k)}">`).join("");
   renderQuery();
-  document.querySelectorAll("[data-an]:not(#cats [data-an],#top [data-an],#alltx [data-an],#recur [data-an])").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();openAnalysis(b.dataset.an)}));
+  document.querySelectorAll("[data-an]:not(#cats [data-an],#top [data-an],#alltx [data-an],#recur [data-an],#anom [data-an])").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();openAnalysis(b.dataset.an)}));
 }
 
 $("run").addEventListener("click",()=>{
