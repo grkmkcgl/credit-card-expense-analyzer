@@ -271,6 +271,14 @@ def plus_payments():
              ("29 Temmuz 2026", "SHELL ORNEK ANKARA TR", "2.000,00"), ("29 Temmuz 2026", "FATURA ODEME MERKEZI TR", "792,00"), ("30 Temmuz 2026", "ZARA İADE", "+300,00")])
 
 
+# 8b) İki ayrı kart (maskeli numara farklı yazılışlarda), aynı ayda farklı kesim tarihleri
+def two_cards():
+    rows_pdf("kart_a.pdf", [("02 Ağustos 2026", "MİGROS ANKARA TR", "1.000,00"), ("09 Ağustos 2026", "SHELL ORNEK ANKARA TR", "500,00")],
+             header="Kart No: 4543 12** **** 1234   Hesap Kesim Tarihi 26 Ağustos 2026   Dönem Borcu 1.500,00 TL")
+    rows_pdf("kart_b.pdf", [("03 Ağustos 2026", "SINEMA ORNEK ISTANBUL TR", "300,00"), ("12 Ağustos 2026", "KAFE ORNEK ISTANBUL TR", "200,00")],
+             header="**** **** **** 5678   Hesap Kesim Tarihi 20 Ağustos 2026   Dönem Borcu 500,00 TL")
+
+
 # 9) Şifreli PDF'ler (aynı şifre) ve bozuk dosya
 def encrypted_and_broken():
     from pypdf import PdfReader, PdfWriter
@@ -291,6 +299,7 @@ def build_all():
     reconciliation()
     info["real"] = real_layout()
     plus_payments()
+    two_cards()
     encrypted_and_broken()
     return info
 
