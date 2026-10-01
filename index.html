@@ -1229,7 +1229,12 @@ function importRows(){
 /* ---------- görüntüleme ---------- */
 /* Kredi kartında dönem = ekstre (ör. kesim 26 Ağustos ise 27 Temmuz – 26 Ağustos arası "Ağustos ekstresi").
    Ekstresi olmayan kayıtlar (Excel/CSV hesap dökümü) takvim ayına göre gruplanır. */
-const periodKey=t=>(t.stmt||t.date||"").slice(0,7);
+/* Ekstre ayı: ay sonunda kesen kartlarda kesim Şubat'ın kısalığı, hafta sonu ya da tatil yüzünden sonraki ayın ilk
+   günlerine kayabilir (31 Oca → 1 Mar → 31 Mar). Ayın 1–5'inde kesilen ekstrenin penceresi neredeyse tamamen önceki
+   aydadır; önceki ayın dönemi sayılır. Aksi halde bir ay boş kalır, sonraki ayda iki ekstre üst üste biner ve
+   taksit tahminleri bir ay kayar. */
+const stmtMonth=s=>+s.slice(8,10)<=5?shiftMonth(s,-1).slice(0,7):s.slice(0,7);
+const periodKey=t=>t.stmt?stmtMonth(t.stmt):(t.date||"").slice(0,7);
 function periodLabel(k,short){
   const [y,m]=k.split("-"), name=new Date(y,m-1).toLocaleDateString("tr-TR",short?{month:"short",year:"2-digit"}:{month:"long",year:"numeric"});
   if(short)return name;
@@ -1246,7 +1251,7 @@ function fillPeriods(){
 }
 
 function renderRecon(p){
-  const list=p?Object.keys(statements).filter(k=>k.slice(0,7)===p&&(!cardSel||!statements[k].card||statements[k].card===cardSel)).sort():[];
+  const list=p?Object.keys(statements).filter(k=>stmtMonth(k)===p&&(!cardSel||!statements[k].card||statements[k].card===cardSel)).sort():[];
   preact.render(list.map(stmt=>hx`<${ReconBox} key=${stmt} stmt=${stmt} multi=${list.length>1}/>`),$("recon"));
 }
 /* Okunamayan satırı bu ekstreye harcama olarak ekler */
@@ -1448,7 +1453,7 @@ function renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross,cmp,byCat})
     const days=Math.max(1,Math.round((toDate(rt)-toDate(rf))/864e5)+1);
     card("Günlük ortalama",fmt(total/days),`${days} gün`);
   }else if(p){
-    const list=Object.keys(statements).filter(k=>k.slice(0,7)===p).sort();
+    const list=Object.keys(statements).filter(k=>stmtMonth(k)===p).sort();
     const diffs=list.map(reconDiff).filter(d=>d!=null);
     if(diffs.length){
       const bad=diffs.find(d=>Math.abs(d)>=1);

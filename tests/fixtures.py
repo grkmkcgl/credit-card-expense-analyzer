@@ -279,6 +279,18 @@ def two_cards():
              header="**** **** **** 5678   Hesap Kesim Tarihi 20 Ağustos 2026   Dönem Borcu 500,00 TL")
 
 
+# 8c) Ay sonunda kesen kart: Şubat kısa olduğu için kesim 31 Ocak → 1 Mart → 31 Mart kayıyor.
+#     Aynı 6 taksitli serinin 2/6, 3/6, 4/6'sı; önceki dönem borcu yok (ekstre kontrolü net harcamayla karşılaştırır).
+def month_end_drift():
+    inst = lambda n: ("20 Kasım 2025", f"ORNEK TEKNO ANKARA TR 6.000,00 TL'lik işlemin {n} / 6 taksidi", "1.000,00")
+    rows_pdf("kayma_ocak.pdf", [("05 Ocak 2026", "ORNEK MARKET ANKARA TR", "300,00"), inst(2)],
+             header="Hesap Kesim Tarihi 31 Ocak 2026   Son Ödeme Tarihi 10 Şubat 2026   Dönem Borcu 1.300,00 TL")
+    rows_pdf("kayma_subat.pdf", [("10 Şubat 2026", "ORNEK KAFE ANKARA TR", "200,00"), inst(3)],
+             header="Hesap Kesim Tarihi 1 Mart 2026   Son Ödeme Tarihi 11 Mart 2026   Dönem Borcu 1.200,00 TL")
+    rows_pdf("kayma_mart.pdf", [("12 Mart 2026", "ORNEK AKARYAKIT ANKARA TR", "400,00"), inst(4)],
+             header="Hesap Kesim Tarihi 31 Mart 2026   Son Ödeme Tarihi 10 Nisan 2026   Dönem Borcu 1.400,00 TL")
+
+
 # 9) Şifreli PDF'ler (aynı şifre) ve bozuk dosya
 def encrypted_and_broken():
     from pypdf import PdfReader, PdfWriter
@@ -300,6 +312,7 @@ def build_all():
     info["real"] = real_layout()
     plus_payments()
     two_cards()
+    month_end_drift()
     encrypted_and_broken()
     return info
 
