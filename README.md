@@ -6,7 +6,8 @@ A single-file web tool that analyzes credit card statements and bank exports **e
 ## Gizlilik / Privacy
 
 - Dosyalar hiçbir sunucuya gönderilmez; tüm okuma ve hesaplama tarayıcıda yapılır. Sayfa açıldıktan sonra internet kapatılsa da çalışır.
-- Tarayıcıda (localStorage vb.) hiçbir şey saklanmaz. Kayıtlar yalnızca kullanıcının seçtiği `harcama-verisi.json` dosyasında tutulur.
+- Ağ kilidi: sayfadaki güvenlik kuralı (`Content-Security-Policy`, `connect-src 'none'`) hiçbir adrese bağlantı kurulmasına izin vermez; kod istese bile veri dışarı gidemez.
+- Tarayıcıda (localStorage vb.) hiçbir veri saklanmaz. Kayıtlar yalnızca kullanıcının seçtiği `harcama-verisi.json` dosyasında tutulur. Telefonda internetsiz açılabilmesi için tarayıcı önbelleğinde yalnızca uygulamanın kendi dosyaları (sayfa, ikonlar) tutulur.
 - PDF şifreleri sadece sayfa açıkken bellekte tutulur.
 - `.gitignore`, ekstre ve kayıt dosyalarının yanlışlıkla depoya girmesini engeller. **Bu depoya asla gerçek ekstre veya `harcama-verisi.json` eklemeyin.**
 
@@ -15,7 +16,8 @@ Files are never uploaded anywhere; parsing and calculations run in the browser, 
 ## Kullanım / Usage
 
 - **Bilgisayar:** Chrome veya Edge ile açın, "Klasör seç" ile kayıt klasörünü seçin (ör. Masaüstü/harcamalar), ekstreleri yükleyin.
-- **Telefon (iOS/Android):** Canlı sayfayı açın; kayıt dosyası "Kayıt dosyasını aç" ile açılır, değişiklikler "Kaydet" ile indirilir. Safari/Chrome'da *Paylaş → Ana Ekrana Ekle* ile uygulama gibi kullanılabilir. iOS 16.4+ gerekir.
+- **Telefon (iOS/Android):** Canlı sayfayı açın; kayıt dosyası "Kayıt dosyasını aç" ile açılır, değişiklikler "Kaydet" ile indirilir. iOS 16.4+ gerekir.
+- **Telefona uygulama olarak kurma (internetsiz çalışır):** Canlı sayfayı bir kez açın ve ana ekrana ekleyin: iPhone'da Safari → *Paylaş → Ana Ekrana Ekle*, Android'de Chrome → *⋮ → Uygulamayı yükle / Ana ekrana ekle*. Bundan sonra ikondan açılır, uçak modunda da çalışır. İnternet varken açıldığında yeni sürüm kendiliğinden alınır; dosya paylaşmaya gerek yoktur.
 - Dosyaya iPhone'daki Dosyalar uygulamasından dokunmak önizleme açar ve sayfa çalışmaz; canlı adresi kullanın.
 
 ## Özellikler / Features
@@ -45,10 +47,10 @@ GitHub Pages, `.github/workflows/pages.yml` ile her push'ta yeniden kurulur:
 - `main` → sitenin kökü
 - diğer her branch → `/onizleme/<branch-adı>/` (`/` yerine `-`), liste: `/onizleme/`
 
-Böylece bir branch'teki değişiklik, `index.html` indirmeden telefonda/bilgisayarda denenebilir. Yalnızca `index.html` yayınlanır.
+Böylece bir branch'teki değişiklik, `index.html` indirmeden telefonda/bilgisayarda denenebilir. Yalnızca uygulama dosyaları yayınlanır: `index.html`, `sw.js`, `manifest.webmanifest`, `icons/`.
 Ayar: *Settings → Pages → Source: Deploy from a branch → `gh-pages` / (root)*. `gh-pages` branch'i otomatik yazılır, elle değiştirmeyin.
 
-The site is rebuilt by the workflow on every push: `main` at the root, every other branch under `/onizleme/<branch>/`. Only `index.html` is published.
+The site is rebuilt by the workflow on every push: `main` at the root, every other branch under `/onizleme/<branch>/`. Only the app files are published (`index.html`, `sw.js`, `manifest.webmanifest`, `icons/`).
 
 Canlı sayfa bağlantıyı bilen herkes tarafından açılabilir, ancak yalnızca boş aracı gösterir; kullanıcı verileri cihazdan çıkmaz.
 Anyone with the link can open the page, but it is only the empty tool; user data never leaves the device.

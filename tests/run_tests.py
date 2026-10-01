@@ -1013,6 +1013,88 @@ def kural_duzenleyici_metin_ve_varsayilan(b, info):
     a.close()
 
 
+
+@test
+def ag_kilidi_baglantiya_izin_vermez(b, info):
+    a = App(b)
+    blocked = a.ev("""async () => {
+      const out = [];
+      for (const u of ['https://example.com/', 'data:text/plain,x']) {
+        try { await fetch(u); out.push('açık'); } catch (e) { out.push('kapalı'); }
+      }
+      try { const x = new XMLHttpRequest(); x.open('GET', 'https://example.com/', false); x.send(); out.push('açık'); }
+      catch (e) { out.push('kapalı'); }
+      return out;
+    }""")
+    eq(blocked, ["kapalı"] * 3, "fetch/XHR engellenmeli")
+    a.import_("arti.pdf")  # kilit varken PDF okuma (eval + blob worker) çalışmalı
+    assert "₺" in a.total(), a.total()
+    a.close()
+
+
+@test
+def pwa_internetsiz_acilir_ve_guncellenir(b, info):
+    import shutil
+    import threading
+    from functools import partial
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+    root = os.path.abspath(os.path.join(HERE, ".."))
+    site = os.path.join(OUT, "site")
+    shutil.rmtree(site, ignore_errors=True)
+    os.makedirs(site)
+    for name in ["index.html", "sw.js", "manifest.webmanifest", "icons"]:
+        (shutil.copytree if os.path.isdir(os.path.join(root, name)) else shutil.copy)(os.path.join(root, name), os.path.join(site, name))
+
+    class Quiet(SimpleHTTPRequestHandler):
+        def log_message(self, *a): pass
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), partial(Quiet, directory=site))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}/"
+    ctx = b.new_context()
+    pg = ctx.new_page()
+    errors = []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    try:
+        pg.goto(url)
+        pg.evaluate("navigator.serviceWorker.ready")
+        pg.reload()
+        assert pg.evaluate("!!navigator.serviceWorker.controller"), "sayfa service worker'a bağlanmalı"
+        man = pg.evaluate("fetch('manifest.webmanifest').then(r=>r.json()).catch(()=>null)")
+        eq(man, None, "sayfanın kendisi manifest'i bile fetch edememeli (ağ kilidi)")
+
+        # İnternet varken yeni sürüm hemen gelir
+        html = open(os.path.join(site, "index.html"), encoding="utf-8").read()
+        open(os.path.join(site, "index.html"), "w", encoding="utf-8").write(html.replace("<title>Harcama Analizi", "<title>YENİ Harcama Analizi", 1))
+        st = os.stat(os.path.join(site, "index.html")); os.utime(os.path.join(site, "index.html"), (st.st_atime, st.st_mtime + 5))  # sunucu saniye çözünürlüklü
+        pg.reload()
+        assert pg.title().startswith("YENİ"), pg.title()
+
+        # Sunucu kapanınca (internet yok) kayıtlı son sürüm açılır ve PDF okunur
+        srv.shutdown(); srv.server_close()
+        ctx.set_offline(True)
+        pg.reload()
+        assert pg.title().startswith("YENİ"), pg.title()
+        pg.wait_for_function("window.libsReady && typeof pdfToRows==='function'")
+        pg.evaluate("window.libsReady")
+        pg.evaluate("document.getElementById('drop').classList.remove('hide')")
+        pg.set_input_files("#file", f("arti.pdf"))
+        pg.wait_for_function("!document.getElementById('setup').classList.contains('hide')", timeout=20000)
+
+        # Önbellekte yalnızca uygulama dosyaları var
+        cached = pg.evaluate("""async () => {
+          const out = [];
+          for (const k of await caches.keys()) for (const r of await (await caches.open(k)).keys()) out.push(new URL(r.url).pathname);
+          return out.sort();
+        }""")
+        eq(cached, sorted(["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"]), "önbellek içeriği")
+        assert not errors, errors
+    finally:
+        ctx.close()
+        try: srv.shutdown(); srv.server_close()
+        except Exception: pass
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]

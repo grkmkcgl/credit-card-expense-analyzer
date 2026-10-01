@@ -1,7 +1,8 @@
 # GitHub Pages: main sitenin kökünde, diğer her branch /onizleme/<branch>/ altında yayınlanır.
 # Site her seferinde tüm branch'lerden yeniden kurulur ve gh-pages branch'ine yazılır;
 # silinen branch'in önizlemesi bir sonraki çalışmada kalkar.
-# Yalnızca index.html kopyalanır; kayıt dosyaları, ekstreler ve testler yayına girmez.
+# Yalnızca uygulama dosyaları (index.html + PWA dosyaları: sw.js, manifest, ikonlar) kopyalanır;
+# kayıt dosyaları, ekstreler ve testler yayına girmez.
 # Ayar: Settings → Pages → Source: "Deploy from a branch", Branch: gh-pages, / (root).
 name: Pages
 
@@ -33,7 +34,17 @@ jobs:
           mkdir -p "$site/onizleme"
           touch "$site/.nojekyll"
           default="${{ github.event.repository.default_branch }}"
-          git show "origin/$default:index.html" > "$site/index.html"
+
+          # Bir branch'in uygulama dosyalarını hedef klasöre yazar (branch'te olmayan PWA dosyası atlanır)
+          publish() {
+            local ref="$1" dest="$2" f
+            for f in index.html sw.js manifest.webmanifest icons/icon-192.png icons/icon-512.png icons/apple-touch-icon.png; do
+              git cat-file -e "origin/$ref:$f" 2>/dev/null || continue
+              mkdir -p "$dest/$(dirname "$f")"
+              git show "origin/$ref:$f" > "$dest/$f"
+            done
+          }
+          publish "$default" "$site"
 
           links=""
           for ref in $(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin); do
@@ -41,8 +52,7 @@ jobs:
             git cat-file -e "origin/$ref:index.html" 2>/dev/null || continue
             # Klasör adı: yalnızca harf, rakam, . _ - ("/" → "-")
             safe=$(printf '%s' "$ref" | tr '/' '-' | tr -c 'A-Za-z0-9._-' '-')
-            mkdir -p "$site/onizleme/$safe"
-            git show "origin/$ref:index.html" > "$site/onizleme/$safe/index.html"
+            publish "$ref" "$site/onizleme/$safe"
             when=$(git log -1 --format=%cd --date=format:'%d.%m.%Y %H:%M' "origin/$ref")
             links="$links<li><a href=\"$safe/\">$safe</a> <small>($when)</small></li>"
           done
