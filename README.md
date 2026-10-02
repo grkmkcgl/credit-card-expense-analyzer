@@ -28,6 +28,7 @@ Files are never uploaded anywhere; parsing and calculations run in the browser, 
 - PDF (şifreli dahil), Excel ve CSV; birden çok ekstreyi aynı anda yükleme (sayfanın herhangi bir yerine sürükle-bırak)
 - Hesap kesim tarihini, dönem borcunu ve maskeli kart numarasını dosyadan bulma
 - Ödeme, iade ve puan (Worldpuan vb.) bölümlerini ayırma
+- Dövizli harcamalarda TL tutarını alma; ay sonu/yıl başı (Aralık→Ocak) ekstrelerinde tarihleri doğru yıla yazma; borç/alacak (B/A) sütunlu ekstreler
 - Ekstre kontrolü: hesaplanan tutarı dönem borcuyla karşılaştırma, okunamayan satırları tek tıkla ekleme
 
 **Analiz**

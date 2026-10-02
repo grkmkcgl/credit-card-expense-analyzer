@@ -291,6 +291,45 @@ def month_end_drift():
              header="Hesap Kesim Tarihi 31 Mart 2026   Son Ödeme Tarihi 10 Nisan 2026   Dönem Borcu 1.400,00 TL")
 
 
+# 8d) PDF ayrıştırma sınır durumları (uydurma isim ve tutarlar)
+def pdf_edge_cases():
+    # dövizli işlemler: TL tutar ikinci / döviz kodu öncede / kur sütunlu
+    rows_pdf("dovizli.pdf", [("02 Ağustos 2026", "AMAZON ORNEK LU", "25,00 USD   1.012,50"), ("05 Ağustos 2026", "BOOKING ORNEK NL", "EUR 40,00   1.620,00"),
+             ("08 Ağustos 2026", "ORNEK YAZILIM IE", "10,00 USD   40,50   405,00"), ("10 Ağustos 2026", "ORNEK MARKET ANKARA TR", "100,00")],
+             header="Hesap Kesim Tarihi 26 Ağustos 2026   Dönem Borcu 3.137,50 TL")
+    # yılsız tarihler: Ocak ekstresinde Aralık işlemleri
+    rows_pdf("yilsiz_ocak.pdf", [("28/12", "MIGROS ORNEK ANKARA", "100,00"), ("30/12", "SHELL ORNEK ANKARA", "200,00"), ("05/01", "ZARA ORNEK", "50,00"), ("12/01", "A101 ORNEK", "70,00")],
+             header="Hesap Kesim Tarihi 26.01.2026   Son Ödeme Tarihi 05.02.2026   Dönem Borcu 420,00 TL")
+    # vade/bilgi cümlesi (içinde tarih ve tutar var) işlem sayılmamalı
+    rows_pdf("vade_cumlesi.pdf", [("01 Ağustos 2026", "MIGROS ORNEK", "100,00"), ("05 Ağustos 2026", "SHELL ORNEK", "200,00"),
+             ("Borcunuzun tamamını 05.09.2026 tarihine kadar 300,00 TL ödeyiniz", "", None)],
+             header="Hesap Kesim Tarihi 26 Ağustos 2026   Dönem Borcu 300,00 TL")
+
+    def marker_pdf(name, rows, due, header_extra=""):
+        c = canvas.Canvas(p(name), pagesize=(700, 842)); c.setFont("D", 8)
+        c.drawString(40, 810, f"Hesap Kesim Tarihi 26 Ağustos 2026   Dönem Borcu {due} TL")
+        c.drawString(40, 790, "Tarih"); c.drawString(130, 790, "Açıklama"); c.drawString(500, 790, "Tutar"); c.drawString(620, 790, header_extra)
+        y = 770
+        for d, desc, a, m in rows:
+            c.drawString(40, y, d); c.drawString(130, y, desc); c.drawRightString(560, y, a)
+            if m: c.drawString(625, y, m)
+            y -= 14
+        c.save()
+    # borç/alacak (B/A) sütunu: A = alacak (iade/ödeme)
+    marker_pdf("isaret_ba.pdf", [("01 Ağustos 2026", "MIGROS ORNEK", "100,00", "B"), ("02 Ağustos 2026", "SHELL ORNEK", "200,00", "B"),
+              ("03 Ağustos 2026", "ZARA ORNEK IADE", "50,00", "A"), ("04 Ağustos 2026", "KAFE ORNEK", "30,00", "B"),
+              ("05 Ağustos 2026", "HESABINIZDAN ODEME", "500,00", "A"), ("06 Ağustos 2026", "A101 ORNEK", "70,00", "B")], "350,00", "B/A")
+    # yalnızca alacaklarda "-" işareti olan ayrı sütun (4 iade)
+    marker_pdf("isaret_eksi.pdf", [("01 Ağustos 2026", "MIGROS ORNEK", "100,00", ""), ("02 Ağustos 2026", "SHELL ORNEK", "80,00", ""), ("03 Ağustos 2026", "A101 ORNEK", "70,00", ""),
+              ("04 Ağustos 2026", "KAFE ORNEK", "60,00", ""), ("05 Ağustos 2026", "ZARA ORNEK", "90,00", ""), ("06 Ağustos 2026", "IADE BIR ORNEK", "10,00", "-"),
+              ("07 Ağustos 2026", "IADE IKI ORNEK", "20,00", "-"), ("08 Ağustos 2026", "IADE UC ORNEK", "30,00", "-"), ("09 Ağustos 2026", "IADE DORT ORNEK", "40,00", "-")], "300,00", "")
+    # saat, küçük harfli ay, parantezli ve alt satırdaki taksit
+    rows_pdf("kucuk_ayrintilar.pdf", [("01.08.2026", "14:35 MIGROS ORNEK ANKARA TR", "100,00"), ("02.08.2026", "09:12 MIGROS ORNEK ANKARA TR", "80,00"),
+             ("26 temmuz 2026", "KAFE ORNEK ISTANBUL TR", "45,00"), ("03.08.2026", "TEKNO ORNEK TR (2/3)", "1.000,00"),
+             ("04.08.2026", "GIYIM ORNEK TR", "600,00"), ("", "2/3 Taksit", None)],
+             header="Hesap Kesim Tarihi 26 Ağustos 2026   Dönem Borcu 1.825,00 TL")
+
+
 # 9) Şifreli PDF'ler (aynı şifre) ve bozuk dosya
 def encrypted_and_broken():
     from pypdf import PdfReader, PdfWriter
@@ -313,6 +352,7 @@ def build_all():
     plus_payments()
     two_cards()
     month_end_drift()
+    pdf_edge_cases()
     encrypted_and_broken()
     return info
 

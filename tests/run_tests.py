@@ -1120,6 +1120,74 @@ def ay_sonu_kesim_kaymasi(b, info):
     a.close()
 
 
+# ---------------------------------------------------------------- PDF ayrıştırma sınır durumları
+def _real_rows(a):
+    return a.ev("history.filter(t=>!t.est).map(t=>({d:t.date,desc:t.desc,amt:t.amt,kind:t.kind||'',note:t.note||'',inst:t.inst?t.inst.n+'/'+t.inst.m:''}))")
+
+
+@test
+def pdf_dovizli_islemde_tl_tutar_alinir(b, info):
+    a = App(b); a.import_("dovizli.pdf")
+    rows = {r["desc"]: r for r in _real_rows(a)}
+    eq(sorted(r["amt"] for r in rows.values()), [100, 405, 1012.5, 1620], "TL tutarlar (döviz tutarı değil)")
+    eq(sorted(rows), ["AMAZON ORNEK LU", "BOOKING ORNEK NL", "ORNEK MARKET ANKARA TR", "ORNEK YAZILIM IE"], "açıklamada döviz kodu kalmamalı")
+    assert "25,00 USD" in rows["AMAZON ORNEK LU"]["note"], rows["AMAZON ORNEK LU"]
+    assert "Tutuyor" in _recon(a), _recon(a)
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
+def pdf_yilsiz_tarihlerde_yil_kesime_gore_cozulur(b, info):
+    a = App(b); a.load("yilsiz_ocak.pdf")
+    src = a.text("#stmtSrc"); assert "uyumsuz" not in src and "Dosyadan okundu" in src, src
+    a.pg.click("#run"); a.pg.wait_for_timeout(150)
+    eq(sorted(r["d"] for r in _real_rows(a)), ["2025-12-28", "2025-12-30", "2026-01-05", "2026-01-12"], "Aralık işlemleri önceki yılda")
+    assert "Tutuyor" in _recon(a, "2026-01"), _recon(a, "2026-01")
+    a.close()
+
+
+@test
+def pdf_vade_cumlesi_islem_sayilmaz(b, info):
+    a = App(b); a.load("vade_cumlesi.pdf")
+    src = a.text("#stmtSrc"); assert "uyumsuz" not in src and "Dosyadan okundu" in src, src
+    a.pg.click("#run"); a.pg.wait_for_timeout(150)
+    rows = _real_rows(a); eq(sorted(r["desc"] for r in rows), ["MIGROS ORNEK", "SHELL ORNEK"], "yalnızca gerçek işlemler")
+    eq(sum(r["amt"] for r in rows), 300, "toplam")
+    assert "Tutuyor" in _recon(a), _recon(a)
+    a.close()
+
+
+@test
+def pdf_isaret_sutunu_silinmez(b, info):
+    a = App(b); a.import_("isaret_ba.pdf")
+    kinds = {r["desc"]: (r["kind"], r["amt"]) for r in _real_rows(a)}
+    eq(kinds["ZARA ORNEK IADE"], ("refund", -50), "A = alacak: iade")
+    eq(kinds["HESABINIZDAN ODEME"][0], "payment", "A = alacak: ödeme")
+    eq(kinds["MIGROS ORNEK"], ("", 100), "B = borç: harcama")
+    assert "Tutuyor" in _recon(a), _recon(a)
+    a.close()
+    a = App(b); a.import_("isaret_eksi.pdf")
+    eq(a.ev("history.filter(t=>t.kind==='refund').length"), 4, "ayrı '-' sütunu iade olarak okunmalı")
+    assert "Tutuyor" in _recon(a), _recon(a)
+    a.close()
+
+
+@test
+def pdf_saat_kucuk_harfli_ay_ve_taksit_bicimleri(b, info):
+    a = App(b); a.import_("kucuk_ayrintilar.pdf")
+    rows = _real_rows(a)
+    eq(len(rows), 5, "küçük harfli aylı satır da okunmalı")
+    descs = [r["desc"] for r in rows if "MIGROS" in r["desc"]]
+    eq(descs, ["MIGROS ORNEK ANKARA TR"] * 2, "saat açıklamada kalmamalı")
+    eq(a.ev("[...new Set(history.filter(t=>/MIGROS/.test(t.desc)).map(t=>merchantKey(t.desc)))]"), ["migros"], "aynı yer tek yer sayılmalı")
+    eq(sorted((r["desc"], r["inst"]) for r in rows if r["inst"]), [("GIYIM ORNEK TR", "2/3"), ("TEKNO ORNEK TR", "2/3")], "(2/3) ve alt satırdaki '2/3 Taksit'")
+    assert "(2/3)" not in " ".join(r["desc"] for r in rows)
+    eq(a.ev("history.find(t=>t.desc==='KAFE ORNEK ISTANBUL TR').date"), "2026-07-26", "küçük harfli ay")
+    assert "Tutuyor" in _recon(a), _recon(a)
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
