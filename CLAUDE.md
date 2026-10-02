@@ -94,9 +94,21 @@ Not covered: installing to the home screen on a real iPhone/Android (manual chec
 
 Live page: GitHub Pages from the `gh-pages` branch, built by `.github/workflows/pages.yml` on every push/branch delete: `main`'s app files at the root, every other branch at `/onizleme/<branch, / → ->/`, list at `/onizleme/`. Only the app files are published (`publish()`: `index.html`, `sw.js`, `manifest.webmanifest`, `icons/*`). Never commit to `gh-pages` by hand; it is force-rewritten. Pages setting: Source = Deploy from a branch, `gh-pages`, `/ (root)`. On iOS, opening the HTML from the Files app shows a Quick Look preview that doesn't run JS; use the live URL (or the home-screen app).
 
-## Commits
+## Branches and commits
 
-Ask the owner for the branch name before creating a new branch.
-Never put session info (Claude session links/IDs, `Claude-Session:` trailers, claude.ai/code URLs) in commit messages, PR titles/bodies, merge commits or comments.
+### Branches
+
+For **every** new feature or fix, work on a **new branch**. Before creating it, ask the owner two things and wait for the answers (do not guess, do not reuse a default):
+1. **The branch name.**
+2. **Which branch to start from.** Do not assume `main`; the owner may want a different base. Offer `main` as the default option.
+
+Rules:
+- Never start work on, or push to, a branch the owner has not named in this conversation. Never reuse an old or already-merged branch for new work; if the owner wants the same name again, restart it from the chosen base.
+- Never create a pull request or merge unless the owner asks for it. Ask before deleting branches (remote deletion is often blocked in the cloud environment; then tell the owner to use GitHub's "Delete branch").
+- Before the first commit, make sure the branch is based on the up-to-date base (`git fetch`), so a PR does not carry unrelated history.
+
+### Commits
+
+Never put session info (Claude session links/IDs, `Claude-Session:` trailers, claude.ai/code URLs) in commit messages, PR titles/bodies, merge commits or comments. The GitHub integration may append a footer with the session link to a PR body automatically; after creating or editing a PR, read the body back and remove it.
 
 Commit messages in Turkish, short subject + body explaining why.
