@@ -24,12 +24,12 @@ A single-file, fully offline web app (`index.html`) that analyzes Turkish credit
 - Lines ~290–310: SheetJS (`xlsx.core.min.js` 0.18.5), PDF.js (3.11.174 `pdf.min.js` + worker) and Preact 10.29.8 + htm 3.1.1 (`LIB_PREACT`, ~7 KB gz, UMD builds) embedded as **gzip+base64** strings, unpacked with `DecompressionStream` into `window.libsReady`. Do not inline raw library JS: sequences like `<!--` inside a `<script>` broke HTML parsing before ("page shows as text").
 - `<style>`: dark theme (`--bg:#000`). Categorical palette `PAL` (6 colors + `GRAY`) was validated for CVD/contrast on black — keep it.
 - App script (after the libs): storage → PDF parsing → rules/categorize → import → render.
-- **UI components**: `window.hx = htm.bind(preact.h)`; render with ``preact.render(hx`<div>…</div>`, $("id"))``. Also migrated: `#anom`, `#recur`, `#instCal`, `#tagbar`, `#toast`. Migrated containers: `#kpis`, `#exclInfo`, `#months`, `#strip`, `#cats` (via `flipList` FLIP animation), `#top`, `#unk`, `#alltx`, `#qOut`, `#recon`, `#pieBox` (`donutClass()` — the `Donut` class component is created lazily because the app script runs before Preact is unpacked; hover state in `setState`, angle tween in `componentWillReceiveProps`/`tick`, skipped under `prefers-reduced-motion`). Never write `innerHTML` into a container Preact renders (or vice versa) — Preact keeps its own vnode tree. Text is escaped automatically, so don't `esc()` interpolations; the only `dangerouslySetInnerHTML` is the `#qOut` tip, built from numbers/labels only. Rows are keyed so DOM nodes (checkboxes, open `<details>`) survive re-render; click handlers are `onClick`/`onChange` on the vnode, and the leftover global `[data-an]` binder in `render()` skips migrated lists (`:not(#cats [data-an],…)`) to avoid double-firing. Animations are CSS/WAAPI only and switched off by `prefers-reduced-motion`. Not migrated on purpose: `#preview`, `#sharePreview` (read back from the DOM via `input[data-imp]`), `#flist` and `#msg` (written from many places with `textContent`/`innerHTML`; their fade-in is plain CSS since the nodes are recreated).
+- **UI components**: `window.hx = htm.bind(preact.h)`; render with ``preact.render(hx`<div>…</div>`, $("id"))``. Containers rendered by Preact: `#kpis`, `#exclInfo`, `#anom`, `#months`, `#instCal`, `#strip`, `#cats` (via `flipList` FLIP animation), `#top`, `#recur`, `#tagbar`, `#alltx`, `#txcat`, `#unk`, `#qOut`, `#recon`, `#rulesEd`, `#cardSel`, `#toast`, `#pieBox` (`donutClass()` — the `Donut` class component is created lazily because the app script runs before Preact is unpacked; hover state in `setState`, angle tween in `componentWillReceiveProps`/`tick`, skipped under `prefers-reduced-motion`). Never write `innerHTML` into a container Preact renders (or vice versa) — Preact keeps its own vnode tree. Text is escaped automatically, so don't `esc()` interpolations; the only `dangerouslySetInnerHTML` is the `#qOut` tip, built from numbers/labels only. Rows are keyed so DOM nodes (checkboxes, open `<details>`) survive re-render; click handlers are `onClick`/`onChange` on the vnode, and the leftover global `[data-an]` binder in `render()` skips migrated lists (`:not(#cats [data-an],…)`) to avoid double-firing. Animations are CSS/WAAPI only and switched off by `prefers-reduced-motion`. Not migrated on purpose: `#preview`, `#sharePreview` (read back from the DOM via `input[data-imp]`), `#flist` and `#msg` (written from many places with `textContent`/`innerHTML`; their fade-in is plain CSS since the nodes are recreated).
 
 ### Storage
 - Desktop (Chrome/Edge): `showDirectoryPicker` → writes `harcama-verisi.json` (+ `.onceki.json` backup) in the chosen folder.
 - Phone/other (`MOBILE = !showDirectoryPicker`): open the JSON via file input, "Kaydet" downloads it.
-- `snapshot()` / `applyData()` define the file schema: `history, statements, overrides, excluded, viewMode, rules, lastMap` plus the optional `notes` (`{txId: "text #tag"}`), `dismissed` (hidden anomaly-warning ids) and `removedDefaults` (default rules the user deleted: `"Kategori|ANAHTAR"` or `"Kategori|*"`, so the load-time default merge doesn't re-add them — `applyData` merges `defaultsText()`, not `DEFAULT_RULES`); transactions may carry `card` (last 4 digits) and `statements[stmt].card`. `applyData` also merges new default rules/keywords into saved rules and runs `migrate()` + `expandInstallments()`. Keep old files loadable.
+- `snapshot()` / `applyData()` define the file schema: `history, statements, overrides, excluded, viewMode, rules, lastMap` plus the optional `notes` (`{txId: "text #tag"}`), `dismissed` (hidden anomaly-warning ids) and `removedDefaults` (default rules the user deleted: `"Kategori|ANAHTAR"` or `"Kategori|*"`, so the load-time default merge doesn't re-add them — `applyData` merges `defaultsText()`, not `DEFAULT_RULES`); transactions may carry `card` (last 4 digits) and `statements[stmt].card`. `applyData` also runs `migrate()` + `expandInstallments()`. Keep old files loadable.
 
 ### PDF parsing (`pdfToRows` → `linesToRows`)
 - Text items grouped into lines by y; items joined with a space only when there is a real x-gap (handles letter-by-letter PDFs).
@@ -64,7 +64,7 @@ A single-file, fully offline web app (`index.html`) that analyzes Turkish credit
 - **Geri al** (`undoable`, `undo`, `#toast`): wrap user-initiated data changes in `undoable(label, fn)`; it snapshots, runs `fn`, saves, re-renders and shows a 6 s toast; Ctrl/Cmd+Z outside inputs also undoes (one level, memory only).
 - **Kart ayrımı**: `findCard` reads a masked card number from the PDF text; `cardSel` (`#cardSel`, shown only with ≥2 cards) filters totals, lists, analysis and recon. Limitation: statements are keyed by cut-off date, so two cards with the *same* cut-off date share one statement/recon entry.
 - **Yazdır**: `#tbPrint` → `window.print()`; `@media print` switches to a light theme, hides controls/rules/uncategorized, expands scroll areas; `beforeprint`/`afterprint` open and restore the `<details>` folds.
-Period selector (all time / each statement / custom date range with presets), category include/exclude checkboxes (affects totals, charts, lists), bar or donut chart (top 6 colored, rest folded to gray), "Dönemlere göre" chart, merchant analysis (`renderQuery`, scoped to the selected period; items in every list are clickable via `data-an`), multi-file upload with per-file summary table, category share export/import. "Dönemlere göre", "Tüm işlemler", "Kategorisi bulunamayanlar" and "Kategori kuralları" are native `<details class="fold">` sections (`#monthsFold`, `#allFold`, `#unkFold`, `#rulesFold`), closed by default, with counts in the title (`#…Count`); a category import opens `#rulesFold` so the preview is visible; open state is not saved and survives re-render because `render()` only rewrites the tables.
+- **Other**: period selector (all time / each statement / custom date range with presets), category include/exclude checkboxes (affects totals, charts, lists), bar or donut chart (top 6 colored, rest folded to gray), "Dönemlere göre" chart, merchant analysis (`renderQuery`, scoped to the selected period; items in every list are clickable via `data-an`), multi-file upload with a per-file result list (`.flist`), category share export/import. "Dönemlere göre", "Tüm işlemler", "Kategorisi bulunamayanlar" and "Kategori kuralları" are native `<details class="fold">` sections (`#monthsFold`, `#allFold`, `#unkFold`, `#rulesFold`), closed by default, with counts in the title (`#…Count`); a category import opens `#rulesFold` so the preview is visible; open state is not saved and survives re-render because `render()` only rewrites the tables.
 
 Layout: before any data the page shows the intro, numbered step panels (`#folderPanel`/`#mobilePanel`, `#drop`) and a 3-step guide (`#how`). Once `history` is non-empty `render()` sets `body.has-data`: CSS hides intro/steps/drop and shows the compact `#toolbar` (folder or file name, counts, "+ Ekstre ekle" → `#file`, folder/file switch) and the "🔒 Çevrimdışı" badge; "Geçmişi sil" lives in the `#hist` fold at the bottom. Files can be dropped anywhere on the page (`handleFiles`, same path as `#file`). The total sits in `.hero` with KPI cards from `renderKpis` (all time: per-period average, upcoming installments; statement: reconciliation status, click opens `#recon`; range: daily average; always: largest category). Multi-file results are a `.flist` list, not a table (fits phones). Category rows use grid areas so the percentage drops under the amount at ≤640px. `.hide` is `!important`.
 
@@ -75,7 +75,7 @@ End-to-end tests drive the real `index.html` in headless Chromium against **synt
 ```bash
 pip install -r tests/requirements.txt
 python -m playwright install chromium      # skip if Chromium is already available (e.g. /opt/pw-browsers)
-python tests/run_tests.py                   # all tests, ~2-3 min
+python tests/run_tests.py                   # all tests (53), ~1.5–3 min
 python tests/run_tests.py taksit            # only tests whose name contains "taksit"
 VERBOSE=1 python tests/run_tests.py         # print tracebacks
 ```
@@ -94,9 +94,21 @@ Not covered: installing to the home screen on a real iPhone/Android (manual chec
 
 Live page: GitHub Pages from the `gh-pages` branch, built by `.github/workflows/pages.yml` on every push/branch delete: `main`'s app files at the root, every other branch at `/onizleme/<branch, / → ->/`, list at `/onizleme/`. Only the app files are published (`publish()`: `index.html`, `sw.js`, `manifest.webmanifest`, `icons/*`). Never commit to `gh-pages` by hand; it is force-rewritten. Pages setting: Source = Deploy from a branch, `gh-pages`, `/ (root)`. On iOS, opening the HTML from the Files app shows a Quick Look preview that doesn't run JS; use the live URL (or the home-screen app).
 
-## Commits
+## Branches and commits
 
-Ask the owner for the branch name before creating a new branch.
-Never put session info (Claude session links/IDs, `Claude-Session:` trailers, claude.ai/code URLs) in commit messages, PR titles/bodies, merge commits or comments.
+### Branches
+
+For **every** new feature or fix, work on a **new branch**. Before creating it, ask the owner two things and wait for the answers (do not guess, do not reuse a default):
+1. **The branch name.**
+2. **Which branch to start from.** Do not assume `main`; the owner may want a different base. Offer `main` as the default option.
+
+Rules:
+- Never start work on, or push to, a branch the owner has not named in this conversation. Never reuse an old or already-merged branch for new work; if the owner wants the same name again, restart it from the chosen base.
+- Never create a pull request or merge unless the owner asks for it. Ask before deleting branches (remote deletion is often blocked in the cloud environment; then tell the owner to use GitHub's "Delete branch").
+- Before the first commit, make sure the branch is based on the up-to-date base (`git fetch`), so a PR does not carry unrelated history.
+
+### Commits
+
+Never put session info (Claude session links/IDs, `Claude-Session:` trailers, claude.ai/code URLs) in commit messages, PR titles/bodies, merge commits or comments. The GitHub integration may append a footer with the session link to a PR body automatically; after creating or editing a PR, read the body back and remove it.
 
 Commit messages in Turkish, short subject + body explaining why.

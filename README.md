@@ -19,27 +19,45 @@ Files are never uploaded anywhere; parsing and calculations run in the browser, 
 - **Telefon (iOS/Android):** Canlı sayfayı açın; kayıt dosyası "Kayıt dosyasını aç" ile açılır, değişiklikler "Kaydet" ile indirilir. iOS 16.4+ gerekir.
 - **Telefona uygulama olarak kurma (internetsiz çalışır):** Canlı sayfayı bir kez açın ve ana ekrana ekleyin: iPhone'da Safari → *Paylaş → Ana Ekrana Ekle*, Android'de Chrome → *⋮ → Uygulamayı yükle / Ana ekrana ekle*. Bundan sonra ikondan açılır, uçak modunda da çalışır. İnternet varken açıldığında yeni sürüm kendiliğinden alınır; dosya paylaşmaya gerek yoktur.
 - Dosyaya iPhone'daki Dosyalar uygulamasından dokunmak önizleme açar ve sayfa çalışmaz; canlı adresi kullanın.
+- **Dönemler:** İşlemler takvim ayına değil, göründükleri **ekstrenin dönemine** yazılır (banka bir harcamayı geç işlerse sonraki ekstrede görünür). Ayın 1–5'inde kesilen bir ekstre önceki ayın dönemi sayılır; ay sonunda kesen kartlarda kesim 31 Ocak → 1 Mart → 31 Mart diye kaysa da her ay tek ekstre görünür.
+- **Rapor:** Araç çubuğundaki "Yazdır" sade, beyaz zeminli bir baskı görünümü açar; tarayıcıdan "PDF olarak kaydet" ile rapor alınabilir.
 
 ## Özellikler / Features
 
-- PDF (şifreli dahil), Excel ve CSV okuma; birden çok ekstreyi aynı anda yükleme
-- Hesap kesim tarihini dosyadan bulma; işlemleri ekstre dönemine göre gruplama
-- Taksit takibi (geçmiş ve gelecek taksitlerin seriden hesaplanması)
-- Ödeme, iade, puan (Worldpuan vb.) bölümlerini ayırma
-- Ekstre kontrolü: hesaplanan tutarı dönem borcuyla karşılaştırma
-- Otomatik kategori (düzenlenebilir kurallar), kategoriyi toplamdan çıkarma
-- Kategori kurallarını ve yer seçimlerini dosya ile başkasıyla paylaşma ve birleştirme (işlem/tutar paylaşılmaz; eklenecekler önce listelenir, onaylananlar kaydedilir)
-- Çubuk ve pasta grafik, tarih aralığı analizi, yer bazında harcama analizi
+**Okuma**
+- PDF (şifreli dahil), Excel ve CSV; birden çok ekstreyi aynı anda yükleme (sayfanın herhangi bir yerine sürükle-bırak)
+- Hesap kesim tarihini, dönem borcunu ve maskeli kart numarasını dosyadan bulma
+- Ödeme, iade ve puan (Worldpuan vb.) bölümlerini ayırma
+- Ekstre kontrolü: hesaplanan tutarı dönem borcuyla karşılaştırma, okunamayan satırları tek tıkla ekleme
+
+**Analiz**
+- Toplam ve özet kartları; çubuk ve pasta grafik; tüm zamanlar, tek ekstre ya da tarih aralığı
+- Önceki ekstreye göre kategori değişimi (▲/▼) ve "en çok artan" kategori
+- Taksit takibi: geçmiş ve gelecek taksitler seriden hesaplanır; gelecek aylar için taksit takvimi
+- Düzenli ödemeler (abonelikler, faturalar): aylık/yıllık tutar, "tutar arttı", "son 2 dönemde yok"
+- Olağandışı harcama uyarıları: çift çekim şüphesi, bir yerin ortalamasının çok üstündeki harcama
+- Yer bazında harcama analizi; birden fazla kart varsa karta göre süzme
+
+**Kategoriler**
+- Otomatik kategori; kuralları kartlar ve anahtar kelime çipleriyle düzenleme, "Kural dene"
+- Kategorisiz yerler için tek tıkla kural önerisi; kategoriyi toplamdan çıkarma
+- Kuralları ve yer seçimlerini dosya ile başkasıyla paylaşma (işlem/tutar paylaşılmaz; eklenecekler önce listelenir, yalnızca onaylananlar kaydedilir)
+
+**Düzenleme**
+- Tüm işlemlerde arama, kategori süzgeci ve sıralama
+- İşlemlere not ve `#etiket` ekleme, etiket toplamları
+- Geri al (bildirimden ya da Ctrl/Cmd+Z)
+- Uzun bölümler açılır/kapanır; yazdırma/PDF rapor görünümü
 
 ## Geliştirme / Development
 
-Tüm uygulama `index.html` içindedir. Excel (SheetJS) ve PDF (PDF.js) kütüphaneleri dosyanın içine sıkıştırılmış olarak gömülüdür; harici bağımlılık veya derleme adımı yoktur.
-The whole app is `index.html`. SheetJS and PDF.js are embedded (gzip + base64), so there is no build step and no network dependency.
+Tüm uygulama `index.html` içindedir. Excel (SheetJS), PDF (PDF.js) ve arayüz (Preact + htm) kütüphaneleri dosyanın içine sıkıştırılmış olarak gömülüdür; harici bağımlılık veya derleme adımı yoktur. Telefona kurulum için yanında yalnızca `sw.js`, `manifest.webmanifest` ve `icons/` vardır.
+The whole app is `index.html`. SheetJS, PDF.js and Preact + htm are embedded (gzip + base64), so there is no build step and no network dependency. `sw.js`, `manifest.webmanifest` and `icons/` only make it installable/offline on phones.
 
-Uygulama kodu dosyanın sonundaki `<script>` bloğundadır.
+`index.html` içinde iki `<script>` bloğu vardır: ilki gömülü kütüphaneleri açar (ve service worker'ı kaydeder), ikincisi uygulama kodudur. Kod yapısı, kurallar ve dikkat edilecek noktalar `CLAUDE.md` içindedir.
 
 **Testler / Tests:** `pip install -r tests/requirements.txt && python -m playwright install chromium && python tests/run_tests.py`
-Sentetik ekstre PDF'leri üretip aracı Chromium'da uçtan uca test eder. Ayrıntılar `CLAUDE.md` içinde.
+Sentetik ekstre PDF'leri üretip aracı Chromium'da uçtan uca test eder (53 senaryo, yaklaşık 1,5–3 dakika). `python tests/run_tests.py taksit` yalnızca adında "taksit" geçenleri çalıştırır; `BROWSER=webkit` Safari motorunda çalıştırır. Ayrıntılar `CLAUDE.md` içinde.
 
 ## Canlı sayfa / Live page
 
