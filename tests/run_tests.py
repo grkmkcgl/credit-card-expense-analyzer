@@ -1095,6 +1095,29 @@ def pwa_internetsiz_acilir_ve_guncellenir(b, info):
         except Exception: pass
 
 
+@test
+def ay_sonu_kesim_kaymasi(b, info):
+    a = App(b)
+    a.import_("kayma_ocak.pdf")
+    eq(a.ev("history.filter(t=>t.inst&&t.inst.n===3).map(t=>[periodKey(t),t.est])"), [["2026-02", "future"]], "yalnız Ocak varken 3/6 Şubat'a tahmin edilmeli")
+    a.import_("kayma_subat.pdf"); a.import_("kayma_mart.pdf")
+    eq(a.ev("history.filter(t=>t.inst&&t.inst.n===3).map(t=>[periodKey(t),!!t.est])"), [["2026-02", False]], "tahmin gerçekle değişmeli, kopya yok")
+    opts = a.ev("[...document.querySelectorAll('#period option')].map(o=>o.value).filter(v=>/^\\d{4}-\\d{2}$/.test(v))")
+    for m in ["2026-01", "2026-02", "2026-03"]:
+        eq(opts.count(m), 1, f"{m} dönemi bir kez")
+    assert "Şubat 2026 ekstresi (kesim 01.03.2026)" in a.ev("document.querySelector('#period option[value=\"2026-02\"]').textContent"), a.ev("[...document.querySelectorAll('#period option')].map(o=>o.textContent)")
+    for m, v in [("2026-01", "₺1.300"), ("2026-02", "₺1.200"), ("2026-03", "₺1.400")]:
+        a.period(m); eq(a.total(), v, f"{m} toplamı")
+        eq(a.ev("document.querySelectorAll('#recon details').length"), 1, f"{m} tek ekstre kontrolü")
+        assert "Tutuyor" in a.text("#recon"), (m, a.text("#recon"))
+    eq(a.ev("history.filter(t=>t.inst).map(t=>[t.inst.n,periodKey(t)]).sort((x,y)=>x[0]-y[0])"),
+       [[1, "2025-12"], [2, "2026-01"], [3, "2026-02"], [4, "2026-03"], [5, "2026-04"], [6, "2026-05"]], "her dönemde tek taksit, doğru ay")
+    a.period("2026-03")
+    eq(a.ev("document.querySelector('#cats .cat[data-k=\"Taksitler\"] .delta')"), None, "Mart taksiti Şubat'la aynı: rozet yok")
+    assert not a.errors, a.errors
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
