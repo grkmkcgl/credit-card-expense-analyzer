@@ -1,8 +1,10 @@
 """index.html için uçtan uca testler (Playwright + Chromium, sentetik PDF'lerle).
 
-Kurulum:   pip install playwright reportlab pypdf && python -m playwright install chromium
+Kurulum:   pip install -r tests/requirements.txt && python -m playwright install chromium
 Çalıştır:  python tests/run_tests.py            (hepsi)
            python tests/run_tests.py taksit     (adında "taksit" geçen testler)
+           VERBOSE=1 python tests/run_tests.py  (hata ayrıntısıyla)
+           BROWSER=webkit python tests/run_tests.py  (Safari motoru; önce: python -m playwright install webkit)
 
 Her test aracı tertemiz bir sayfada açar; tarayıcıda hiçbir şey saklanmadığı için testler birbirini etkilemez.
 Saat 28.09.2026'ya sabitlenir (gelecek/geçmiş taksit ayrımı buna bağlıdır).
