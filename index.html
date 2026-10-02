@@ -648,11 +648,15 @@ document.addEventListener("drop",e=>{
 
 /* ---------- PDF okuma (tamamen cihazda) ---------- */
 const MONTHS=[["Ocak","OCAK","Oca","OCA"],["Şubat","ŞUBAT","SUBAT","Şub","ŞUB","Sub"],["Mart","MART","Mar","MAR"],["Nisan","NİSAN","NISAN","Nis","NİS","NIS"],["Mayıs","MAYIS","Mayis","May","MAY"],["Haziran","HAZİRAN","HAZIRAN","Haz","HAZ"],["Temmuz","TEMMUZ","Tem","TEM"],["Ağustos","AĞUSTOS","AGUSTOS","Ağu","AĞU","Agu","AGU"],["Eylül","EYLÜL","EYLUL","Eyl","EYL"],["Ekim","EKİM","EKIM","Eki","EKİ","EKI"],["Kasım","KASIM","Kasim","Kas","KAS"],["Aralık","ARALIK","Aralik","Ara","ARA"]];
-const MONTH_IDX={}; MONTHS.forEach((v,i)=>v.forEach(n=>MONTH_IDX[n]=i+1));
+/* Ay adları büyük/küçük harf ve Türkçe karakter varyantlarıyla tanınır ("26 Temmuz", "26 TEMMUZ", "26 temmuz") */
+const MONTH_IDX={}; MONTHS.forEach((v,i)=>v.forEach(n=>{for(const x of [n,n.toLocaleLowerCase("tr-TR"),n.toLowerCase()])MONTH_IDX[x]=i+1}));
 const MONTH_ALT=Object.keys(MONTH_IDX).sort((a,b)=>b.length-a.length).join("|");
 /* Tarih: 26.07.2026 / 26/07/26 / 2026-07-26 / 26 Temmuz 2026 */
 const ANY_DATE=new RegExp(`(?<![\\d.,])(?:(\\d{1,2})[./-](\\d{1,2})[./-](\\d{4}|\\d{2})(?![\\d,])|(\\d{1,2})\\s+(${MONTH_ALT})\\.?\\s+(\\d{4})|(\\d{4})-(\\d{2})-(\\d{2}))`,"g");
 const AMT_RE=/([-+]?\s?(?:\d{1,3}(?:\.\d{3})+|\d+),\d{2})(\s?[-+](?!\d))?/g;
+/* Döviz kodu/sembolü: tutarın hemen sonrasında ("25,00 USD") ya da öncesinde ("EUR 40,00") */
+const CCY="USD|EUR|GBP|CHF|JPY|AUD|CAD|SEK|NOK|DKK|RUB|SAR|AED|CNY|PLN|CZK|HUF|RON|BGN";
+const CCY_AFTER=new RegExp(`^\\s*(${CCY}|[$€£])(?![A-Za-z])`), CCY_BEFORE=new RegExp(`(?:^|[^A-Za-z])(${CCY}|[$€£])\\s*$`), CCY_RE_G=new RegExp(`\\b(?:${CCY})\\b|[$€£]`,"g");
 const SKIP_RE=/SON ODEME|KESIM|DONEM BORC|ASGARI|TOPLAM|LIMIT|KULLANILABILIR|ONCEKI DONEM|BAKIYE|HESAP OZETI|EKSTRE|SAYFA \d/;
 function dateFromMatch(m){
   let d,mo,y;
@@ -744,13 +748,19 @@ function findLabel(L,kw){
   return {x0:xAt(L,startOff),x1:xAt(L,e),endOff:e};
 }
 function findStmtDate(lines,rows){
-  const txDates=rows.slice(1).filter(r=>!r[6]).map(r=>toISOfromTR(r[0])).filter(Boolean).sort();
-  const maxTx=txDates.at(-1)||"";
-  const plausible=d=>{
-    if(!maxTx)return true;
-    const diff=(toDate(toISOfromTR(d))-toDate(maxTx))/864e5;
-    return diff>=-5&&diff<=45;
+  /* Aday kesim tarihi, işlem tarihlerinin çoğunu [kesim−60, kesim+2] aralığına almalı. Tek bir satır (ör. vade bilgi cümlesi)
+     sonucu bozmaz; yılsız tarihlerin yılı adaya göre çözülür (Ocak ekstresinde 28/12 → önceki yıl). */
+  const body=rows.slice(1).filter(r=>!r[6]);
+  const fit=d=>{
+    const c=toDate(toISOfromTR(d)); let ok=0,n=0;
+    for(const r of body){
+      let t=toDate(toISOfromTR(r[0])); if(!t||isNaN(t))continue; n++;
+      if(r.ny){t=new Date(c.getFullYear(),t.getMonth(),t.getDate()); if(t>new Date(c.getTime()+2*864e5))t=new Date(c.getFullYear()-1,t.getMonth(),t.getDate())}
+      const diff=(c-t)/864e5; if(diff>=-2&&diff<=60)ok++;
+    }
+    return n?ok/n:1;
   };
+  const plausible=d=>fit(d)>=0.6;
   const cands=[];
   lines.forEach((L,li)=>{
     const key=sq(L.raw);
@@ -826,7 +836,8 @@ async function pdfToRows(buf){
     const byX={};
     items.forEach(it=>{if(it.str.trim().length<=2&&isolated(it)){const k=Math.round(it.transform[4]/3);(byX[k]=byX[k]||[]).push(it)}});
     const drop=new Set();
-    Object.values(byX).forEach(col=>{if(col.length>=4)col.forEach(i=>drop.add(i))});
+    /* Dikey harf yığını en az 4 farklı karakter içerir; "B"/"A" ya da "-" gibi az değerli sütunlar tablo sütunudur, silinmez */
+    Object.values(byX).forEach(col=>{if(col.length>=4&&new Set(col.map(i=>i.str.trim())).size>=4)col.forEach(i=>drop.add(i))});
     items=items.filter(it=>!drop.has(it));
 
     const lines=[];
@@ -852,11 +863,28 @@ async function pdfToRows(buf){
   }
   const rows=linesToRows(allLines);
   pdfStmt=findStmtDate(lineObjs,rows);
+  settleRowsByCutoff(rows,pdfStmt);
   pdfSummary={due:findLabeledAmount(lineObjs,DUE_KW,true),prev:findLabeledAmount(lineObjs,PREV_KW,false)};
   pdfCard=findCard(allLines);
   return rows;
 }
 
+/* Kesim tarihi güvenilir bulunduysa: (1) yılsız tarihlerin yılını "tarih ≤ kesim+3 gün" olacak şekilde çöz (Aralık işlemi Ocak ekstresinde önceki yıl),
+   (2) kesimden 2 günden fazla sonraki tarihli satırları (vade/bilgi cümleleri) işlem sayma. Güvenilir değilse (uyumsuz uyarısı) dokunulmaz. */
+function settleRowsByCutoff(rows,st){
+  if(!st.date||/uyumsuz/.test(st.src))return;
+  const addDays=(d,n)=>iso(new Date(toDate(d).getTime()+n*864e5));
+  const cutY=+st.date.slice(0,4), lim3=addDays(st.date,3), lim2=addDays(st.date,2);
+  rows.forEach((r,i)=>{
+    if(!i||!r.ny)return;
+    const [d,m]=r[0].split(".");
+    r[0]=`${d}.${m}.${`${cutY}-${m}-${d}`>lim3?cutY-1:cutY}`;
+  });
+  for(let i=rows.length-1;i>=1;i--){
+    const di=toISOfromTR(rows[i][0]);
+    if(di&&di>lim2){pdfSkipped.push(rows[i].slice(0,3).join(" "));rows.splice(i,1)}
+  }
+}
 /* Maskeli kart numarasının son 4 hanesi ("5412 34** **** 5678", "**** **** **** 5678"). Ekstrede birden çok geçerse en sık geçen alınır. */
 const CARD_RE=/(?:[*•xX]\s?){4,}(?:[\s-]*[*•xX]+)*[\s-]*(\d{4})(?!\d)/g;
 function findCard(lines){
@@ -893,15 +921,38 @@ function linesToRows(lines){
   const NOYEAR=new RegExp(`^(?:(\\d{1,2})[./](\\d{1,2})|(\\d{1,2})\\s+(${MONTH_ALT})\\.?)(?![\\d.,/]|\\s*\\d{4})`);
   lines.forEach((t,li)=>{
     if(ds.some(d=>d.li===li&&d.i===0))return;
+    if(/^\d{1,2}\s?\/\s?\d{1,2}\s*\.?\s*TAKS[İIiı]T/i.test(t))return;   /* "2/3 Taksit" taksit bilgisidir, tarih değil */
     const m=t.match(NOYEAR); if(!m)return;
     const d=+(m[1]||m[3]), mo=m[2]?+m[2]:MONTH_IDX[m[4]];
-    if(d>=1&&d<=31&&mo>=1&&mo<=12)ds.push({li,i:0,len:m[0].length,date:`${String(d).padStart(2,"0")}.${String(mo).padStart(2,"0")}.${yr}`});
+    if(d>=1&&d<=31&&mo>=1&&mo<=12)ds.push({li,i:0,len:m[0].length,noyear:true,date:`${String(d).padStart(2,"0")}.${String(mo).padStart(2,"0")}.${yr}`});
   });
   ds.sort((a,b)=>a.li-b.li||a.i-b.i);
 
   const consumed=new Set();
-  const cleanDesc=t=>t.replace(/\b(TL|TRY)\b|₺/gi,"").replace(/(^|\s)\d{1,2}\s?\/\s?\d{1,2}(?=\s|$)/g," ").replace(/\s+/g," ").trim();
-  const amountsIn=t=>[...t.matchAll(AMT_RE)].map(m=>{let v=m[1].replace(/\s/g,"");if(m[2]&&m[2].trim()==="-"&&!v.startsWith("-"))v="-"+v;return {v,idx:m.index}});
+  /* Açıklamadan TL/döviz kodu, saat ("14:35"), taksit bilgisi ("2/3", "(2/3)", "Taksit:") atılır */
+  const cleanDesc=t=>t.replace(/\b(TL|TRY)\b|₺/gi,"").replace(CCY_RE_G,"").replace(/\b(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?\b/g,"")
+    .replace(/(^|[\s(])\d{1,2}\s?\/\s?\d{1,2}\)?(?=\s|$)/g," ").replace(/\bTAKS[İI]T\b\s*:?/gi," ").replace(/\s+/g," ").trim();
+  /* Tutarın hemen yanında döviz kodu/sembolü ("25,00 USD", "EUR 40,00") varsa o tutar dövizdir; "fx" işaretlenir.
+     Bir kod önce kendinden önceki tutara aittir ("25,00 USD 1.012,50": USD, 25,00'ındır), ancak o yoksa sonraki tutara. */
+  const amountsIn=t=>{
+    let from=0;
+    return [...t.matchAll(AMT_RE)].map(m=>{
+      let v=m[1].replace(/\s/g,"");if(m[2]&&m[2].trim()==="-"&&!v.startsWith("-"))v="-"+v;
+      const end=m.index+m[0].length;
+      const ca=t.slice(end).match(CCY_AFTER), cb=t.slice(from,m.index).match(CCY_BEFORE), c=ca||cb;
+      from=end+(ca?ca[0].length:0);
+      return {v,idx:m.index,end,fx:!!c,ccy:c?c[1]:""};
+    });
+  };
+  /* Dövizli satırda TL tutarı seç: "döviz × kur ≈ TL" sağlayan tutar, yoksa ilk TL tutar; yalnız dövizliyse tutar yok (satır "okunamayan"a düşer) */
+  const settle=am=>{
+    const fx=am.filter(a=>a.fx), tl=am.filter(a=>!a.fx), num=a=>toNum(a.v.replace(/^[-+]/,""));
+    if(!fx.length)return {vals:am.map(a=>a.v),fx:null};
+    if(!tl.length)return {vals:[],fx:null};
+    let pick=tl[0];
+    if(tl.length>1){const f=num(fx[0]);const hit=tl.find(a=>tl.some(r=>r!==a&&Math.abs(f*num(r)-num(a))<=num(a)*0.02+0.05));if(hit)pick=hit}
+    return {vals:[pick.v,...tl.filter(a=>a!==pick).map(a=>a.v)],fx:`${fx[0].v} ${fx[0].ccy}`};
+  };
 
   for(let k=0;k<ds.length;k++){
     const cur=ds[k], nxt=ds[k+1];
@@ -915,31 +966,36 @@ function linesToRows(lines){
       if(txt)parts.push({li,txt});
       if(nxt&&li===nxt.li)break;
     }
-    const main={desc:[],amts:null,inst:null,lis:[cur.li]};
+    const main={desc:[],amts:null,inst:null,fx:null,lis:[cur.li]};
     const extras=[];
     for(const p of parts){
       const im=p.txt.match(INST_RE);
       const cleaned=im?(p.txt.slice(0,im.index)+" "+p.txt.slice(im.index+im[0].length)).trim():p.txt;
-      const am=amountsIn(cleaned);
-      const rawBefore=am.length?cleaned.slice(0,am[0].idx):cleaned;
+      const am0=amountsIn(cleaned);
+      const rawBefore=am0.length?cleaned.slice(0,am0[0].idx):cleaned;
+      const st=settle(am0);
+      /* Tutardan sonra tek başına "A"/"(A)"/"ALACAK"/"CR": alacak (iade/ödeme) → eksi; "B" (borç) değişmez */
+      const tail=am0.length?cleaned.slice(am0.at(-1).end).trim():"";
+      if(st.vals.length&&/^\(?(?:A|ALACAK|CR)\)?$/i.test(tail)&&!st.vals[0].startsWith("-"))st.vals[0]="-"+st.vals[0].replace(/^\+/,"");
+      const am=st.vals.map(v=>({v}));
       const before=cleanDesc(rawBefore);
       let inst=im?{total:im[1],n:+im[2],m:+im[3]}:null;
       if(!inst){
         /* "TEKNOSA 2/6 1.654,98" veya "Taksit: 2/6" biçimi */
-        const cm=rawBefore.match(/(?:^|\s)(?:TAKS[İI]T\s*:?\s*)?(\d{1,2})\s?\/\s?(\d{1,2})(?:\s*\.?\s*TAKS[İI]T)?(?=\s|$)/i);
+        const cm=rawBefore.match(/(?:^|[\s(])(?:TAKS[İI]T\s*:?\s*)?(\d{1,2})\s?\/\s?(\d{1,2})(?:\s*\.?\s*TAKS[İI]T)?\)?(?=\s|$)/i);
         if(cm&&+cm[1]>=1&&+cm[2]>=2&&+cm[2]<=36&&+cm[1]<=+cm[2])inst={total:null,n:+cm[1],m:+cm[2]};
       }
       if(!main.amts){
         if(before)main.desc.push(before);
         if(inst)main.inst=inst;
-        if(am.length)main.amts=am.map(a=>a.v);
+        if(am.length){main.amts=am.map(a=>a.v);main.fx=st.fx}
         main.lis.push(p.li);
       }else if(inst){
         if(!am.length&&!before&&!main.inst){main.inst=inst;main.lis.push(p.li)}
-        else{extras.push({desc:before,amts:am.map(a=>a.v),inst,li:p.li})}
+        else{extras.push({desc:before,amts:am.map(a=>a.v),inst,fx:st.fx,li:p.li})}
       }
     }
-    const emit=(desc,amts,inst,lis)=>{
+    const emit=(desc,amts,inst,lis,fx)=>{
       desc=desc.replace(/\s+/g," ").trim();
       if(!desc&&inst)desc="Taksitli işlem";
       if(!desc||desc.length>200||(desc.length<45&&SKIP_RE.test(norm(desc))))return;
@@ -954,14 +1010,14 @@ function linesToRows(lines){
         if(best.err<=inst.m*0.05+1)amts=[best.v,...amts.filter(v=>v!==best.v)];
         else if(toNum(amts[0])===T)amts=amts.slice(1);
       }
-      const note=inst?`Taksit ${inst.n}/${inst.m}`+(inst.total?` (toplam ${inst.total} TL)`:""):"";
+      const note=[inst?`Taksit ${inst.n}/${inst.m}`+(inst.total?` (toplam ${inst.total} TL)`:""):"",fx?`Döviz: ${fx}`:""].filter(Boolean).join(" · ");
       const r=[cur.date,desc,...amts.slice(0,3)];
       while(r.length<5)r.push("");
-      r.push(note, inst?`${inst.n}/${inst.m}`:"", inst&&inst.total?inst.total:""); rows.push(r);
+      r.push(note, inst?`${inst.n}/${inst.m}`:"", inst&&inst.total?inst.total:""); if(cur.noyear)r.ny=true; rows.push(r);
       lis.forEach(l=>consumed.add(l));
     };
-    emit(main.desc.join(" "),main.amts,main.inst,main.lis);
-    extras.forEach(e=>emit(e.desc||main.desc.join(" "),e.amts,e.inst,[e.li]));
+    emit(main.desc.join(" "),main.amts,main.inst,main.lis,main.fx);
+    extras.forEach(e=>emit(e.desc||main.desc.join(" "),e.amts,e.inst,[e.li],e.fx));
   }
   pdfMissed=lines.filter((t,li)=>!consumed.has(li)&&amountsIn(t).length&&!SKIP_RE.test(norm(t)));
   /* Kredi kartı özetlerinde harcamalar işaretsiz, ödeme/iadeler "+" ile yazılır.
