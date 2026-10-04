@@ -1188,6 +1188,72 @@ def pdf_saat_kucuk_harfli_ay_ve_taksit_bicimleri(b, info):
     a.close()
 
 
+# ---------------------------------------------------------------- Grafik altındaki listeden düzenleme
+def _liste_app(b):
+    H = _pide_history() + [
+        {"id": "t1", "date": "2026-08-05", "stmt": "2026-08-26", "desc": "ORNEK ELEKTRONIK TR", "amt": 500, "inst": {"n": 1, "m": 3, "total": 1500}},
+        {"id": "r1", "date": "2026-08-06", "stmt": "2026-08-26", "desc": "ORNEK IADE TR", "amt": -100, "kind": "refund"},
+        {"id": "u1", "date": "2026-08-07", "stmt": "2026-08-26", "desc": "ZZQ BILINMEYEN YER TR", "amt": 70},
+        {"id": "u2", "date": "2026-08-21", "stmt": "2026-08-26", "desc": "ZZQ BILINMEYEN YER ANKARA TR", "amt": 30}]
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", H); a.period("2026-08")
+    return a
+
+
+def _ac(a, name):
+    row = a.pg.locator(f"#cats .cat[data-k='{name}'] button.row")
+    if row.get_attribute("aria-expanded") != "true": row.click(); a.pg.wait_for_timeout(120)
+
+
+@test
+def liste_icinden_kategori_duzenleme(b, info):
+    a = _liste_app(b)
+    sel = lambda c: a.pg.locator(f"#cats .cat[data-k='{c}'] .catlist .rowcat select")
+    # kapalıyken hiçbir seçici yok
+    eq(a.ev("document.querySelectorAll('#cats .rowcat').length"), 0, "kapalı listede seçici yok")
+    # 1) Kafe: aynı açıklamalı iki satır birlikte taşınır
+    _ac(a, "Kafe ve restoran"); eq(sel("Kafe ve restoran").count(), 3, "her satırın altında seçici")
+    sel("Kafe ve restoran").nth(0).select_option("Market"); a.pg.wait_for_timeout(200)
+    eq(a.ev("overrides[norm('EGE PIDE SALONU ANKARA TR')]"), "Market", "seçim override olarak yazılmalı")
+    eq(sel("Kafe ve restoran").count(), 1, "taşınan satırlar Kafe listesinden kalkmalı")
+    assert "₺540" in a.text("#cats .cat[data-k='Kafe ve restoran'] button.row") and "₺3.320" in a.text("#cats .cat[data-k='Market'] button.row"), a.text("#cats")
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(200)
+    eq(sel("Kafe ve restoran").count(), 3, "Geri al satırları döndürmeli")
+    # 2) Taksitler: seçici var, satır Taksitler'de kalır, alt kategori değişir
+    _ac(a, "Taksitler"); eq(sel("Taksitler").count(), 1)
+    sel("Taksitler").nth(0).select_option("Market"); a.pg.wait_for_timeout(200)
+    eq(sel("Taksitler").count(), 1, "taksit satırı Taksitler'de kalmalı")
+    eq(a.ev("categorize('ORNEK ELEKTRONIK TR')"), "Market", "alt kategori güncellenmeli")
+    eq(sel("Taksitler").nth(0).input_value(), "Market", "seçici yeni alt kategoriyi göstermeli")
+    # 3) İadeler: seçici yok
+    _ac(a, "İadeler ve indirimler"); eq(sel("İadeler ve indirimler").count(), 0, "iadede seçici olmamalı")
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
+def liste_icinden_diger_icin_kural_onerisi(b, info):
+    a = _liste_app(b)
+    _ac(a, "Diğer")
+    blk = a.pg.locator("#cats .cat[data-k='Diğer'] .catlist")
+    eq(blk.locator(".kwsug").count(), 2, "iki farklı yer, ikisinde de kural önerisi")
+    eq(blk.locator("input[data-kw]").first.input_value(), "ZZQ BİLİNMEYEN", "önerilen anahtar kelime")
+    assert blk.locator("input[data-asrule]").first.is_checked(), "varsayılan işaretli"
+    blk.locator("select").first.select_option("Market"); a.pg.wait_for_timeout(200)
+    assert "ZZQ BİLİNMEYEN" in [l for l in a.ev("$('rules').value").split("\n") if l.startswith("Market:")][0], "kural eklenmeli"
+    eq(a.ev("categorize('ZZQ BILINMEYEN YER ANKARA TR')"), "Market", "aynı yerin diğer işlemi de kategorilenir")
+    eq(a.ev("Object.keys(overrides).filter(k=>/ZZQ/.test(k)).length"), 0, "kural varken override gerekmez")
+    assert a.pg.locator("#cats .cat[data-k='Diğer']").count() == 0, "Diğer boşalınca satır kalkmalı"
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(200)
+    eq(a.ev("categorize('ZZQ BILINMEYEN YER ANKARA TR')"), "Diğer", "Geri al kuralı kaldırmalı")
+    # işaret kaldırılırsa yalnızca bu açıklama için seçim
+    _ac(a, "Diğer"); blk = a.pg.locator("#cats .cat[data-k='Diğer'] .catlist")
+    blk.locator("input[data-asrule]").first.uncheck(); blk.locator("select").first.select_option("Market"); a.pg.wait_for_timeout(200)
+    eq(a.ev("categorize('ZZQ BILINMEYEN YER ANKARA TR')"), "Diğer", "öbür açıklama etkilenmemeli")
+    assert a.ev("Object.keys(overrides).some(k=>/ZZQ BILINMEYEN YER TR/.test(k))"), "override yazılmalı"
+    assert not a.errors, a.errors
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]

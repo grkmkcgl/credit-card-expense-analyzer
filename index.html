@@ -221,6 +221,8 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 .instcal{margin-top:16px}
 .instcal h3{font-size:.95rem;margin:0 0 4px}
 .iend{display:block;color:var(--mustard);font-size:.75rem;margin-top:2px}
+.rowcat{margin-top:3px}
+.rowcat select{font-size:.8rem;padding:2px 6px;min-width:0;width:auto;max-width:100%}
 .kwsug{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin:4px 0 0;font-size:.78rem;color:var(--muted)}
 .kwsug input[type=checkbox]{accent-color:var(--teal)}
 .kwsug input[type=text]{font:inherit;font-size:.78rem;padding:2px 6px;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink);width:auto;max-width:160px}
@@ -247,7 +249,7 @@ html{color-scheme:light}
 *{-webkit-print-color-adjust:exact;print-color-adjust:exact;animation:none!important;transition:none!important}
 body{background:#fff;color:#111;font-size:12px}
 main{max-width:none;padding:0}
-#msg,.toolbar,#saveBar,#toast,.lock,.badge,#how,.intro,.seg,.presets,.txbar,.notebtn,.noteedit,#hist,#unkFold,#rulesFold,#qOut,#q,#qClear,button.x,#exclInfo button,.anom button,input,.kwsug{display:none!important}
+#msg,.toolbar,#saveBar,#toast,.lock,.badge,#how,.intro,.seg,.presets,.txbar,.notebtn,.noteedit,#hist,#unkFold,#rulesFold,#qOut,#q,#qClear,button.x,#exclInfo button,.anom button,input,.kwsug,.catlist select{display:none!important}
 .periodbar select{border:0;background:none;color:#111;font-weight:600;appearance:none;padding:0;width:auto}
 .periodbar label{display:none}
 .hero,.panel,.kpi,.qcard{background:#fff;border-color:#cfd4d2}
@@ -1538,9 +1540,18 @@ function txExtra(t){
   return t.note||null;
 }
 function AnBtn({desc}){return hx`<button class="linkish" data-an=${desc} title="Bu harcamayı analiz et" onClick=${e=>{e.stopPropagation();openAnalysis(desc)}}>${desc}</button>`}
-function TxRow({t}){
+/* Kategori seçici: seçim bu açıklama için override yazar (Diğer = override'ı siler); "Tüm işlemler" ve grafik listesi paylaşır */
+function CatPick({t,catOpts}){
+  const pick=e=>{const v=e.target.value,k=norm(t.desc);undoable(`"${t.desc}" → ${v}`,()=>{if(v==="Diğer")delete overrides[k];else overrides[k]=v})};
+  return hx`<select data-k=${norm(t.desc)} onChange=${pick}>${catOpts.map(c=>hx`<option key=${c} selected=${c===t.sub}>${c}</option>`)}</select>`;
+}
+function TxRow({t,catOpts}){
   const extra=txExtra(t);
-  return hx`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><${AnBtn} desc=${t.desc}/>${extra?hx`<br/><small>${extra}</small>`:null}</td><td class="n">${fmt(t.amt)}</td></tr>`;
+  return hx`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><${AnBtn} desc=${t.desc}/>${extra?hx`<br/><small>${extra}</small>`:null}${catOpts&&!t.est?hx`<div class="rowcat"><${CatPick} t=${t} catOpts=${catOpts}/></div>`:null}</td><td class="n">${fmt(t.amt)}</td></tr>`;
+}
+function groupByDesc(items){
+  const by={}; items.forEach(t=>{const k=norm(t.desc),b=by[k]=by[k]||{desc:t.desc,n:0,sum:0};b.n++;b.sum+=t.amt});
+  return Object.values(by).sort((a,b)=>b.sum-a.sum);
 }
 /* "Tüm işlemler" satırı: kategori seçimi ve silme */
 /* İşlem notu: satır altında not metni (#etiketler vurgulu), ✎ ile satır içi düzenleme; Enter kaydeder, Esc vazgeçer.
@@ -1567,8 +1578,7 @@ function AllRow({t,catOpts}){
     if(!confirm(`Bu işlem silinsin mi?\n\n${t.date?toDate(t.date).toLocaleDateString("tr-TR"):""} · ${t.desc} · ${fmt2(t.amt)}\n\nSilinen işlem aynı ekstreyi tekrar yüklerseniz geri gelir.`))return;
     undoable(`"${t.desc}" silindi`,()=>{history=history.filter(x=>x.id!==t.id);expandInstallments()});
   };
-  const pick=e=>{const v=e.target.value,k=norm(t.desc);undoable(`"${t.desc}" → ${v}`,()=>{if(v==="Diğer")delete overrides[k];else overrides[k]=v})};
-  return hx`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><${AnBtn} desc=${t.desc}/>${extra?hx`<br/><small>${extra}</small>`:null}<${NoteCell} t=${t}/></td><td><select data-k=${norm(t.desc)} onChange=${pick}>${catOpts.map(c=>hx`<option key=${c} selected=${c===t.sub}>${c}</option>`)}</select></td><td class="n">${fmt(t.amt)}</td><td>${t.est?null:hx`<button class="x" data-id=${t.id} title="Bu işlemi sil" onClick=${del}>Sil</button>`}</td></tr>`;
+  return hx`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><${AnBtn} desc=${t.desc}/>${extra?hx`<br/><small>${extra}</small>`:null}<${NoteCell} t=${t}/></td><td><${CatPick} t=${t} catOpts=${catOpts}/></td><td class="n">${fmt(t.amt)}</td><td>${t.est?null:hx`<button class="x" data-id=${t.id} title="Bu işlemi sil" onClick=${del}>Sil</button>`}</td></tr>`;
 }
 /* Liste yeniden çizilirken satırlar eski yerinden yenisine kayar (FLIP); hareket azaltılmışsa atlanır */
 function flipList(el,draw){
@@ -1897,6 +1907,8 @@ function render(){
   
   preact.render(posCats.map(([c,v])=>hx`<span key=${c} style=${`width:${v/gross*100}%;background:${col[c]}`} title=${c}></span>`),$("strip"));
   renderKpis({p,isRange,rf,rt,tx,total,upcoming,posCats,gross,cmp,byCat});
+  const catNames=[...new Set(rules.map(r=>r.cat))];
+  const catOpts=[...new Set([...catNames,"Diğer"])];
   flipList($("cats"),()=>preact.render(cats.map(([c,v])=>{
     const open=openCats.has(c);
     const off=excluded.has(c);
@@ -1911,7 +1923,8 @@ function render(){
         <label class="inc" title=${off?"Toplama dahil et":"Toplamdan çıkar"}><input type="checkbox" data-inc=${c} checked=${!off} aria-label=${c+" toplama dahil"} onChange=${e=>{const on=e.target.checked;undoable(on?`${c} toplama dahil edildi`:`${c} toplamdan çıkarıldı`,()=>on?excluded.delete(c):excluded.add(c))}}/></label>
         <button class="row" data-cat=${c} aria-expanded=${String(open)} onClick=${()=>{openCats.has(c)?openCats.delete(c):openCats.add(c);render()}}><span class="dot" style=${"background:"+col[c]}></span><span class="nm">${c} <small>(${allTx.filter(t=>t.cat===c).length})</small>${cmp&&!off?hx` <${Delta} now=${v} prev=${cmp.prev[c]||0} p=${cmp.prevP}/>`:null}</span><span class="pct">${v>0&&!off?`%${(v/gross*100).toFixed(1)}`:off?"çıkarıldı":""}</span><b class="amt">${fmt(v)}</b><span class="chev" aria-hidden="true">▶</span></button>
       </div>
-      ${open?hx`<div class="catlist">${subs}<table>${items.map((t,n)=>hx`<${TxRow} key=${t.id||n} t=${t}/>`)}</table></div>`:null}
+      ${open?hx`<div class="catlist">${subs}<table>${c==="Diğer"?groupByDesc(items).map(d=>hx`<${UnkRow} key=${norm(d.desc)} d=${d} catNames=${catNames}/>`)
+        :items.map((t,n)=>hx`<${TxRow} key=${t.id||n} t=${t} catOpts=${c==="İadeler ve indirimler"?null:catOpts}/>`)}</table></div>`:null}
     </div>`;
   }),$("cats")));
 
@@ -1933,13 +1946,11 @@ function render(){
   $("recurCount").textContent=rec.length?`(${recActive.length} · aylık ${fmt(recActive.reduce((s,r)=>s+r.med,0))})`:"";
   preact.render(hx`<tbody>${rec.length?rec.map(r=>hx`<${RecurRow} key=${r.key} r=${r}/>`):hx`<tr><td><div class="empty"><small>Henüz düzenli ödeme bulunmadı. En az 3 ekstre dönemi gerekir.</small></div></td></tr>`}</tbody>`,$("recur"));
 
-  const catNames=[...new Set(rules.map(r=>r.cat))];
   $("rulesCount").textContent=`(${catNames.length} kategori)`;
   renderRulesEd();
   const unk=all.filter(d=>d.sub==="Diğer"&&d.sum>0);
   $("unkCount").textContent=unk.length?`(${unk.length})`:"";
   preact.render(hx`<tbody>${unk.length?unk.map(d=>hx`<${UnkRow} key=${norm(d.desc)} d=${d} catNames=${catNames}/>`):hx`<tr><td><div class="empty"><span class="tick" aria-hidden="true">✓</span><small>Hepsi kategorilendi.</small></div></td></tr>`}</tbody>`,$("unk"));
-  const catOpts=[...new Set([...catNames,"Diğer"])];
   const list=txList(tx);
   $("allCount").textContent=list.length===tx.length?`(${tx.length} işlem)`:`(${list.length} / ${tx.length} işlem)`;
   preact.render(hx`<${TagBar} tx=${tx}/>`,$("tagbar"));
