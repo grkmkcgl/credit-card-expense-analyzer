@@ -214,7 +214,12 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 .sortbtn:hover{color:var(--ink);filter:none}
 #alltx th[aria-sort] .sortbtn{color:var(--teal)}
 .anom{background:#241a0a;border:1px solid #5a4418;border-radius:10px;padding:10px 12px;margin:10px 0 0;font-size:.9rem;animation:fadein .3s ease-out}
-.anom>b{color:var(--mustard)}
+.anom>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;border-radius:6px}
+.anom>summary::-webkit-details-marker{display:none}
+.anom>summary b{color:var(--mustard)}
+.anom>summary .chev{color:var(--muted);font-size:.8rem;transition:transform .15s}
+.anom[open]>summary .chev{transform:rotate(90deg)}
+.anom>summary:focus-visible{outline:3px solid var(--mustard);outline-offset:2px}
 .arow{display:flex;gap:10px;align-items:flex-start;padding:8px 0 2px;border-top:1px solid #3a2e14;margin-top:6px}
 .arow>div{flex:1;min-width:0;overflow-wrap:anywhere}
 .aic{color:var(--mustard);font-weight:700;width:14px}
@@ -1651,9 +1656,9 @@ function detectAnomalies(tx){
 function AnomBox({list}){
   if(!list.length)return null;
   const hide=id=>undoable("Uyarı gizlendi",()=>dismissed.add(id));
-  return hx`<div class="anom" role="status"><b>Dikkat edilmesi gereken ${list.length} harcama</b>
+  return hx`<details class="anom" role="status"><summary><b>Dikkat edilmesi gereken ${list.length} harcama</b><span class="chev" aria-hidden="true">▶</span></summary>
     ${list.map(a=>hx`<div class="arow" key=${a.id}><span class="aic" aria-hidden="true">${a.type==="dup"?"⧉":"↑"}</span><div><${AnBtn} desc=${a.t.desc}/> <small>${a.t.date?toDate(a.t.date).toLocaleDateString("tr-TR"):""}</small><br/><small>${a.type==="dup"?`Aynı gün aynı tutarda ${a.n} kez: ${fmt2(a.t.amt)}. Çift çekim olabilir, ekstreyi kontrol edin.`:`${fmt(a.t.amt)}; bu yerdeki ortalamanızın (${fmt(a.avg)}) ${Math.round(a.t.amt/a.avg)} katı.`}</small></div><button class="x" data-dismiss=${a.id} title="Bu uyarıyı bir daha gösterme" onClick=${()=>hide(a.id)}>Gösterme</button></div>`)}
-  </div>`;
+  </details>`;
 }
 /* Gelecek taksit takvimi: henüz özette görünmeyen planlı taksitlerin dönem başına toplamı ve o dönemde biten seriler */
 function InstCal({up}){

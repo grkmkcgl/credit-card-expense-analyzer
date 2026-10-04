@@ -742,11 +742,15 @@ def olagandisi_harcamalar(b, info):
     add("2026-08-12", "KAFE ORNEK TR", 180); add("2026-08-12", "KAFE ORNEK TR", 180)  # çift çekim
     add("2026-08-20", "TEK SEFERLIK ALIS TR", 9000)              # geçmişi yok: uyarı yok
     a = App(b); a.ev("h=>{applyData({history:h});render()}", H); a.period("2026-08")
+    eq(a.ev("document.querySelector('#anom .anom').open"), False, "uyarılar varsayılan kapalı")
+    a.pg.click("#anom summary"); a.pg.wait_for_timeout(100)
+    eq(a.ev("document.querySelector('#anom .anom').open"), True, "başlığa tıklayınca açılmalı")
     t = a.text("#anom")
     assert "2 harcama" in t and "Çift çekim" in t and "ORNEK MARKET" in t and "4 katı" in t, t
     assert "TEK SEFERLIK" not in t, t
     a.pg.click("#anom button[data-dismiss^='D|']"); a.pg.wait_for_timeout(150)
     t = a.text("#anom"); assert "1 harcama" in t and "Çift çekim" not in t, t
+    eq(a.ev("document.querySelector('#anom .anom').open"), True, "yeniden çizimde açık kalmalı")
     data = json.loads(a.ev("snapshot()"))
     eq(len(data["dismissed"]), 1, "gizlenen uyarı dosyaya yazılmalı")
     a.ev("d=>{applyData(d);render()}", data); a.period("2026-08")
