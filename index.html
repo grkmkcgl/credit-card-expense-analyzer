@@ -224,6 +224,20 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 .arow>div{flex:1;min-width:0;overflow-wrap:anywhere}
 .aic{color:var(--mustard);font-weight:700;width:14px}
 .instcal{margin-top:16px}
+.trends{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.trend{background:var(--field);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:.9rem}
+.thead{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.tbars{display:flex;align-items:flex-end;gap:2px;height:48px}
+.tbars span{flex:1;min-width:0;border-radius:2px 2px 0 0}
+.tbars span.on{outline:2px solid var(--mustard);outline-offset:1px}
+.tfoot{display:flex;justify-content:space-between;color:var(--muted);margin:2px 0 6px;font-size:.75rem}
+.yearsum .kpis{max-width:none;margin:10px 0}
+.yearsum h3{margin:16px 0 6px}
+.ybar{display:flex;align-items:center;gap:8px}
+.ybar select{width:auto}
+.ycats .dot{display:inline-block;vertical-align:-1px;margin-right:4px}
+.ycats th{text-align:left;font-weight:400;color:var(--muted);border-bottom:1px solid var(--line);padding:4px}
+.ycats th.n{text-align:right}
 .instcal h3{font-size:.95rem;margin:0 0 4px}
 .iend{display:block;color:var(--mustard);font-size:.75rem;margin-top:2px}
 .rowcat{margin-top:3px}
@@ -259,7 +273,8 @@ main{max-width:none;padding:0}
 .periodbar label{display:none}
 .hero,.panel,.kpi,.qcard{background:#fff;border-color:#cfd4d2}
 .scroll{max-height:none!important;overflow:visible!important;border:0;padding:0}
-.fold,.hero,.cat,tr,.instcal{break-inside:avoid}
+.fold,.hero,.cat,tr,.instcal,.trend{break-inside:avoid}
+.ybar select{border:0;background:none;color:#111;font-weight:600;appearance:none;padding:0;width:auto}
 h2{break-after:avoid}
 .dot{outline:1px solid #888}
 #alltx th{position:static;background:#fff}
@@ -435,6 +450,15 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <p style="margin:0 0 6px"><small id="monthsNote" class="err"></small></p>
 <div id="months"></div>
 <div id="instCal"></div>
+</details>
+
+<details class="fold" id="trendFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategori trendleri <small id="trendCount"></small></h2></summary>
+<p><small>Her kategorinin son 12 ekstre dönemi. Her kart kendi ölçeğindedir; tutarı görmek için çubuğun üzerine gelin. Bir dönem seçiliyse grafik o dönemde biter ve o dönem vurgulanır.</small></p>
+<div id="trends"></div>
+</details>
+
+<details class="fold" id="yearFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Yıllık özet <small id="yearCount"></small></h2></summary>
+<div id="yearSum"></div>
 </details>
 
 <details class="fold" id="allFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Tüm işlemler <small id="allCount"></small></h2></summary>
@@ -1609,9 +1633,9 @@ const tagsOf=n=>(String(n).match(/#[\p{L}\p{N}_-]+/gu)||[]).map(x=>x.toLocaleLow
 let editNote=null;   /* düzenlenen işlemin id'si (yalnızca bellekte) */
 const catOfTx=t=>t.kind==="refund"?"İadeler ve indirimler":t.inst?"Taksitler":categorize(t.desc);
 /* Önceki döneme göre değişim rozeti: artış kırmızı, azalış teal; %5'ten küçük değişim gösterilmez */
-function Delta({now,prev,p}){
+function Delta({now,prev,p,label}){
   if(now<=0&&prev<=0)return null;
-  const tip=`${periodLabel(p,true)}: ${fmt(prev)}`;
+  const tip=`${label||periodLabel(p,true)}: ${fmt(prev)}`;
   if(prev<=0)return hx`<span class="delta up" title=${tip}>yeni</span>`;
   const d=Math.round((now-prev)/prev*100);
   if(Math.abs(d)<5)return null;
@@ -1659,6 +1683,77 @@ function AnomBox({list}){
   return hx`<details class="anom" role="status"><summary><b>Dikkat edilmesi gereken ${list.length} harcama</b><span class="chev" aria-hidden="true">▶</span></summary>
     ${list.map(a=>hx`<div class="arow" key=${a.id}><span class="aic" aria-hidden="true">${a.type==="dup"?"⧉":"↑"}</span><div><${AnBtn} desc=${a.t.desc}/> <small>${a.t.date?toDate(a.t.date).toLocaleDateString("tr-TR"):""}</small><br/><small>${a.type==="dup"?`Aynı gün aynı tutarda ${a.n} kez: ${fmt2(a.t.amt)}. Çift çekim olabilir, ekstreyi kontrol edin.`:`${fmt(a.t.amt)}; bu yerdeki ortalamanızın (${fmt(a.avg)}) ${Math.round(a.t.amt/a.avg)} katı.`}</small></div><button class="x" data-dismiss=${a.id} title="Bu uyarıyı bir daha gösterme" onClick=${()=>hide(a.id)}>Gösterme</button></div>`)}
   </details>`;
+}
+/* Kategori trendleri: her kategori için son 12 dönemin küçük çubuk grafiği (kart kendi ölçeğinde).
+   Pencere verideki dönemlerden oluşur ve bugünün dönemi ya da seçili dönemde biter. */
+function trendData(spend,p){
+  const end=p&&p!=="range"?p:iso(new Date()).slice(0,7);
+  const ks=[...new Set(spend.map(periodKey))].filter(k=>k&&k<=end).sort().slice(-12);
+  const by={}; spend.forEach(t=>{const k=periodKey(t);if(!ks.includes(k))return;const c=catOfTx(t);if(c==="İadeler ve indirimler"||excluded.has(c))return;(by[c]=by[c]||{})[k]=(by[c][k]||0)+t.amt});
+  const cats=Object.entries(by).map(([c,v])=>({c,vals:ks.map(k=>v[k]||0)})).map(x=>({...x,sum:x.vals.reduce((s,v)=>s+v,0)})).filter(x=>x.sum>0).sort((a,b)=>b.sum-a.sum);
+  return {ks,cats};
+}
+function Trends({data,colorOf,p}){
+  const {ks,cats}=data;
+  if(!cats.length)return hx`<div class="empty"><small>Henüz trend çizecek kadar veri yok.</small></div>`;
+  return hx`<div class="trends">${cats.map(({c,vals,sum})=>{
+    const mx=Math.max(...vals,1), avg=sum/ks.length, last=vals.at(-1), d=avg>0?Math.round((last-avg)/avg*100):0;
+    return hx`<div class="trend" key=${c} data-k=${c}>
+      <div class="thead"><span class="dot" style=${"background:"+colorOf(c)}></span><b>${c}</b></div>
+      <div class="tbars" aria-hidden="true">${vals.map((v,i)=>hx`<span key=${ks[i]} class=${ks[i]===p?"on":""} title=${`${periodLabel(ks[i],true)}: ${fmt(v)}`} style=${`height:${Math.max(v>0?3:1,v/mx*100)}%;background:${v>0?colorOf(c):"var(--line)"}`}></span>`)}</div>
+      <div class="tfoot"><small>${periodLabel(ks[0],true)}</small><small>${periodLabel(ks.at(-1),true)}</small></div>
+      <small>Toplam <b>${fmt(sum)}</b> · dönem ortalaması <b>${fmt(avg)}</b></small><br/>
+      <small>Son dönem ${fmt(last)}${Math.abs(d)>=5?hx`, <span class=${"delta "+(d>0?"up":"down")}>ortalamanın %${Math.abs(d)} ${d>0?"üstünde":"altında"}</span>`:", ortalama civarında"}</small>
+    </div>`})}</div>`;
+}
+/* Yıllık özet: yıl = ekstre döneminin yılı. Henüz özette görünmeyen gelecek taksitler sayılmaz; toplamdan çıkarılan
+   kategoriler düşülür. Geçen yılla karşılaştırma yalnız iki yılda da bulunan aylar üzerinden yapılır (yarım yıl adil olsun). */
+let yearSel="";
+function yearsOf(spend){return [...new Set(spend.map(t=>periodKey(t).slice(0,4)).filter(Boolean))].sort().reverse()}
+function YearSummary({spend,years,colorOf}){
+  if(!years.length)return null;
+  const y=years.includes(yearSel)?yearSel:years[0], py=String(+y-1);
+  const inY=yr=>spend.filter(t=>periodKey(t).slice(0,4)===yr);
+  const all=inY(y), tx=all.filter(t=>!excluded.has(catOfTx(t))), prevTx=inY(py).filter(t=>!excluded.has(catOfTx(t)));
+  const sum=l=>l.reduce((s,t)=>s+t.amt,0), total=sum(tx);
+  const byP={}; tx.forEach(t=>{const k=periodKey(t);byP[k]=(byP[k]||0)+t.amt});
+  const ps=Object.keys(byP).sort(), n=ps.length;
+  const prevByP={}; prevTx.forEach(t=>{const k=periodKey(t);prevByP[k]=(prevByP[k]||0)+t.amt});
+  const common=ps.filter(k=>(py+k.slice(4)) in prevByP);
+  const buys=tx.filter(t=>t.amt>0&&t.kind!=="refund");
+  const big=buys.reduce((m,t)=>!m||t.amt>m.amt?t:m,null);
+  const hi=ps.reduce((m,k)=>m==null||byP[k]>byP[m]?k:m,null), lo=ps.reduce((m,k)=>m==null||byP[k]<byP[m]?k:m,null);
+  const fees=sum(all.filter(t=>categorize(t.desc)==="Faiz ve ücretler"&&t.amt>0)), inst=sum(tx.filter(t=>t.inst)), refunds=-sum(tx.filter(t=>t.kind==="refund"));
+  const cards=[{label:`${y} toplamı`,value:fmt(total),sub:`${n} dönem · ${buys.length} harcama`},
+    {label:"Dönem başına ortalama",value:fmt(n?total/n:0),sub:`${n} dönem`}];
+  if(n>1)cards.push({label:"En yüksek dönem",value:fmt(byP[hi]),sub:periodLabel(hi,true)},{label:"En düşük dönem",value:fmt(byP[lo]),sub:periodLabel(lo,true)});
+  if(common.length){
+    const now=common.reduce((s,k)=>s+byP[k],0), was=common.reduce((s,k)=>s+prevByP[py+k.slice(4)],0), d=was>0?Math.round((now-was)/was*100):0;
+    cards.push({label:`${py} yılının aynı dönemleri`,value:fmt(was),sub:hx`${y}: ${fmt(now)}${was>0&&Math.abs(d)>=1?hx` <span class=${"delta "+(d>0?"up":"down")}>${d>0?"▲":"▼"} %${Math.abs(d)}</span>`:null}<br/>${common.length} dönem karşılaştırıldı`});
+  }
+  if(big)cards.push({label:"En büyük harcama",value:fmt(big.amt),sub:big.desc});
+  if(fees>0)cards.push({label:"Ödenen faiz ve ücretler",value:fmt(fees),sub:"Faiz, BSMV/KKDF, kart ücreti",cls:"bad"});
+  if(inst>0)cards.push({label:"Taksit ödemeleri",value:fmt(inst),sub:"bu yılın ekstrelerinde"});
+  if(refunds>0)cards.push({label:"İadeler ve indirimler",value:fmt(refunds),sub:"toplamdan düşüldü"});
+  const byC={}, prevC={}; tx.forEach(t=>{const c=catOfTx(t);if(c!=="İadeler ve indirimler")byC[c]=(byC[c]||0)+t.amt});
+  prevTx.forEach(t=>{const c=catOfTx(t);prevC[c]=(prevC[c]||0)+t.amt});
+  const pn=new Set(prevTx.map(periodKey)).size, gross=Object.values(byC).filter(v=>v>0).reduce((s,v)=>s+v,0)||1;
+  const cats=Object.entries(byC).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const byM={}; buys.forEach(t=>{const k=merchantKey(t.desc),b=byM[k]=byM[k]||{sum:0,n:0,names:{}};b.sum+=t.amt;b.n++;b.names[t.desc]=(b.names[t.desc]||0)+1});
+  const top=Object.values(byM).sort((a,b)=>b.sum-a.sum).slice(0,5).map(b=>({...b,desc:Object.entries(b.names).sort((x,z)=>z[1]-x[1])[0][0]}));
+  const exNow=[...excluded].filter(c=>all.some(t=>catOfTx(t)===c));
+  return hx`<div class="yearsum">
+    <div class="ybar"><label for="yearSel">Yıl</label><select id="yearSel" onChange=${e=>{yearSel=e.target.value;render()}}>${years.map(v=>hx`<option key=${v} value=${v} selected=${v===y}>${v}</option>`)}</select></div>
+    ${exNow.length?hx`<p><small class="err">Çıkarılan kategoriler (${exNow.join(", ")}) bu özete dahil değil.</small></p>`:null}
+    <div class="kpis">${cards.map(c=>hx`<${KpiCard} key=${c.label} ...${c}/>`)}</div>
+    <h3>Kategoriler</h3>
+    <div class="scroll"><table class="ycats"><thead><tr><th>Kategori</th><th class="n">Toplam</th><th class="n">Pay</th><th class="n">Dönem başına</th></tr></thead>
+    <tbody>${cats.map(([c,v])=>hx`<tr key=${c} data-k=${c}><td><span class="dot" style=${"background:"+colorOf(c)}></span>${c}</td><td class="n">${fmt(v)}</td><td class="n"><small>%${(v/gross*100).toFixed(1)}</small></td>
+      <td class="n">${fmt(v/n)}${pn?hx` <${Delta} now=${v/n} prev=${(prevC[c]||0)/pn} label=${`${py} dönem başına`}/>`:null}</td></tr>`)}</tbody></table></div>
+    ${pn?hx`<p><small>Değişim rozeti, dönem başına tutarı ${py} yılının dönem başına tutarıyla karşılaştırır.</small></p>`:null}
+    <h3>En çok harcanan yerler</h3>
+    <table class="top ytop"><tbody>${top.map(b=>hx`<tr key=${b.desc}><td><${AnBtn} desc=${b.desc}/><br/><small>${b.n} işlem</small></td><td class="n"><b>${fmt(b.sum)}</b></td></tr>`)}</tbody></table>
+  </div>`;
 }
 /* Gelecek taksit takvimi: henüz özette görünmeyen planlı taksitlerin dönem başına toplamı ve o dönemde biten seriler */
 function InstCal({up}){
@@ -1933,6 +2028,13 @@ function render(){
     </div>`;
   }),$("cats")));
 
+  const pastTx=spend.filter(t=>!isUpcoming(t));
+  const td=trendData(pastTx,isRange?"":p);
+  $("trendCount").textContent=td.cats.length?`(${td.cats.length} kategori)`:"";
+  preact.render(hx`<${Trends} data=${td} colorOf=${colorOf} p=${isRange?"":p}/>`,$("trends"));
+  const years=yearsOf(pastTx);
+  $("yearCount").textContent=years.length?`(${years.length} yıl)`:"";
+  preact.render(hx`<${YearSummary} spend=${pastTx} years=${years} colorOf=${colorOf}/>`,$("yearSum"));
   const catOf=t=>t.kind==="refund"?"İadeler ve indirimler":t.inst?"Taksitler":categorize(t.desc);
   const byM={}; spend.forEach(t=>{const k=periodKey(t);if(!k||excluded.has(catOf(t)))return;byM[k]=(byM[k]||0)+t.amt});
   $("monthsNote").textContent=excluded.size?`Çıkarılan kategoriler (${[...excluded].join(", ")}) grafiğe dahil değil.`:"";
@@ -1968,7 +2070,7 @@ function render(){
   const keys=[...new Set(history.filter(t=>t.kind!=="payment").map(t=>merchantKey(t.desc)))].sort();
   $("qList").innerHTML=keys.slice(0,400).map(k=>`<option value="${esc(k)}">`).join("");
   renderQuery();
-  document.querySelectorAll("[data-an]:not(#cats [data-an],#top [data-an],#alltx [data-an],#recur [data-an],#anom [data-an])").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();openAnalysis(b.dataset.an)}));
+  document.querySelectorAll("[data-an]:not(#cats [data-an],#top [data-an],#alltx [data-an],#recur [data-an],#anom [data-an],#yearSum [data-an])").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();openAnalysis(b.dataset.an)}));
 }
 
 $("run").addEventListener("click",()=>{
