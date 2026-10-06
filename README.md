@@ -41,6 +41,11 @@ Files are never uploaded anywhere; parsing and calculations run in the browser, 
 - Olağandışı harcama uyarıları: çift çekim şüphesi, bir yerin ortalamasının çok üstündeki harcama
 - Yer bazında harcama analizi; birden fazla kart varsa karta göre süzme
 
+**Birikim ve bütçe** (ayrı sekme)
+- Sabit aylık gelir (maaş) ve sabit giderler (kira, aidat); zam/kira artışı o aydan itibaren geçerli olur, geçmiş aylar değişmez
+- Her ay için gelir − sabit giderler − o ayın ekstresi = kalan; aylara göre tablo, gelecek aylar planlı taksitlerle tahmini; kartla ödenen sabit gider iki kez düşülmez
+- TL, dolar, euro, gram/çeyrek altın birikimleri; kurlar elle girilir (internete bağlanılmaz), toplam TL karşılığı ve birikimin kaç aylık gidere yettiği
+
 **Kategoriler**
 - Otomatik kategori; kuralları kartlar ve anahtar kelime çipleriyle düzenleme, "Kural dene"
 - Kategorisiz yerler için tek tıkla kural önerisi; kategoriyi toplamdan çıkarma
