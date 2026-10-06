@@ -1258,6 +1258,86 @@ def liste_icinden_diger_icin_kural_onerisi(b, info):
     a.close()
 
 
+# ---------------------------------------------------------------- yıllık özet ve kategori trendleri
+def _yil_app(b):
+    """2025-07…2025-12 ve 2026-01…2026-09 dönemleri; iki kart (Kafe 2026 satırları 5678'de)."""
+    H, i = [], 0
+    def add(m, desc, amt, card="1234", **kw):
+        nonlocal i; H.append({"id": f"y{i}", "date": m + "-10", "stmt": m + "-26", "desc": desc, "amt": amt, "card": card, **kw}); i += 1
+    for m in ["2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12"]:
+        add(m, "MİGROS ANKARA TR", 1000)
+    for m in ["2025-07", "2025-08", "2025-09"]:
+        add(m, "ORNEK KAFE TR", 200)
+    for k in range(1, 10):
+        add(f"2026-{k:02d}", "MİGROS ANKARA TR", 1500)
+    for m in ["2026-07", "2026-08", "2026-09"]:
+        add(m, "ORNEK KAFE TR", 300, card="5678")
+    add("2026-03", "FAIZ TUTARI", 120); add("2026-03", "BSMV", 18)
+    add("2026-05", "ORNEK ELEKTRONIK TEKNOSA", 6000)
+    add("2026-06", "ORNEK IADE TR", -250, kind="refund")
+    add("2026-09", "ORNEK MOBILYA IKEA", 400, inst={"n": 1, "m": 2, "total": 800})   # 2/2 gelecekte: sayılmaz
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", H)
+    return a
+
+
+@test
+def yillik_ozet(b, info):
+    a = _yil_app(b)
+    eq(a.ev("$('yearFold').open"), False, "varsayılan kapalı")
+    eq(a.text("#yearCount"), "(2 yıl)", "başlıkta yıl sayısı")
+    a.pg.click("#yearFold > summary"); a.pg.wait_for_timeout(100)
+    eq(a.ev("document.querySelector('#yearSum select').value"), "2026", "varsayılan son yıl")
+    t = a.text("#yearSum")
+    for s in ["₺20.688", "9 dönem", "₺2.299", "₺7.500", "₺1.250", "ORNEK ELEKTRONIK TEKNOSA", "₺6.000", "₺138", "₺400", "₺250", "₺5.800", "▲ %61"]:
+        assert s in t, f"{s!r} yıllık özette yok:\n{t}"
+    eq(a.total(), "₺27.288", "tüm zamanlar = 2025 (6.600) + 2026 (20.688)")
+    # kategori tablosu: Market dönem başına 1.500, geçen yıl 1.000 → ▲ %50; Kafe dönem başına aynı (100) → rozet yok
+    rows = a.pg.locator("#yearSum tr[data-k='Market']")
+    eq(rows.count(), 1, "Market satırı")
+    rt = rows.inner_text(); assert "₺13.500" in rt and "▲ %50" in rt, rt
+    assert "▲" not in a.pg.locator("#yearSum tr[data-k='Kafe ve restoran']").inner_text()
+    eq(a.pg.locator("#yearSum tr[data-k='İadeler ve indirimler']").count(), 0, "iadeler kategori tablosunda değil")
+    # en çok harcanan yerler: 5 yer, ilki MİGROS; tıklayınca analiz bir kez açılır
+    eq(a.pg.locator("#yearSum .ytop [data-an]").count(), 5, "5 yer")
+    a.ev("()=>{window.__an=0;const o=openAnalysis;window.openAnalysis=d=>{window.__an++;o(d)}}")
+    a.pg.locator("#yearSum .ytop [data-an]").first.click(); a.pg.wait_for_timeout(150)
+    eq(a.ev("window.__an"), 1, "analiz tek sefer açılmalı"); eq(a.ev("$('q').value"), "migros", "analiz MİGROS için")
+    # yıl değişince
+    a.pg.select_option("#yearSum select", "2025"); a.pg.wait_for_timeout(100)
+    t = a.text("#yearSum"); assert "₺6.600" in t and "6 dönem" in t and "₺1.100" in t, t
+    assert "aynı dönemleri" not in t, "önceki yıl yoksa karşılaştırma yok"
+    eq(a.ev("$('yearFold').open"), True, "yeniden çizimde açık kalmalı")
+    # kategori çıkarma ve kart süzgeci
+    a.pg.select_option("#yearSum select", "2026"); a.ev("()=>{excluded.add('Elektronik');render()}")
+    t = a.text("#yearSum"); assert "₺14.688" in t and "Elektronik" in t and "dahil değil" in t, t
+    a.ev("()=>{excluded.clear();render()}")
+    a.pg.select_option("#cardSel", "5678"); a.pg.wait_for_timeout(100)
+    assert "₺900" in a.text("#yearSum"), a.text("#yearSum")
+    a.close()
+
+
+@test
+def kategori_trendleri(b, info):
+    a = _yil_app(b)
+    eq(a.ev("$('trendFold').open"), False, "varsayılan kapalı")
+    eq(a.text("#trendCount"), "(5 kategori)", "başlıkta kategori sayısı")
+    a.pg.click("#trendFold > summary"); a.pg.wait_for_timeout(100)
+    eq(a.ev("[...document.querySelectorAll('#trends .trend')].map(e=>e.dataset.k)"),
+       ["Market", "Elektronik", "Kafe ve restoran", "Taksitler", "Faiz ve ücretler"], "pencere toplamına göre sıra, iadeler yok")
+    m = "#trends .trend[data-k='Market']"
+    eq(a.pg.locator(m + " .tbars span").count(), 12, "son 12 dönem")
+    eq(a.pg.locator("#trends .trend[data-k='Kafe ve restoran'] .tbars span").count(), 12, "boş dönemler de çubuk")
+    mt = a.text(m); assert "₺16.500" in mt and "₺1.375" in mt and "%9" in mt, mt
+    assert "₺1.500" in a.ev(f"document.querySelector(\"{m} .tbars span:last-child\").title")
+    a.period("2026-05")
+    eq(a.pg.locator(m + " .tbars span").count(), 11, "pencere seçili dönemde biter")
+    assert a.ev(f"document.querySelector(\"{m} .tbars span:last-child\").classList.contains('on')"), "seçili dönem vurgulu"
+    a.ev("()=>{excluded.add('Elektronik');render()}")
+    eq(a.pg.locator("#trends .trend[data-k='Elektronik']").count(), 0, "çıkarılan kategori yok")
+    eq(a.ev("$('trendFold').open"), True, "yeniden çizimde açık kalmalı")
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]

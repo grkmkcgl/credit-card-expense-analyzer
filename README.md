@@ -34,6 +34,8 @@ Files are never uploaded anywhere; parsing and calculations run in the browser, 
 **Analiz**
 - Toplam ve özet kartları; çubuk ve pasta grafik; tüm zamanlar, tek ekstre ya da tarih aralığı
 - Önceki ekstreye göre kategori değişimi (▲/▼) ve "en çok artan" kategori
+- Kategori trendleri: her kategorinin son 12 dönemi küçük grafiklerle, ortalamaya göre son dönem
+- Yıllık özet: yıl toplamı, dönem ortalaması, en yüksek/düşük dönem, ödenen faiz ve ücretler, geçen yılın aynı dönemleriyle karşılaştırma, kategori tablosu ve en çok harcanan yerler
 - Taksit takibi: geçmiş ve gelecek taksitler seriden hesaplanır; gelecek aylar için taksit takvimi
 - Düzenli ödemeler (abonelikler, faturalar): aylık/yıllık tutar, "tutar arttı", "son 2 dönemde yok"
 - Olağandışı harcama uyarıları: çift çekim şüphesi, bir yerin ortalamasının çok üstündeki harcama
