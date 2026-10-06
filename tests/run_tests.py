@@ -1459,6 +1459,82 @@ def birikim_ekstresiz_telefonda(b, info):
     a.close()
 
 
+# ---------------------------------------------------------------- Vadesiz hesap özeti (Birikim sekmesi)
+SUGS = "bView.bank.sugs.map(s=>[s.type,s.kind,s.name,s.amts.at(-1).v,s.amts[0].from,s.on])"
+BEKLENEN = [["new", "income", "Maaş", 45000, "2026-07", True], ["new", "expense", "Kira", 15000, "2026-07", True],
+            ["new", "expense", "Aidat", 750, "2026-07", True]]
+
+
+def _bank(a, name):
+    a.ev("bView.bank=null")
+    a.pg.set_input_files("#bankFile", f(name))
+    a.pg.wait_for_function("bView.bank&&!bView.bank.busy", timeout=20000)
+    a.pg.wait_for_timeout(100)
+
+
+@test
+def hesap_ozeti_duzenli_kalemleri_onerir(b, info):
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    hist = a.ev("JSON.stringify(history)")
+    _bank(a, "hesap_isaretli.pdf")
+    eq(a.ev(SUGS), BEKLENEN, "öneriler: maaş, kira, aidat; kart ödemesi ve tek seferlikler yok")
+    t = a.text("#bankInfo"); assert "17 hareket" in t and "3 kredi kartı ödemesi (₺24.650) atlandı" in t and "kaydedilmedi" in t, t
+    eq(a.ev("budget.items.length"), 0, "Ekle'den önce bütçe değişmez")
+    a.pg.uncheck("[data-sug='expense|SITE YONETIMI AIDAT'] [data-on]")
+    a.pg.fill("[data-sug='expense|AYSE ORNEKOGLU KIRA'] [data-name]", "Ev kirası")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.map(i=>[i.kind,i.name,i.amts,i.src])"),
+       [["income", "Maaş", [{"from": "2026-07", "v": 45000}], "MAAS ORNEK YAZILIM"],
+        ["expense", "Ev kirası", [{"from": "2026-07", "v": 15000}], "AYSE ORNEKOGLU KIRA"]], "seçilenler eklendi")
+    eq(a.text("#bLeft"), "₺27.350", "Eylül: 45.000 − 15.000 − 2.650")
+    eq(a.ev("JSON.stringify(history)"), hist, "kart geçmişine hesap hareketi girmez")
+    snap = a.ev("snapshot()")
+    assert "KREDI KARTI ODEMESI" not in snap and "HAVALE GELEN" not in snap, "hesap hareketleri dosyaya yazılmaz"
+    assert "Hesap özetinden 2 kalem" in a.text("#bankMsg") or "2 kalem" in a.text("#bankMsg")
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.length"), 0, "geri al")
+    # tekrar: hepsini ekle, sonra aynı özet yeni öneri getirmez
+    _bank(a, "hesap_isaretli.pdf"); a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.length"), 3)
+    _bank(a, "hesap_isaretli.pdf")
+    eq(a.ev("bView.bank.sugs.length"), 0, "kayıtlı kalemler tekrar önerilmez")
+    assert "bulunamadı" in a.text("#bankPrev")
+    a.pg.click("#bankCancel"); a.pg.wait_for_timeout(100)
+    eq(a.pg.locator("#bankPrev").count(), 0)
+    eq(a.ev("localStorage.length+sessionStorage.length"), 0)
+    a.close()
+
+
+@test
+def hesap_ozeti_isaret_bakiyeden_ve_csv(b, info):
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    for name in ["hesap_bakiye.pdf", "hesap_borc_alacak.csv"]:
+        _bank(a, name)
+        eq(a.ev(SUGS), BEKLENEN, f"{name}: öneriler")
+        eq(a.ev("[bView.bank.n,bView.bank.unk,bView.bank.cardN]"), [17, 0, 3], f"{name}: tüm satırların yönü bulundu")
+    a.pg.click("#bankCancel"); a.pg.wait_for_timeout(100)
+    eq(a.ev("budget.items.length"), 0, "vazgeçince bir şey değişmez")
+    assert "değişmedi" in a.text("#bankMsg")
+    a.close()
+
+
+@test
+def hesap_ozeti_tutar_degisikligi(b, info):
+    a = _butce_app(b)   # Maaş, Kira 15.000, Aidat 750 kayıtlı
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    _bank(a, "hesap_zam.pdf")
+    eq(a.ev("bView.bank.sugs.map(s=>[s.type,s.name,s.itemName,s.from,s.amts.at(-1).v,s.cur])"),
+       [["change", "Kira", "Kira", "2026-09", 17500, 15000]], "yalnızca kira tutarı değişti")
+    assert "Kayıtlı ₺15.000" in a.text("#bankPrev")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.find(i=>i.id==='e1').amts"), [{"from": "2026-01", "v": 15000}, {"from": "2026-09", "v": 17500}], "Eylül'den yeni tutar")
+    eq(a.text("#bLeft"), "₺24.850", "Eylül kalanı"); assert "₺23.500" in _row(a, "2026-07"), "Temmuz değişmez"
+    _bank(a, "hesap_zam.pdf"); eq(a.ev("bView.bank.sugs.length"), 0, "artık güncel")
+    a.close()
+
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]

@@ -268,7 +268,7 @@ html{color-scheme:light}
 *{-webkit-print-color-adjust:exact;print-color-adjust:exact;animation:none!important;transition:none!important}
 body{background:#fff;color:#111;font-size:12px}
 main{max-width:none;padding:0}
-#msg,.toolbar,#saveBar,#toast,.lock,.badge,#how,#tabs,.bform,.bchk,.intro,.seg,.presets,.txbar,.notebtn,.noteedit,#hist,#unkFold,#rulesFold,#qOut,#q,#qClear,button.x,#exclInfo button,.anom button,input,.kwsug,.catlist select{display:none!important}
+#msg,.toolbar,#saveBar,#toast,.lock,.badge,#how,#tabs,#bankBox,.bform,.bchk,.intro,.seg,.presets,.txbar,.notebtn,.noteedit,#hist,#unkFold,#rulesFold,#qOut,#q,#qClear,button.x,#exclInfo button,.anom button,input,.kwsug,.catlist select{display:none!important}
 .periodbar select{border:0;background:none;color:#111;font-weight:600;appearance:none;padding:0;width:auto}
 .periodbar label{display:none}
 .hero,.panel,.kpi,.qcard{background:#fff;border-color:#cfd4d2}
@@ -361,12 +361,21 @@ body:not(.tab-budget) #budget{display:none}
 .aqty input{width:100px!important;padding:5px 8px!important;text-align:right}
 .aqty small{margin-left:4px}
 .pqty{display:none}
+.bankbox{margin:0 0 14px}
+.bankbox h3{font-size:.95rem;margin:14px 0 4px}
+.bankbox label.btn{margin:10px 0 0}
+.bsug{display:grid;grid-template-columns:24px 1fr 130px;gap:8px;align-items:start;padding:8px 0;border-top:1px solid var(--line)}
+.bsug .bchk{padding:6px 0 0}
+.bsugm{min-width:0;overflow-wrap:anywhere}
+.bsugm input{margin-bottom:2px}
+.bsug input[data-amt]{text-align:right}
 @media (max-width:640px){
 .bbar{flex-direction:column;align-items:stretch;gap:4px}
 .bbar select{max-width:none}
 .btable{font-size:.8rem}
 .aqty{width:110px}
 .aqty input{width:72px!important}
+.bsug{grid-template-columns:24px 1fr 92px}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 </style>
@@ -902,7 +911,9 @@ const toNum=v=>parseFloat(String(v).replace(/\./g,"").replace(",","."));
 const toTR=n=>n.toLocaleString("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2});
 
 let lastPw="", currentFileName="";   /* şifre sadece bu oturumda bellekte tutulur, hiçbir yere kaydedilmez */
-async function pdfToRows(buf){
+/* bank=true: vadesiz hesap özeti. Kart özetine özel düzeltmeler ("+" tutarı ödeme sayma, kesim tarihine göre satır atma)
+   yapılmaz, "Devreden bakiye" satırı bakiye çapası olarak kalır. */
+async function pdfToRows(buf,bank){
   const task=pdfjsLib.getDocument({data:new Uint8Array(buf),isEvalSupported:false});
   let triedLast=false;
   task.onPassword=(update,reason)=>{
@@ -954,9 +965,9 @@ async function pdfToRows(buf){
       if(t)allLines.push(t);
     }
   }
-  const rows=linesToRows(allLines);
+  const rows=linesToRows(allLines,bank);
   pdfStmt=findStmtDate(lineObjs,rows);
-  settleRowsByCutoff(rows,pdfStmt);
+  if(!bank)settleRowsByCutoff(rows,pdfStmt);
   pdfSummary={due:findLabeledAmount(lineObjs,DUE_KW,true),prev:findLabeledAmount(lineObjs,PREV_KW,false)};
   pdfCard=findCard(allLines);
   return rows;
@@ -1003,7 +1014,7 @@ function dropNonTxSections(lines){
     return t;
   });
 }
-function linesToRows(lines){
+function linesToRows(lines,bank){
   lines=dropNonTxSections(lines);
   const rows=[["Tarih","Açıklama","Tutar 1","Tutar 2","Tutar 3","Not","Taksit","Taksit toplamı"]];
   /* Tarihleri bul: (satır, konum, uzunluk, tarih) */
@@ -1091,7 +1102,7 @@ function linesToRows(lines){
     const emit=(desc,amts,inst,lis,fx)=>{
       desc=desc.replace(/\s+/g," ").trim();
       if(!desc&&inst)desc="Taksitli işlem";
-      if(!desc||desc.length>200||(desc.length<45&&SKIP_RE.test(norm(desc))))return;
+      if(!desc||desc.length>200||(desc.length<45&&SKIP_RE.test(norm(desc))&&!(bank&&OPEN_RE.test(norm(desc)))))return;
       if(!amts||!amts.length){
         if(!inst||!inst.total)return;
         amts=[toTR(Math.round(toNum(inst.total)/inst.m*100)/100)];
@@ -1117,7 +1128,7 @@ function linesToRows(lines){
      İşaretsiz tutarlar çoğunluktaysa "+" olanları ödeme (eksi) olarak işaretle. */
   const body=rows.slice(1);
   const plus=body.filter(r=>/^\+/.test(r[2])).length, unsigned=body.filter(r=>/^\d/.test(r[2])).length;
-  if(plus&&unsigned>=plus){
+  if(!bank&&plus&&unsigned>=plus){
     body.forEach(r=>{if(/^\+/.test(r[2])){r[2]="-"+r[2].slice(1);r[5]=(r[5]?r[5]+" · ":"")+"Ödeme/iade (+)"}});
   }
   return rows;
@@ -1877,7 +1888,7 @@ document.addEventListener("keydown",e=>{
    değiştirmez. Bir ayın kalanı = gelir − kart dışı sabit giderler − o ayın ekstresi (periodKey). Kartla ödenen sabit gider (card)
    ekstrede zaten olduğu için ayrıca düşülmez. Kurlar elle girilir; internetten hiçbir şey alınmaz. */
 let tab="spend";   /* açık sekme (yalnızca bellekte) */
-const bView={month:"",open:new Set(),add:{income:{name:"",amt:"",from:""},expense:{name:"",amt:"",from:"",card:false}},asset:{name:"",type:"TRY",qty:""},msg:null};
+const bView={month:"",open:new Set(),add:{income:{name:"",amt:"",from:""},expense:{name:"",amt:"",from:"",card:false}},asset:{name:"",type:"TRY",qty:""},msg:null,bank:null,bankMsg:""};
 const ASSET_TYPES={TRY:{l:"TL",u:"₺"},USD:{l:"Dolar",u:"$"},EUR:{l:"Euro",u:"€"},GAU:{l:"Gram altın",u:"gr"},CEYREK:{l:"Çeyrek altın",u:"adet"}};
 const isMonth=s=>/^\d{4}-\d{2}$/.test(s||"");
 let uidN=0; const uid=()=>Date.now().toString(36)+"-"+(uidN++).toString(36);
@@ -1886,7 +1897,7 @@ function normBudget(b){
   const num=v=>isFinite(+v)?+v:0;
   const items=(Array.isArray(b.items)?b.items:[]).filter(i=>i&&(i.kind==="income"||i.kind==="expense")).map(i=>({id:String(i.id||uid()),kind:i.kind,name:String(i.name||"").trim()||"(adsız)",
     amts:(Array.isArray(i.amts)?i.amts:[]).filter(a=>a&&isMonth(a.from)).map(a=>({from:a.from,v:num(a.v)})).sort((x,y)=>x.from.localeCompare(y.from)),
-    to:isMonth(i.to)?i.to:"",card:i.kind==="expense"&&!!i.card})).filter(i=>i.amts.length);
+    to:isMonth(i.to)?i.to:"",card:i.kind==="expense"&&!!i.card,...(typeof i.src==="string"&&i.src?{src:i.src}:{})})).filter(i=>i.amts.length);
   const assets=(Array.isArray(b.assets)?b.assets:[]).filter(a=>a&&ASSET_TYPES[a.type]).map(a=>({id:String(a.id||uid()),name:String(a.name||"").trim()||ASSET_TYPES[a.type].l,type:a.type,qty:num(a.qty),upd:typeof a.upd==="string"?a.upd:""}));
   const rates={}; for(const k of Object.keys(ASSET_TYPES)){const r=b.rates&&b.rates[k];if(k!=="TRY"&&r&&num(r.v)>0)rates[k]={v:num(r.v),date:typeof r.date==="string"?r.date:""}}
   return {items,assets,rates};
@@ -2031,6 +2042,183 @@ function AssetsBox({total,vals}){
     ${msg("asset")}
   </div>`;
 }
+/* ---------- Vadesiz hesap özetinden sabit gelir/gider bulma ----------
+   Hesap hareketleri yalnızca öneri için okunur, dosyaya yazılmaz ve kart geçmişine (history) girmez. Satırlar {date, desc, amt}
+   (gelen +, giden −). İşaretsiz özetlerde yön bakiye farkından çıkarılır. Kart ödemeleri ekstrede zaten olduğu için atlanır. */
+const OPEN_RE=/DEVREDEN|ACILIS BAKIYE|ONCEKI BAKIYE|GECEN BAKIYE/;
+const CARDPAY_RE=/KREDI KARTI|KREDI KART|KART ODEME|KARTI ODEME|KK ODEME|KARTA ODEME/;
+const FIXED_KW=/(^|[^A-Z])(KIRA|AIDAT|MAAS|UCRET|KREDI TAKSIT)/;
+const BANK_NOISE=new Set(["EFT","HAVALE","FAST","GIDEN","GELEN","REF","NO","ACIKLAMA","ISLEM","IBAN","TR","HESAP","HESABA","HESAPTAN","OTOMATIK","ODEME","ODEMESI","TALIMAT","TALIMATI","VIRMAN","TL","AS","A.S","LTD","STI"]);
+let monthWords; const isMonthWord=w=>(monthWords||(monthWords=new Set(Object.keys(MONTH_IDX).map(norm)))).has(w);
+/* Karşı taraf anahtarı: rakam içeren sözcükler (referans, tarih, hesap no), ay adları ve EFT/HAVALE gibi sözcükler atılır */
+function bankKey(desc){
+  const w=norm(desc).replace(/[^A-Z0-9 ]/g," ").split(" ").filter(x=>x.length>1&&!/\d/.test(x)&&!BANK_NOISE.has(x)&&!isMonthWord(x));
+  return (w.length?w:norm(desc).split(" ")).slice(0,3).join(" ");
+}
+function bankName(key,desc){
+  const d=norm(desc);
+  if(/(^|[^A-Z])KIRA([^A-Z]|$)/.test(d))return "Kira";
+  if(d.includes("AIDAT"))return "Aidat";
+  if(/MAAS|UCRET/.test(d))return "Maaş";
+  if(/KREDI (TAKSIT|ODEME|GERI)/.test(d))return "Kredi taksiti";
+  return key.toLocaleLowerCase("tr-TR").replace(/(^|\s)\S/g,c=>c.toLocaleUpperCase("tr-TR"));
+}
+/* Excel/CSV: tarih, açıklama ve ya tek "Tutar" sütunu ya da ayrı Borç/Alacak sütunları; Bakiye tutar sayılmaz */
+function bankRowsFromTable(tab){
+  const h=tab.findIndex(r=>{const t=norm(r.join(" "));return t.includes("TARIH")&&/TUTAR|ACIKLAMA|ISLEM|BORC|ALACAK/.test(t)});
+  if(h<0)throw new Error("empty");
+  const head=tab[h].map(c=>norm(c)), col=f=>head.findIndex(f);
+  const cd=col(c=>c.includes("TARIH")), cb=col(c=>c.includes("BAKIYE")), cBo=col(c=>c.includes("BORC")&&!c.includes("BAKIYE")), cAl=col(c=>c.includes("ALACAK")),
+    ca=col(c=>c.includes("TUTAR")&&!c.includes("BAKIYE")), cs=col(c=>/ACIKLAMA|DETAY|ISLEM|KARSI/.test(c)&&!c.includes("TARIH")&&!c.includes("TUTAR"));
+  if(cd<0||cs<0||(ca<0&&cBo<0&&cAl<0))throw new Error("empty");
+  const num=v=>{const x=parseAmount(v);return isFinite(x)?x:null};
+  const rows=[];
+  for(const r of tab.slice(h+1)){
+    const dt=parseDate(r[cd]); if(!dt||isNaN(dt))continue;
+    const desc=String(r[cs]??"").trim(), bal=cb>=0?num(r[cb]):null;
+    if(OPEN_RE.test(norm(desc))){rows.push({date:iso(dt),desc,open:true,bal});continue}
+    let v;
+    if(ca>=0)v=num(r[ca]); else v=(num(r[cAl])||0)-(num(r[cBo])||0);
+    if(!v)continue;
+    rows.push({date:iso(dt),desc,a:Math.abs(v),v,bal});
+  }
+  /* Tek tutar sütununda hiç eksi yoksa yön bilinmiyor (bakiyeden çıkarılır) */
+  const signed=ca<0||rows.some(r=>r.v<0);
+  rows.forEach(r=>{if(!r.open)r.s=signed?Math.sign(r.v):0});
+  return rows;
+}
+/* PDF: pdfToRows(…, true) satırları; ilk tutar işlem, ikincisi bakiye */
+function bankRowsFromPdf(t){
+  const body=t.slice(1), signed=body.some(r=>/^-/.test(r[2]));
+  const n=x=>x?toNum(x.replace(/^[-+]/,""))*(/^-/.test(x)?-1:1):null;
+  return body.map(r=>{
+    const date=toISOfromTR(r[0]), am=[r[2],r[3],r[4]].filter(Boolean);
+    if(OPEN_RE.test(norm(r[1])))return {date,desc:r[1],open:true,bal:am.length?n(am.at(-1)):null};
+    const a1=am[0]||"";
+    return {date,desc:r[1],a:Math.abs(n(a1)||0),bal:am.length>1?n(am[1]):null,s:/^-/.test(a1)?-1:/^\+/.test(a1)?1:signed?1:0};
+  }).filter(r=>r.date);
+}
+/* İşaretsiz satırların yönü: bakiye bir öncekine göre tutar kadar arttıysa gelen, azaldıysa giden.
+   Özet eskiden yeniye ya da yeniden eskiye sıralı olabilir; daha çok satırın tuttuğu yön seçilir. */
+function signFromBalance(rows){
+  if(rows.some(r=>!r.open&&!r.s)){
+    const fit=(i,j)=>{const a=rows[i],b=rows[j];if(!b||a.open||a.bal==null||b.bal==null)return 0;const d=a.bal-b.bal;return Math.abs(Math.abs(d)-a.a)<0.01?Math.sign(d):0};
+    let fw=0,bw=0; rows.forEach((r,i)=>{if(fit(i,i-1))fw++;if(fit(i,i+1))bw++});
+    rows.forEach((r,i)=>{if(!r.open&&!r.s)r.s=fit(i,bw>fw?i+1:i-1)});
+  }
+  return {rows:rows.filter(r=>!r.open&&r.s&&r.a>0).map(r=>({date:r.date,desc:r.desc,amt:r.s*r.a})),unk:rows.filter(r=>!r.open&&!r.s&&r.a>0).length};
+}
+async function readBankFile(f){
+  await window.libsReady; currentFileName=f.name;
+  const buf=await f.arrayBuffer();
+  if(/\.pdf$/i.test(f.name)){
+    /* kart özeti akışının bellekteki önizleme bilgileri bozulmasın */
+    const keep=[pdfMissed,pdfStmt,pdfSummary,pdfCard];
+    try{const t=await pdfToRows(buf,true);if(t.length<2)throw new Error("empty");return signFromBalance(bankRowsFromPdf(t))}
+    finally{[pdfMissed,pdfStmt,pdfSummary,pdfCard]=keep}
+  }
+  /* CSV: metni kendimiz çözeriz (UTF-8, değilse Windows-1254) ve hücreleri ham bırakırız; yoksa "45.000,00" 45, "01.07.2026" 7 Ocak okunur */
+  let wb;
+  if(/\.csv$/i.test(f.name)){
+    let text; try{text=new TextDecoder("utf-8",{fatal:true}).decode(buf)}catch(e){text=new TextDecoder("windows-1254").decode(buf)}
+    wb=XLSX.read(text.replace(/^\uFEFF/,""),{type:"string",raw:true});
+  }else wb=XLSX.read(buf,{type:"array",cellDates:false});
+  return signFromBalance(bankRowsFromTable(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:""})));
+}
+function detectFixedFromBank(rows){
+  let cardSum=0,cardN=0;
+  const g={};
+  for(const r of rows){
+    const d=norm(r.desc);
+    if(r.amt<0&&CARDPAY_RE.test(d)){cardSum-=r.amt;cardN++;continue}
+    if(Math.abs(r.amt)<100)continue;
+    const kind=r.amt>0?"income":"expense", key=bankKey(r.desc), m=r.date.slice(0,7), x=g[kind+"|"+key]=g[kind+"|"+key]||{kind,key,desc:r.desc,per:{}};
+    x.per[m]=(x.per[m]||0)+Math.abs(r.amt);
+  }
+  const sugs=[];
+  for(const x of Object.values(g)){
+    const ms=Object.keys(x.per).sort(), vs=ms.map(k=>Math.round(x.per[k]*100)/100), med=[...vs].sort((a,b)=>a-b)[Math.floor(vs.length/2)];
+    const regular=ms.length>=2&&vs.filter(v=>Math.abs(v-med)<=med*.15).length>=Math.max(2,ms.length*.6);
+    if(!regular&&!FIXED_KW.test(norm(x.desc)))continue;
+    /* Tutar geçmişi: değer %1'den fazla değişince o aydan yeni tutar (kira artışı, zam) */
+    const amts=[]; ms.forEach((k,i)=>{const last=amts.at(-1);if(!last||Math.abs(vs[i]-last.v)>last.v*.01)amts.push({from:k,v:vs[i]})});
+    const s={kind:x.kind,key:x.key,name:bankName(x.key,x.desc),desc:x.desc,months:ms,amts,regular,on:regular,amt:fmtNum(amts.at(-1).v)};
+    const it=budget.items.find(i=>i.kind===s.kind&&(i.src===s.key||norm(i.name)===norm(s.name)));
+    if(it){
+      const last=amts.at(-1), cur=amtAt(it,ms.at(-1));
+      if(Math.abs(cur-last.v)<=Math.max(1,last.v*.01))continue;   /* kayıtlı ve tutar aynı */
+      Object.assign(s,{type:"change",item:it.id,itemName:it.name,from:last.from,cur});
+    }else s.type="new";
+    sugs.push(s);
+  }
+  const ord={income:0,expense:1};
+  return {sugs:sugs.sort((a,b)=>(a.type==="change")-(b.type==="change")||ord[a.kind]-ord[b.kind]||b.amts.at(-1).v-a.amts.at(-1).v),cardSum,cardN};
+}
+async function readBankFiles(files){
+  if(!files.length)return;
+  bView.bank={busy:true}; bView.bankMsg=""; renderBudget();
+  const all=[], errs=[]; let unk=0;
+  for(const f of files){
+    try{
+      const r=await readBankFile(f); unk+=r.unk;
+      /* Çakışan dönemli özetler: aynı satır (tarih+açıklama+tutar) bir dosyada kaç kez varsa o kadar sayılır */
+      const cnt={}; r.rows.forEach(x=>{const k=`${x.date}|${norm(x.desc)}|${x.amt}`;cnt[k]=(cnt[k]||0)+1;all.push({k,n:cnt[k],x})});
+    }catch(e){errs.push(`${f.name}: ${fileErr(e)}`)}
+  }
+  const seen=new Set(), rows=all.filter(({k,n})=>{const id=k+"#"+n;if(seen.has(id))return false;seen.add(id);return true}).map(o=>o.x);
+  const det=detectFixedFromBank(rows), ms=[...new Set(rows.map(r=>r.date.slice(0,7)))].sort();
+  bView.bank={...det,n:rows.length,unk,errs,files:files.map(f=>f.name),ms};
+  renderBudget();
+}
+function applyBank(){
+  const B=bView.bank, sel=B.sugs.filter(s=>s.on);
+  if(!sel.length){bView.bank=null;bView.bankMsg="Hiçbir öneri seçilmedi, hiçbir şey değişmedi.";renderBudget();return}
+  bView.bank=null; bView.bankMsg=`Hesap özetinden ${sel.length} kalem eklendi/güncellendi. Hesap hareketleri kaydedilmedi.`;
+  undoable(`Hesap özetinden ${sel.length} kalem`,()=>{
+    for(const s of sel){
+      const v=parseMoney(s.amt), last=s.amts.at(-1);
+      if(s.type==="change"){
+        const it=budget.items.find(i=>i.id===s.item); if(!it)continue;
+        const nv=v>0?v:last.v, a=it.amts.find(x=>x.from===s.from);
+        if(a)a.v=nv; else{it.amts.push({from:s.from,v:nv});it.amts.sort((x,y)=>x.from.localeCompare(y.from))}
+        it.src=s.key; continue;
+      }
+      /* Tutar elle değiştirildiyse tek tutar: ilk görüldüğü aydan bu yana */
+      const amts=v>0&&Math.abs(v-last.v)>0.005?[{from:s.amts[0].from,v}]:s.amts.map(a=>({...a}));
+      budget.items.push({id:uid(),kind:s.kind,name:s.name.trim()||bankName(s.key,s.desc),amts,to:"",card:false,src:s.key});
+    }
+  });
+}
+function BankSug({s}){
+  const ml=s.months.map(k=>periodLabel(k,true)).join(", ");
+  return hx`<div class="bsug" data-sug=${s.kind+"|"+s.key}>
+    <label class="bchk"><input type="checkbox" data-on checked=${s.on} aria-label=${s.name+" ekle"} onChange=${e=>{s.on=e.target.checked}}/></label>
+    <div class="bsugm">${s.type==="change"?hx`<b>${s.itemName}</b><br/>`:hx`<input type="text" data-name value=${s.name} aria-label="Ad" onInput=${e=>{s.name=e.target.value}}/>`}
+      <small>${s.type==="change"?`Kayıtlı ${fmt(s.cur)}, hesapta ${monthName(s.from)} ve sonrası farklı · `:""}${s.months.length} ayda: ${ml}${s.amts.length>1&&s.type!=="change"?` · tutar değişmiş (${s.amts.map(a=>fmt(a.v)).join(" → ")})`:""}${s.regular?"":" · tek ay, kontrol edin"}<br/>${s.desc}</small></div>
+    <input type="text" inputmode="decimal" data-amt value=${s.amt} aria-label="Aylık tutar" onInput=${e=>{s.amt=e.target.value}}/>
+  </div>`;
+}
+function BankImport(){
+  const B=bView.bank;
+  const group=(title,list)=>list.length?hx`<h3>${title} (${list.length})</h3>${list.map(s=>hx`<${BankSug} key=${s.kind+"|"+s.key} s=${s}/>`)}`:null;
+  return hx`<div class="panel bankbox" id="bankBox">
+    <b>Hesap özetinden bul</b><br/>
+    <small>Vadesiz hesap özetinizi (PDF, Excel ya da CSV; birden çok ayı aynı anda seçebilirsiniz) yükleyin; düzenli gelen ve giden paralar (maaş, kira, aidat) önerilir. Hareketler kaydedilmez, yalnızca onayladıklarınız sabit gelir/gider olarak eklenir. Kredi kartı ödemeleri ekstrede zaten olduğu için atlanır.</small><br/>
+    <label class="btn ghost">Hesap özeti seç<input type="file" id="bankFile" accept=".pdf,.xlsx,.xls,.csv" multiple style="display:none" onChange=${e=>{const fs=[...e.target.files];e.target.value="";readBankFiles(fs)}}/></label>
+    ${bView.bankMsg?hx`<p class="rmsg ok" id="bankMsg">${bView.bankMsg}</p>`:null}
+    ${B&&B.busy?hx`<p><small>Okunuyor…</small></p>`:null}
+    ${B&&!B.busy?hx`<div id="bankPrev">
+      <p class="rmsg" id="bankInfo"><small>${B.files.join(", ")}: ${B.n} hareket okundu${B.ms.length?` (${periodLabel(B.ms[0],true)} – ${periodLabel(B.ms.at(-1),true)})`:""}${B.cardN?` · ${B.cardN} kredi kartı ödemesi (${fmt(B.cardSum)}) atlandı`:""}${B.unk?` · ${B.unk} satırın yönü belirlenemedi`:""} · hareketler kaydedilmedi.</small></p>
+      ${B.errs.map(e=>hx`<p class="rmsg err" key=${e}>${e}</p>`)}
+      ${B.sugs.length?hx`<p><small>İstemediklerinizin işaretini kaldırın; adı ve tutarı değiştirebilirsiniz. "Ekle"ye basana kadar hiçbir şey değişmez.</small></p>
+        ${group("Düzenli gelirler",B.sugs.filter(s=>s.type==="new"&&s.kind==="income"))}
+        ${group("Düzenli giderler",B.sugs.filter(s=>s.type==="new"&&s.kind==="expense"))}
+        ${group("Tutarı değişenler",B.sugs.filter(s=>s.type==="change"))}
+        <button id="bankApply" onClick=${applyBank}>Ekle</button> <button class="ghost" id="bankCancel" onClick=${()=>{bView.bank=null;bView.bankMsg="Vazgeçildi, hiçbir şey değişmedi.";renderBudget()}}>Vazgeç</button>`
+      :hx`<p class="empty"><small>Yeni düzenli gelir ya da gider bulunamadı${budget.items.length?"; kayıtlı kalemleriniz güncel":""}.</small></p><button class="ghost" id="bankCancel" onClick=${()=>{bView.bank=null;renderBudget()}}>Kapat</button>`}
+    </div>`:null}
+  </div>`;
+}
 function BudgetTab(){
   const now=iso(new Date()).slice(0,7), months=budgetMonths();
   if(!months.includes(bView.month))bView.month=defaultBudgetMonth();
@@ -2071,6 +2259,7 @@ function BudgetTab(){
     <p><small>* tahmini: kart harcamasında yalnızca planlanan taksitler var. "–": o ay için ekstre yok. Satıra tıklayınca o ay seçilir. Sabit sütunu kartla ödenen sabit giderleri içermez (ekstrede zaten var).</small></p>
 
     <h2>Sabit gelirler</h2>
+    <${BankImport}/>
     <p><small>Her ay düzenli gelen para. Zam olunca kaleme tıklayıp "Tutarı değiştir" deyin; önceki aylar eski tutarla kalır.</small></p>
     <${FixedList} kind="income" m=${m} bm=${bm}/>
     <h2>Sabit giderler</h2>

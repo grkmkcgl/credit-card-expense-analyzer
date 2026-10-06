@@ -341,6 +341,55 @@ def encrypted_and_broken():
         f.write("bu bir pdf değil")
 
 
+# 10) Vadesiz hesap özetleri (Birikim sekmesi "Hesap özetinden bul"): her ay maaş, kira, aidat ve kart ödemesi + tek seferlikler
+def bank_rows(sep_rent=15000):
+    kart = {7: 8000, 8: 9250, 9: 7400}
+    R = []
+    for m in (7, 8, 9):
+        R += [(f"01.{m:02d}.2026", "MAAS ODEMESI ORNEK YAZILIM AS", 45000),
+              (f"03.{m:02d}.2026", f"EFT GIDEN 4821{m} AYSE ORNEKOGLU KIRA", -(sep_rent if m == 9 else 15000)),
+              (f"05.{m:02d}.2026", f"SITE YONETIMI AIDAT 2026/{m}", -750),
+              (f"10.{m:02d}.2026", "KREDI KARTI ODEMESI 5512 1234", -kart[m])]
+    R += [("12.07.2026", "ORNEK MARKET ANKARA", -320.5), ("15.08.2026", "FAST GIDEN 77123 MEHMET ORNEK", -5000),
+          ("20.08.2026", "HAVALE GELEN ORNEK KISI", 2500), ("18.09.2026", "ATM PARA CEKME", -1000), ("22.09.2026", "ORNEK KAFE", -85)]
+    R.sort(key=lambda r: (r[0][6:], r[0][3:5], r[0][:2]))
+    bal, out = 20000.0, []
+    for d, desc, a in R:
+        bal += a
+        out.append((d, desc, a, bal))
+    return out
+
+
+def bank_pdf(name, rows, signed=True, newest_first=False):
+    c = canvas.Canvas(p(name), pagesize=(700, 842)); c.setFont("D", 8)
+    c.drawString(40, 810, "VADESİZ TL HESAP ÖZETİ   ORNEK BANK A.Ş.   Hesap No 1234567")
+    c.drawString(40, 796, "Dönem 01.07.2026 - 30.09.2026")
+    c.drawString(40, 770, "Tarih"); c.drawString(120, 770, "Açıklama"); c.drawRightString(500, 770, "Tutar"); c.drawRightString(620, 770, "Bakiye")
+    lines = [("30.06.2026", "DEVREDEN BAKİYE", None, 20000.0)] + rows
+    if newest_first:
+        lines = lines[::-1]
+    y = 752
+    for d, desc, a, bal in lines:
+        c.drawString(40, y, d); c.drawString(120, y, desc)
+        if a is not None:
+            c.drawRightString(500, y, ("-" if a < 0 and signed else "") + tr(abs(a)))
+        c.drawRightString(620, y, tr(bal))
+        y -= 14
+    c.save()
+
+
+def bank_statements():
+    rows = bank_rows()
+    bank_pdf("hesap_isaretli.pdf", rows)
+    bank_pdf("hesap_bakiye.pdf", rows, signed=False, newest_first=True)
+    bank_pdf("hesap_zam.pdf", bank_rows(sep_rent=17500))
+    q = lambda v: '"' + tr(v) + '"' if v else ""
+    with open(p("hesap_borc_alacak.csv"), "w", encoding="utf-8") as f:
+        f.write("İşlem Tarihi,Açıklama,Borç,Alacak,Bakiye\n")
+        for d, desc, a, bal in rows:
+            f.write(f"{d},{desc},{q(-a) if a < 0 else ''},{q(a) if a > 0 else ''},{q(bal)}\n")
+
+
 def build_all():
     info = {"big": big()}
     installments_and_vertical()
@@ -354,6 +403,7 @@ def build_all():
     month_end_drift()
     pdf_edge_cases()
     encrypted_and_broken()
+    bank_statements()
     return info
 
 

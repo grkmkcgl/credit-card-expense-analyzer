@@ -44,6 +44,7 @@ Files are never uploaded anywhere; parsing and calculations run in the browser, 
 **Birikim ve bütçe** (ayrı sekme)
 - Sabit aylık gelir (maaş) ve sabit giderler (kira, aidat); zam/kira artışı o aydan itibaren geçerli olur, geçmiş aylar değişmez
 - Her ay için gelir − sabit giderler − o ayın ekstresi = kalan; aylara göre tablo, gelecek aylar planlı taksitlerle tahmini; kartla ödenen sabit gider iki kez düşülmez
+- Vadesiz hesap özetinden (PDF, Excel, CSV) düzenli gelir ve giderleri (maaş, kira, aidat) bulma; öneriler onaylanınca eklenir, hesap hareketleri kaydedilmez, kart ödemeleri atlanır, kira artışı tutar değişikliği olarak önerilir
 - TL, dolar, euro, gram/çeyrek altın birikimleri; kurlar elle girilir (internete bağlanılmaz), toplam TL karşılığı ve birikimin kaç aylık gidere yettiği
 
 **Kategoriler**
