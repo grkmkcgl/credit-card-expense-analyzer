@@ -347,8 +347,10 @@ def bank_rows(sep_rent=15000):
     R = []
     for m in (7, 8, 9):
         R += [(f"01.{m:02d}.2026", "MAAS ODEMESI ORNEK YAZILIM AS", 45000),
-              (f"03.{m:02d}.2026", f"EFT GIDEN 4821{m} AYSE ORNEKOGLU KIRA", -(sep_rent if m == 9 else 15000)),
+              # banka açıklamayı aydan aya farklı yazar: Eylül'de "EYLUL KIRASI", BES'te sözcük sırası değişir
+              (f"03.{m:02d}.2026", f"EFT GIDEN 4821{m} AYSE ORNEKOGLU " + ("EYLUL KIRASI" if m == 9 else "KIRA"), -(sep_rent if m == 9 else 15000)),
               (f"05.{m:02d}.2026", f"SITE YONETIMI AIDAT 2026/{m}", -750),
+              (f"07.{m:02d}.2026", "DIGER DIGER BES ODEMESI 1234" if m == 7 else "FATURA ODEMESI DIGER BES 5678", -1500),
               (f"10.{m:02d}.2026", "KREDI KARTI ODEMESI 5512 1234", -kart[m])]
     R += [("12.07.2026", "ORNEK MARKET ANKARA", -320.5), ("15.08.2026", "FAST GIDEN 77123 MEHMET ORNEK", -5000),
           ("20.08.2026", "HAVALE GELEN ORNEK KISI", 2500), ("18.09.2026", "ATM PARA CEKME", -1000), ("22.09.2026", "ORNEK KAFE", -85)]

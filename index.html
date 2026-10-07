@@ -2047,21 +2047,28 @@ function AssetsBox({total,vals}){
    (gelen +, giden −). İşaretsiz özetlerde yön bakiye farkından çıkarılır. Kart ödemeleri ekstrede zaten olduğu için atlanır. */
 const OPEN_RE=/DEVREDEN|ACILIS BAKIYE|ONCEKI BAKIYE|GECEN BAKIYE/;
 const CARDPAY_RE=/KREDI KARTI|KREDI KART|KART ODEME|KARTI ODEME|KK ODEME|KARTA ODEME/;
-const FIXED_KW=/(^|[^A-Z])(KIRA|AIDAT|MAAS|UCRET|KREDI TAKSIT)/;
-const BANK_NOISE=new Set(["EFT","HAVALE","FAST","GIDEN","GELEN","REF","NO","ACIKLAMA","ISLEM","IBAN","TR","HESAP","HESABA","HESAPTAN","OTOMATIK","ODEME","ODEMESI","TALIMAT","TALIMATI","VIRMAN","TL","AS","A.S","LTD","STI"]);
+const FIXED_KW=/(^|[^A-Z])(KIRA|AIDAT|MAAS|UCRET|KREDI TAKSIT|BES([^A-Z]|$))/;
+const BANK_NOISE=new Set(["EFT","HAVALE","FAST","GIDEN","GELEN","REF","NO","ACIKLAMA","ISLEM","IBAN","TR","HESAP","HESABA","HESAPTAN","OTOMATIK","ODEME","ODEMESI","TALIMAT","TALIMATI","VIRMAN","TL","AS","A.S","LTD","STI",
+  "DIGER","FATURA","FATURASI","KURUM","TAHSILAT","TAHSILATI","ISLEMI","NOLU","ABONE"]);
 let monthWords; const isMonthWord=w=>(monthWords||(monthWords=new Set(Object.keys(MONTH_IDX).map(norm)))).has(w);
-/* Karşı taraf anahtarı: rakam içeren sözcükler (referans, tarih, hesap no), ay adları ve EFT/HAVALE gibi sözcükler atılır */
-function bankKey(desc){
+/* Karşı tarafın ayırt edici sözcükleri (açıklamadaki sırayla, tekrarsız): rakam içerenler (referans, tarih, hesap no),
+   ay adları ve EFT/HAVALE/FATURA/DİĞER gibi sözcükler atılır. Banka aynı ödemeyi aydan aya farklı sırayla yazabilir
+   ("DİĞER DİĞER BES ÖDEMESİ" / "FATURA ÖDEMESİ DİĞER BES"); anahtar bu yüzden sıradan bağımsızdır. */
+function bankTokens(desc){
   const w=norm(desc).replace(/[^A-Z0-9 ]/g," ").split(" ").filter(x=>x.length>1&&!/\d/.test(x)&&!BANK_NOISE.has(x)&&!isMonthWord(x));
-  return (w.length?w:norm(desc).split(" ")).slice(0,3).join(" ");
+  return [...new Set(w.length?w:norm(desc).split(" ").filter(Boolean))];
 }
-function bankName(key,desc){
+const bankKey=desc=>[...bankTokens(desc)].sort().join(" ");
+/* İki sözcük kümesi aynı karşı taraf mı: ortak sözcükler küçük kümenin en az %60'ı */
+function tokOverlap(a,b){const B=new Set(b), n=a.filter(x=>B.has(x)).length;return {n,r:n/Math.max(1,Math.min(a.length,b.length))}}
+function bankName(desc){
   const d=norm(desc);
-  if(/(^|[^A-Z])KIRA([^A-Z]|$)/.test(d))return "Kira";
+  if(/(^|[^A-Z])KIRA(SI)?([^A-Z]|$)/.test(d))return "Kira";
   if(d.includes("AIDAT"))return "Aidat";
   if(/MAAS|UCRET/.test(d))return "Maaş";
   if(/KREDI (TAKSIT|ODEME|GERI)/.test(d))return "Kredi taksiti";
-  return key.toLocaleLowerCase("tr-TR").replace(/(^|\s)\S/g,c=>c.toLocaleUpperCase("tr-TR"));
+  /* kısa sözcükler (BES, SGK) büyük harf kalır */
+  return bankTokens(desc).slice(0,3).map(w=>w.length<=4?w:w[0]+w.slice(1).toLowerCase()).join(" ");
 }
 /* Excel/CSV: tarih, açıklama ve ya tek "Tutar" sütunu ya da ayrı Borç/Alacak sütunları; Bakiye tutar sayılmaz */
 function bankRowsFromTable(tab){
@@ -2132,18 +2139,29 @@ function detectFixedFromBank(rows){
     const d=norm(r.desc);
     if(r.amt<0&&CARDPAY_RE.test(d)){cardSum-=r.amt;cardN++;continue}
     if(Math.abs(r.amt)<100)continue;
-    const kind=r.amt>0?"income":"expense", key=bankKey(r.desc), m=r.date.slice(0,7), x=g[kind+"|"+key]=g[kind+"|"+key]||{kind,key,desc:r.desc,per:{}};
+    const kind=r.amt>0?"income":"expense", key=bankKey(r.desc), m=r.date.slice(0,7), x=g[kind+"|"+key]=g[kind+"|"+key]||{kind,key,toks:key.split(" "),desc:r.desc,date:r.date,per:{}};
     x.per[m]=(x.per[m]||0)+Math.abs(r.amt);
+    if(r.date<x.date){x.date=r.date;x.desc=r.desc}   /* ad için en eski açıklama */
+  }
+  /* Farklı yazılmış aynı ödemeyi birleştir: aynı yön, ortak sözcük oranı ≥%60 ve (≥2 ortak sözcük ya da ortanca tutarlar ±%15) */
+  const med=x=>{const v=Object.values(x.per).sort((a,b)=>a-b);return v[Math.floor(v.length/2)]};
+  const groups=[];
+  for(const x of Object.values(g).sort((a,b)=>a.toks.length-b.toks.length||a.key.localeCompare(b.key))){
+    const h=groups.find(h=>{if(h.kind!==x.kind)return false;const o=tokOverlap(h.toks,x.toks);return o.r>=.6&&(o.n>=2||Math.abs(med(h)-med(x))<=med(h)*.15)});
+    if(!h){groups.push(x);continue}
+    for(const [m,v] of Object.entries(x.per))h.per[m]=(h.per[m]||0)+v;
+    if(x.date<h.date){h.date=x.date;h.desc=x.desc}
   }
   const sugs=[];
-  for(const x of Object.values(g)){
+  for(const x of groups){
     const ms=Object.keys(x.per).sort(), vs=ms.map(k=>Math.round(x.per[k]*100)/100), med=[...vs].sort((a,b)=>a-b)[Math.floor(vs.length/2)];
     const regular=ms.length>=2&&vs.filter(v=>Math.abs(v-med)<=med*.15).length>=Math.max(2,ms.length*.6);
     if(!regular&&!FIXED_KW.test(norm(x.desc)))continue;
     /* Tutar geçmişi: değer %1'den fazla değişince o aydan yeni tutar (kira artışı, zam) */
     const amts=[]; ms.forEach((k,i)=>{const last=amts.at(-1);if(!last||Math.abs(vs[i]-last.v)>last.v*.01)amts.push({from:k,v:vs[i]})});
-    const s={kind:x.kind,key:x.key,name:bankName(x.key,x.desc),desc:x.desc,months:ms,amts,regular,on:regular,amt:fmtNum(amts.at(-1).v)};
-    const it=budget.items.find(i=>i.kind===s.kind&&(i.src===s.key||norm(i.name)===norm(s.name)));
+    const s={kind:x.kind,key:x.key,name:bankName(x.desc),desc:x.desc,months:ms,amts,regular,on:regular,amt:fmtNum(amts.at(-1).v)};
+    /* kayıtlı kalem: kaynak sözcükleri benziyorsa (eski sürümün sıralı anahtarı da) ya da adı aynıysa */
+    const it=budget.items.find(i=>i.kind===s.kind&&((i.src&&tokOverlap(bankTokens(i.src),x.toks).r>=.6)||norm(i.name)===norm(s.name)));
     if(it){
       const last=amts.at(-1), cur=amtAt(it,ms.at(-1));
       if(Math.abs(cur-last.v)<=Math.max(1,last.v*.01))continue;   /* kayıtlı ve tutar aynı */
@@ -2185,7 +2203,7 @@ function applyBank(){
       }
       /* Tutar elle değiştirildiyse tek tutar: ilk görüldüğü aydan bu yana */
       const amts=v>0&&Math.abs(v-last.v)>0.005?[{from:s.amts[0].from,v}]:s.amts.map(a=>({...a}));
-      budget.items.push({id:uid(),kind:s.kind,name:s.name.trim()||bankName(s.key,s.desc),amts,to:"",card:false,src:s.key});
+      budget.items.push({id:uid(),kind:s.kind,name:s.name.trim()||bankName(s.desc),amts,to:"",card:false,src:s.key});
     }
   });
 }

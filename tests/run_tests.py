@@ -1462,7 +1462,7 @@ def birikim_ekstresiz_telefonda(b, info):
 # ---------------------------------------------------------------- Vadesiz hesap özeti (Birikim sekmesi)
 SUGS = "bView.bank.sugs.map(s=>[s.type,s.kind,s.name,s.amts.at(-1).v,s.amts[0].from,s.on])"
 BEKLENEN = [["new", "income", "Maaş", 45000, "2026-07", True], ["new", "expense", "Kira", 15000, "2026-07", True],
-            ["new", "expense", "Aidat", 750, "2026-07", True]]
+            ["new", "expense", "BES", 1500, "2026-07", True], ["new", "expense", "Aidat", 750, "2026-07", True]]
 
 
 def _bank(a, name):
@@ -1479,14 +1479,15 @@ def hesap_ozeti_duzenli_kalemleri_onerir(b, info):
     hist = a.ev("JSON.stringify(history)")
     _bank(a, "hesap_isaretli.pdf")
     eq(a.ev(SUGS), BEKLENEN, "öneriler: maaş, kira, aidat; kart ödemesi ve tek seferlikler yok")
-    t = a.text("#bankInfo"); assert "17 hareket" in t and "3 kredi kartı ödemesi (₺24.650) atlandı" in t and "kaydedilmedi" in t, t
+    t = a.text("#bankInfo"); assert "20 hareket" in t and "3 kredi kartı ödemesi (₺24.650) atlandı" in t and "kaydedilmedi" in t, t
     eq(a.ev("budget.items.length"), 0, "Ekle'den önce bütçe değişmez")
-    a.pg.uncheck("[data-sug='expense|SITE YONETIMI AIDAT'] [data-on]")
-    a.pg.fill("[data-sug='expense|AYSE ORNEKOGLU KIRA'] [data-name]", "Ev kirası")
+    a.pg.uncheck("[data-sug='expense|AIDAT SITE YONETIMI'] [data-on]")
+    a.pg.uncheck("[data-sug='expense|BES'] [data-on]")
+    a.pg.fill("[data-sug='expense|AYSE KIRA ORNEKOGLU'] [data-name]", "Ev kirası")
     a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
     eq(a.ev("budget.items.map(i=>[i.kind,i.name,i.amts,i.src])"),
        [["income", "Maaş", [{"from": "2026-07", "v": 45000}], "MAAS ORNEK YAZILIM"],
-        ["expense", "Ev kirası", [{"from": "2026-07", "v": 15000}], "AYSE ORNEKOGLU KIRA"]], "seçilenler eklendi")
+        ["expense", "Ev kirası", [{"from": "2026-07", "v": 15000}], "AYSE KIRA ORNEKOGLU"]], "seçilenler eklendi")
     eq(a.text("#bLeft"), "₺27.350", "Eylül: 45.000 − 15.000 − 2.650")
     eq(a.ev("JSON.stringify(history)"), hist, "kart geçmişine hesap hareketi girmez")
     snap = a.ev("snapshot()")
@@ -1496,7 +1497,7 @@ def hesap_ozeti_duzenli_kalemleri_onerir(b, info):
     eq(a.ev("budget.items.length"), 0, "geri al")
     # tekrar: hepsini ekle, sonra aynı özet yeni öneri getirmez
     _bank(a, "hesap_isaretli.pdf"); a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
-    eq(a.ev("budget.items.length"), 3)
+    eq(a.ev("budget.items.length"), 4)
     _bank(a, "hesap_isaretli.pdf")
     eq(a.ev("bView.bank.sugs.length"), 0, "kayıtlı kalemler tekrar önerilmez")
     assert "bulunamadı" in a.text("#bankPrev")
@@ -1513,7 +1514,7 @@ def hesap_ozeti_isaret_bakiyeden_ve_csv(b, info):
     for name in ["hesap_bakiye.pdf", "hesap_borc_alacak.csv"]:
         _bank(a, name)
         eq(a.ev(SUGS), BEKLENEN, f"{name}: öneriler")
-        eq(a.ev("[bView.bank.n,bView.bank.unk,bView.bank.cardN]"), [17, 0, 3], f"{name}: tüm satırların yönü bulundu")
+        eq(a.ev("[bView.bank.n,bView.bank.unk,bView.bank.cardN]"), [20, 0, 3], f"{name}: tüm satırların yönü bulundu")
     a.pg.click("#bankCancel"); a.pg.wait_for_timeout(100)
     eq(a.ev("budget.items.length"), 0, "vazgeçince bir şey değişmez")
     assert "değişmedi" in a.text("#bankMsg")
@@ -1526,12 +1527,30 @@ def hesap_ozeti_tutar_degisikligi(b, info):
     a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
     _bank(a, "hesap_zam.pdf")
     eq(a.ev("bView.bank.sugs.map(s=>[s.type,s.name,s.itemName,s.from,s.amts.at(-1).v,s.cur])"),
-       [["change", "Kira", "Kira", "2026-09", 17500, 15000]], "yalnızca kira tutarı değişti")
+       [["new", "BES", None, None, 1500, None], ["change", "Kira", "Kira", "2026-09", 17500, 15000]], "BES yeni; kira (açıklaması da değişen) tek öneri")
     assert "Kayıtlı ₺15.000" in a.text("#bankPrev")
     a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
     eq(a.ev("budget.items.find(i=>i.id==='e1').amts"), [{"from": "2026-01", "v": 15000}, {"from": "2026-09", "v": 17500}], "Eylül'den yeni tutar")
-    eq(a.text("#bLeft"), "₺24.850", "Eylül kalanı"); assert "₺23.500" in _row(a, "2026-07"), "Temmuz değişmez"
+    # Eylül: 45.000 − 17.500 (kira) − 1.500 (yeni BES) − 2.650 (kart); aidat kartla ödendiği için düşülmez
+    eq(a.text("#bLeft"), "₺23.350", "Eylül kalanı"); assert "₺22.000" in _row(a, "2026-07"), "Temmuz: kira eski tutarda (40.000 − 15.000 − 1.500 − 1.500)"
     _bank(a, "hesap_zam.pdf"); eq(a.ev("bView.bank.sugs.length"), 0, "artık güncel")
+
+
+@test
+def hesap_ozeti_benzer_aciklamalar_birlesir(b, info):
+    a = _butce_app(b, budget=False)
+    rows = [{"date": f"2026-0{m}-08", "desc": d, "amt": v} for m in (7, 8, 9) for d, v in
+            [("FATURA ODEMESI ENERJISA " + str(m), -900), ("FATURA ODEMESI IGDAS", -400), ("SGK PRIM ODEMESI", -2000)]]
+    rows.append({"date": "2026-08-12", "desc": "DIGER SGK PRIM", "amt": -2000})   # aynı ay: toplanır
+    got = a.ev("r=>detectFixedFromBank(r).sugs.map(s=>[s.key,s.name,s.amts.map(x=>[x.from,x.v])])", rows)
+    eq(got, [["PRIM SGK", "SGK PRIM", [["2026-07", 2000], ["2026-08", 4000], ["2026-09", 2000]]],
+             ["ENERJISA", "Enerjisa", [["2026-07", 900]]], ["IGDAS", "Igdas", [["2026-07", 400]]]],
+       "farklı kurumlar ayrı, aynı kurumun farklı yazılışı tek")
+    # eski sürümün sıralı anahtarıyla kayıtlı kira tekrar önerilmez
+    a.ev("()=>{budget.items=[{id:'k',kind:'expense',name:'Ev',amts:[{from:'2026-07',v:15000}],to:'',card:false,src:'AYSE ORNEKOGLU KIRA'}];render()}")
+    got = a.ev("r=>detectFixedFromBank(r).sugs.map(s=>s.key)", [{"date": f"2026-0{m}-03", "desc": "EFT GIDEN AYSE ORNEKOGLU KIRA", "amt": -15000} for m in (7, 8)])
+    eq(got, [], "eski src ile eşleşir")
+    a.close()
     a.close()
 
 
