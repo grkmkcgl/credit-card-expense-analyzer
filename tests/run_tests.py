@@ -1554,6 +1554,33 @@ def hesap_ozeti_benzer_aciklamalar_birlesir(b, info):
     a.close()
 
 
+
+@test
+def hesap_ozeti_hareketleri_gosterir_ve_ayirir(b, info):
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    _bank(a, "hesap_isaretli.pdf")
+    bes = "[data-sug='expense|BES']"
+    assert "Tem 26 ₺1.500 · Ağu 26 ₺1.500 · Eyl 26 ₺1.500" in a.text(bes), a.text(bes)
+    a.pg.click(bes + " .bdet summary"); a.pg.wait_for_timeout(100)
+    t = a.text(bes + " .bdet")
+    assert "DIGER DIGER BES ODEMESI 1234" in t and "FATURA ODEMESI DIGER BES 5678" in t and "₺1.500,00" in t and "01.07.2026" not in t, t
+    eq(a.pg.locator(bes + " .bdet .brow").count(), 3, "BES'in 3 hareketi")
+    # bir hareketi çıkarınca aylar yeniden hesaplanır ve açık liste kapanmaz
+    a.pg.uncheck(bes + " .brow[data-row='2'] [data-inc]"); a.pg.wait_for_timeout(100)
+    eq(a.ev("bView.bank.sugs.find(s=>s.key==='BES').months"), ["2026-07", "2026-08"], "Eylül çıkarıldı")
+    eq(a.ev("document.querySelector(\"[data-sug='expense|BES'] .bdet\").open"), True, "liste açık kalır")
+    # kira iki yazılışlı: EYLUL KIRASI ayrı kalem yapılır
+    kira = "[data-sug='expense|AYSE KIRA ORNEKOGLU']"
+    a.pg.click(kira + " .bdet summary"); a.pg.wait_for_timeout(100)
+    assert "2 farklı yazılış" in a.text(kira), a.text(kira)
+    a.pg.click(kira + " [data-split='AYSE KIRASI ORNEKOGLU']"); a.pg.wait_for_timeout(100)
+    eq(a.ev("bView.bank.sugs.filter(s=>s.kind==='expense').map(s=>[s.key,s.months.length,s.on])"),
+       [["AYSE KIRA ORNEKOGLU", 2, True], ["AYSE KIRASI ORNEKOGLU", 1, False], ["BES", 2, True], ["AIDAT SITE YONETIMI", 3, True]], "ayrılan yazılış ayrı öneri")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.map(i=>[i.name,i.amts.length])"), [["Maaş", 1], ["Kira", 1], ["BES", 1], ["Aidat", 1]], "işaretsiz ayrılan eklenmez")
+    a.close()
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]

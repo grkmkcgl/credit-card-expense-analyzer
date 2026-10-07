@@ -369,6 +369,16 @@ body:not(.tab-budget) #budget{display:none}
 .bsugm{min-width:0;overflow-wrap:anywhere}
 .bsugm input{margin-bottom:2px}
 .bsug input[data-amt]{text-align:right}
+.bdet{grid-column:2/-1;margin-top:-4px}
+.bdet summary{color:var(--teal)}
+.brows{margin:4px 0 6px}
+.brow{display:grid;grid-template-columns:20px 1fr auto;gap:8px;align-items:start;margin:0;padding:5px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.brow span{display:flex;flex-direction:column;min-width:0;overflow-wrap:anywhere}
+.brow .bd{color:var(--ink)}
+.brow.off small{text-decoration:line-through;opacity:.6}
+.brow input{accent-color:var(--teal);margin:2px 0 0}
+.bvar div{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:4px}
+.bvar button{margin:0;padding:3px 10px;font-size:.8rem}
 @media (max-width:640px){
 .bbar{flex-direction:column;align-items:stretch;gap:4px}
 .bbar select{max-width:none}
@@ -1964,6 +1974,7 @@ function FixedItem({i,m,bm}){
       <b>${v?fmt(v):hx`<small>bu ay yok</small>`}</b><span class="chev" aria-hidden="true">▶</span></button>
     ${hits.length?hx`<p class="bhint"><small>Bu dönemin ekstresinde "${hits[0].desc}" (${fmt(hits.reduce((s,t)=>s+t.amt,0))}) var. Bu gideri kartla ödüyorsanız "Kartla ödeniyor"u işaretleyin; yoksa iki kez düşülür.</small></p>`:null}
     ${open?hx`<div class="bibody">
+      ${i.src?hx`<p class="bnote"><small>Hesap özetinden eklendi; açıklamadaki sözcükler: ${i.src}</small></p>`:null}
       <table class="bamts"><tbody>${i.amts.map((a,n)=>hx`<tr key=${a.from}><td>${monthName(a.from)} ve sonrası</td><td class="n">${fmt(a.v)}</td><td class="n">${n?hx`<button class="x" title="Bu tutar değişikliğini sil" onClick=${()=>undoable(`${i.name}: tutar değişikliği silindi`,()=>i.amts.splice(n,1))}>✕</button>`:null}</td></tr>`)}</tbody></table>
       <div class="bform"><input type="text" inputmode="decimal" data-newamt placeholder="Yeni aylık tutar (₺)" aria-label="Yeni aylık tutar"/>
         <label>Şu aydan itibaren<input type="month" data-newfrom value=${m}/></label>
@@ -2139,38 +2150,58 @@ function detectFixedFromBank(rows){
     const d=norm(r.desc);
     if(r.amt<0&&CARDPAY_RE.test(d)){cardSum-=r.amt;cardN++;continue}
     if(Math.abs(r.amt)<100)continue;
-    const kind=r.amt>0?"income":"expense", key=bankKey(r.desc), m=r.date.slice(0,7), x=g[kind+"|"+key]=g[kind+"|"+key]||{kind,key,toks:key.split(" "),desc:r.desc,date:r.date,per:{}};
-    x.per[m]=(x.per[m]||0)+Math.abs(r.amt);
-    if(r.date<x.date){x.date=r.date;x.desc=r.desc}   /* ad için en eski açıklama */
+    const kind=r.amt>0?"income":"expense", key=bankKey(r.desc), x=g[kind+"|"+key]=g[kind+"|"+key]||{kind,key,toks:key.split(" "),rows:[]};
+    x.rows.push({date:r.date,desc:r.desc,amt:Math.abs(r.amt),k0:key});   /* k0: yazılışın kendi anahtarı ("Ayrı kalem yap" için) */
   }
   /* Farklı yazılmış aynı ödemeyi birleştir: aynı yön, ortak sözcük oranı ≥%60 ve (≥2 ortak sözcük ya da ortanca tutarlar ±%15) */
-  const med=x=>{const v=Object.values(x.per).sort((a,b)=>a-b);return v[Math.floor(v.length/2)]};
+  const med=x=>{const v=Object.values(perMonth(x.rows)).sort((a,b)=>a-b);return v[Math.floor(v.length/2)]};
   const groups=[];
   for(const x of Object.values(g).sort((a,b)=>a.toks.length-b.toks.length||a.key.localeCompare(b.key))){
     const h=groups.find(h=>{if(h.kind!==x.kind)return false;const o=tokOverlap(h.toks,x.toks);return o.r>=.6&&(o.n>=2||Math.abs(med(h)-med(x))<=med(h)*.15)});
-    if(!h){groups.push(x);continue}
-    for(const [m,v] of Object.entries(x.per))h.per[m]=(h.per[m]||0)+v;
-    if(x.date<h.date){h.date=x.date;h.desc=x.desc}
+    if(h)h.rows.push(...x.rows); else groups.push(x);
   }
   const sugs=[];
   for(const x of groups){
-    const ms=Object.keys(x.per).sort(), vs=ms.map(k=>Math.round(x.per[k]*100)/100), med=[...vs].sort((a,b)=>a-b)[Math.floor(vs.length/2)];
-    const regular=ms.length>=2&&vs.filter(v=>Math.abs(v-med)<=med*.15).length>=Math.max(2,ms.length*.6);
-    if(!regular&&!FIXED_KW.test(norm(x.desc)))continue;
-    /* Tutar geçmişi: değer %1'den fazla değişince o aydan yeni tutar (kira artışı, zam) */
-    const amts=[]; ms.forEach((k,i)=>{const last=amts.at(-1);if(!last||Math.abs(vs[i]-last.v)>last.v*.01)amts.push({from:k,v:vs[i]})});
-    const s={kind:x.kind,key:x.key,name:bankName(x.desc),desc:x.desc,months:ms,amts,regular,on:regular,amt:fmtNum(amts.at(-1).v)};
-    /* kayıtlı kalem: kaynak sözcükleri benziyorsa (eski sürümün sıralı anahtarı da) ya da adı aynıysa */
-    const it=budget.items.find(i=>i.kind===s.kind&&((i.src&&tokOverlap(bankTokens(i.src),x.toks).r>=.6)||norm(i.name)===norm(s.name)));
-    if(it){
-      const last=amts.at(-1), cur=amtAt(it,ms.at(-1));
-      if(Math.abs(cur-last.v)<=Math.max(1,last.v*.01))continue;   /* kayıtlı ve tutar aynı */
-      Object.assign(s,{type:"change",item:it.id,itemName:it.name,from:last.from,cur});
-    }else s.type="new";
+    const s=fillSug({kind:x.kind,key:x.key,toks:x.toks,rows:x.rows.sort((a,b)=>a.date.localeCompare(b.date))});
+    if(!s.regular&&!FIXED_KW.test(norm(s.desc)))continue;
+    s.on=s.regular;
+    if(s.type==="same")continue;   /* kayıtlı ve tutar aynı */
     sugs.push(s);
   }
   const ord={income:0,expense:1};
   return {sugs:sugs.sort((a,b)=>(a.type==="change")-(b.type==="change")||ord[a.kind]-ord[b.kind]||b.amts.at(-1).v-a.amts.at(-1).v),cardSum,cardN};
+}
+function perMonth(rows){const per={};rows.forEach(r=>{if(!r.off){const m=r.date.slice(0,7);per[m]=(per[m]||0)+r.amt}});return per}
+/* Önerinin aylık tutarlarını, tutar geçmişini ve kayıtlı kalemle ilişkisini, dahil edilen hareketlerden (yeniden) hesaplar */
+function fillSug(s){
+  const live=s.rows.filter(r=>!r.off), per=perMonth(s.rows);
+  const ms=Object.keys(per).sort(), vs=ms.map(k=>Math.round(per[k]*100)/100), med=[...vs].sort((a,b)=>a-b)[Math.floor(vs.length/2)];
+  const first=live[0]||s.rows[0];
+  if(!s.nameEdited)s.name=bankName(first.desc);
+  s.desc=first.desc; s.months=ms; s.per=Object.fromEntries(ms.map((k,i)=>[k,vs[i]]));
+  s.regular=ms.length>=2&&vs.filter(v=>Math.abs(v-med)<=med*.15).length>=Math.max(2,ms.length*.6);
+  /* Tutar geçmişi: değer %1'den fazla değişince o aydan yeni tutar (kira artışı, zam) */
+  const amts=[]; ms.forEach((k,i)=>{const last=amts.at(-1);if(!last||Math.abs(vs[i]-last.v)>last.v*.01)amts.push({from:k,v:vs[i]})});
+  s.amts=amts.length?amts:[{from:first.date.slice(0,7),v:0}]; s.amt=fmtNum(s.amts.at(-1).v);
+  /* kayıtlı kalem: kaynak sözcükleri benziyorsa (eski sürümün sıralı anahtarı da) ya da adı aynıysa */
+  const it=budget.items.find(i=>i.kind===s.kind&&((i.src&&tokOverlap(bankTokens(i.src),s.toks).r>=.6)||norm(i.name)===norm(s.name)));
+  delete s.item; s.type="new";
+  if(it&&ms.length){
+    const last=s.amts.at(-1), cur=amtAt(it,ms.at(-1));
+    if(Math.abs(cur-last.v)<=Math.max(1,last.v*.01))s.type="same";
+    else Object.assign(s,{type:"change",item:it.id,itemName:it.name,from:last.from,cur});
+  }
+  return s;
+}
+/* Bir yazılışın hareketlerini ayrı bir öneriye taşır (yanlış birleşmiş ödemeler için) */
+function splitSug(s,k0){
+  const B=bView.bank, out=s.rows.filter(r=>r.k0===k0);
+  s.rows=s.rows.filter(r=>r.k0!==k0);
+  const keyOf=rows=>[...new Set(rows.map(r=>r.k0))].sort((a,b)=>a.split(" ").length-b.split(" ").length||a.localeCompare(b))[0];
+  s.key=keyOf(s.rows); s.toks=s.key.split(" "); fillSug(s);
+  const n=fillSug({kind:s.kind,key:k0,toks:k0.split(" "),rows:out}); n.on=n.regular&&n.type!=="same";
+  B.sugs.splice(B.sugs.indexOf(s)+1,0,n);
+  renderBudget();
 }
 async function readBankFiles(files){
   if(!files.length)return;
@@ -2189,7 +2220,7 @@ async function readBankFiles(files){
   renderBudget();
 }
 function applyBank(){
-  const B=bView.bank, sel=B.sugs.filter(s=>s.on);
+  const B=bView.bank, sel=B.sugs.filter(s=>s.on&&s.type!=="same"&&s.months.length);
   if(!sel.length){bView.bank=null;bView.bankMsg="Hiçbir öneri seçilmedi, hiçbir şey değişmedi.";renderBudget();return}
   bView.bank=null; bView.bankMsg=`Hesap özetinden ${sel.length} kalem eklendi/güncellendi. Hesap hareketleri kaydedilmedi.`;
   undoable(`Hesap özetinden ${sel.length} kalem`,()=>{
@@ -2208,12 +2239,22 @@ function applyBank(){
   });
 }
 function BankSug({s}){
-  const ml=s.months.map(k=>periodLabel(k,true)).join(", ");
+  const ml=s.months.map(k=>`${periodLabel(k,true)} ${fmt(s.per[k])}`).join(" · ");
+  const variants=[...new Set(s.rows.map(r=>r.k0))];
+  const tog=(r,on)=>{r.off=!on;fillSug(s);if(s.type==="same")s.on=false;renderBudget()};
   return hx`<div class="bsug" data-sug=${s.kind+"|"+s.key}>
     <label class="bchk"><input type="checkbox" data-on checked=${s.on} aria-label=${s.name+" ekle"} onChange=${e=>{s.on=e.target.checked}}/></label>
-    <div class="bsugm">${s.type==="change"?hx`<b>${s.itemName}</b><br/>`:hx`<input type="text" data-name value=${s.name} aria-label="Ad" onInput=${e=>{s.name=e.target.value}}/>`}
-      <small>${s.type==="change"?`Kayıtlı ${fmt(s.cur)}, hesapta ${monthName(s.from)} ve sonrası farklı · `:""}${s.months.length} ayda: ${ml}${s.amts.length>1&&s.type!=="change"?` · tutar değişmiş (${s.amts.map(a=>fmt(a.v)).join(" → ")})`:""}${s.regular?"":" · tek ay, kontrol edin"}<br/>${s.desc}</small></div>
+    <div class="bsugm">${s.type==="change"?hx`<b>${s.itemName}</b><br/>`:hx`<input type="text" data-name value=${s.name} aria-label="Ad" onInput=${e=>{s.name=e.target.value;s.nameEdited=true}}/>`}
+      <small>${s.type==="change"?`Kayıtlı ${fmt(s.cur)}, hesapta ${monthName(s.from)} ve sonrası farklı · `:s.type==="same"?"Kayıtlı kalemle aynı · ":""}${s.months.length?ml:"hiç hareket seçili değil"}${s.regular?"":" · düzenli değil, kontrol edin"}</small>
+      </div>
     <input type="text" inputmode="decimal" data-amt value=${s.amt} aria-label="Aylık tutar" onInput=${e=>{s.amt=e.target.value}}/>
+      <details class="bdet"><summary><small>${s.rows.length} hareketi göster${variants.length>1?` (${variants.length} farklı yazılış)`:""}</small></summary>
+        <div class="brows">${s.rows.map((r,i)=>hx`<label key=${i} class=${"brow"+(r.off?" off":"")} data-row=${i}>
+          <input type="checkbox" data-inc checked=${!r.off} aria-label="Bu hareketi dahil et" onChange=${e=>tog(r,e.target.checked)}/>
+          <span><small class="bd">${r.desc}</small><small>${toDate(r.date).toLocaleDateString("tr-TR")}</small></span><small class="n">${fmt2(r.amt)}</small></label>`)}</div>
+        ${variants.length>1?hx`<div class="bvar"><small>Farklı ödemeler yanlışlıkla birleştiyse bir yazılışı ayrı kalem yapın:</small>${variants.map(k=>{const ex=s.rows.find(r=>r.k0===k);
+          return hx`<div key=${k}><small>"${ex.desc}" · ${s.rows.filter(r=>r.k0===k).length} hareket</small> <button class="ghost" data-split=${k} onClick=${()=>splitSug(s,k)}>Ayrı kalem yap</button></div>`})}</div>`:null}
+      </details>
   </div>`;
 }
 function BankImport(){
