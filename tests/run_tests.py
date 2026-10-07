@@ -1543,7 +1543,7 @@ def hesap_ozeti_benzer_aciklamalar_birlesir(b, info):
             [("FATURA ODEMESI ENERJISA " + str(m), -900), ("FATURA ODEMESI IGDAS", -400), ("SGK PRIM ODEMESI", -2000)]]
     rows.append({"date": "2026-08-12", "desc": "DIGER SGK PRIM", "amt": -2000})   # aynı ay: toplanır
     got = a.ev("r=>detectFixedFromBank(r).sugs.map(s=>[s.key,s.name,s.amts.map(x=>[x.from,x.v])])", rows)
-    eq(got, [["PRIM SGK", "SGK PRIM", [["2026-07", 2000], ["2026-08", 4000], ["2026-09", 2000]]],
+    eq(got, [["PRIM SGK", "SGK Prim", [["2026-07", 2000], ["2026-08", 4000], ["2026-09", 2000]]],
              ["ENERJISA", "Enerjisa", [["2026-07", 900]]], ["IGDAS", "Igdas", [["2026-07", 400]]]],
        "farklı kurumlar ayrı, aynı kurumun farklı yazılışı tek")
     # eski sürümün sıralı anahtarıyla kayıtlı kira tekrar önerilmez
@@ -1579,6 +1579,44 @@ def hesap_ozeti_hareketleri_gosterir_ve_ayirir(b, info):
        [["AYSE KIRA ORNEKOGLU", 2, True], ["AYSE KIRASI ORNEKOGLU", 1, False], ["BES", 2, True], ["AIDAT SITE YONETIMI", 3, True]], "ayrılan yazılış ayrı öneri")
     a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
     eq(a.ev("budget.items.map(i=>[i.name,i.amts.length])"), [["Maaş", 1], ["Kira", 1], ["BES", 1], ["Aidat", 1]], "işaretsiz ayrılan eklenmez")
+    a.close()
+
+
+@test
+def hesap_ozeti_onerilmeyenler_listelenir_ve_eklenir(b, info):
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    assert a.ev("$('bankBox').compareDocumentPosition($('bMonth'))&Node.DOCUMENT_POSITION_FOLLOWING"), "kutu ay seçicinin üstünde"
+    _bank(a, "hesap_isaretli.pdf")
+    eq(a.ev("bView.bank.rest.reduce((n,g)=>n+g.rows.length,0)"), 8, "önerilmeyen 8 hareket")
+    a.pg.click("#bankRest > summary"); a.pg.wait_for_timeout(100)
+    t = a.text("#bankRest")
+    for s in ["Önerilmeyen 8 hareket", "ORNEK MARKET ANKARA", "FAST GIDEN 77123 MEHMET ORNEK", "−₺5.000,00", "HAVALE GELEN ORNEK KISI", "+₺2.500,00",
+              "ATM PARA CEKME", "ORNEK KAFE", "küçük tutar", "kredi kartı ödemesi", "tek seferlik"]:
+        assert s in t, f"{s!r} listede yok:\n{t}"
+    a.pg.fill("#restQ", "havale"); a.pg.wait_for_timeout(100)
+    eq(a.pg.locator("#bankRest .brow").count(), 1, "arama süzer")
+    a.pg.click("#bankRest [data-promote]"); a.pg.wait_for_timeout(100)
+    eq(a.ev("bView.bank.sugs.filter(s=>s.kind==='income').map(s=>[s.name,s.on,s.amts.at(-1).v])"), [["Maaş", True, 45000], ["Ornek Kisi", True, 2500]], "öneriye taşındı")
+    eq(a.ev("bView.bank.rest.reduce((n,g)=>n+g.rows.length,0)"), 7, "listeden kalktı")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    assert ["income", "Ornek Kisi"] in a.ev("budget.items.map(i=>[i.kind,i.name])"), a.ev("budget.items.map(i=>i.name)")
+    snap = a.ev("snapshot()"); assert "ATM PARA CEKME" not in snap and "ORNEK MARKET" not in snap, "hareketler kaydedilmez"
+    a.close()
+
+
+@test
+def hesap_ozeti_yon_bakiyeden_ve_elle(b, info):
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    for name in ["hesap_gelen_fast.pdf", "hesap_gelen_fast.csv"]:
+        _bank(a, name)
+        eq(a.ev(SUGS), [["new", "income", "Ornek Kisi", 3000, "2026-08", True]], f"{name}: gelen para gelir")
+    a.pg.click("[data-sug='income|KISI ORNEK'] [data-flip]"); a.pg.wait_for_timeout(100)
+    eq(a.ev("bView.bank.sugs.map(s=>s.kind)"), ["expense"], "elle gidere çevrildi")
+    assert a.pg.locator("[data-sug='expense|KISI ORNEK']").count() == 1
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.map(i=>[i.kind,i.name])"), [["expense", "Ornek Kisi"]], "seçilen yönde eklendi")
     a.close()
 
 # ----------------------------------------------------------------

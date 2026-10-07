@@ -385,6 +385,23 @@ def bank_statements():
     bank_pdf("hesap_isaretli.pdf", rows)
     bank_pdf("hesap_bakiye.pdf", rows, signed=False, newest_first=True)
     bank_pdf("hesap_zam.pdf", bank_rows(sep_rent=17500))
+    # gelen para yanlış işaretle (başında eksi) yazılmış; bakiye artıyor → gelen olmalı
+    fast = [("05.08.2026", "GELEN FAST ORNEK KISI", 3000.0, 13000.0), ("06.08.2026", "ORNEK MARKET", -200.0, 12800.0),
+            ("05.09.2026", "GELEN FAST ORNEK KISI", 3000.0, 15800.0)]
+    c = canvas.Canvas(p("hesap_gelen_fast.pdf"), pagesize=(700, 842)); c.setFont("D", 8)
+    c.drawString(40, 810, "VADESİZ TL HESAP ÖZETİ"); c.drawString(40, 770, "Tarih"); c.drawString(120, 770, "Açıklama")
+    c.drawRightString(500, 770, "Tutar"); c.drawRightString(620, 770, "Bakiye")
+    y = 752
+    for d, desc, a, bal in [("31.07.2026", "DEVREDEN BAKİYE", None, 10000.0)] + fast:
+        c.drawString(40, y, d); c.drawString(120, y, desc)
+        if a is not None: c.drawRightString(500, y, "-" + tr(abs(a)))
+        c.drawRightString(620, y, tr(bal)); y -= 14
+    c.save()
+    # bakiyesiz CSV: işaret yanlış, yalnızca açıklamadaki GELEN kalıyor
+    with open(p("hesap_gelen_fast.csv"), "w", encoding="utf-8") as f:
+        f.write("Tarih,Açıklama,Tutar\n")
+        for d, desc, a, _ in fast:
+            f.write(f'{d},{desc.replace("GELEN FAST", "FAST GELEN")},"-{tr(abs(a))}"\n')
     q = lambda v: '"' + tr(v) + '"' if v else ""
     with open(p("hesap_borc_alacak.csv"), "w", encoding="utf-8") as f:
         f.write("İşlem Tarihi,Açıklama,Borç,Alacak,Bakiye\n")
