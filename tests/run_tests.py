@@ -1543,7 +1543,7 @@ def hesap_ozeti_benzer_aciklamalar_birlesir(b, info):
             [("FATURA ODEMESI ENERJISA " + str(m), -900), ("FATURA ODEMESI IGDAS", -400), ("SGK PRIM ODEMESI", -2000)]]
     rows.append({"date": "2026-08-12", "desc": "DIGER SGK PRIM", "amt": -2000})   # aynı ay: toplanır
     got = a.ev("r=>detectFixedFromBank(r).sugs.map(s=>[s.key,s.name,s.amts.map(x=>[x.from,x.v])])", rows)
-    eq(got, [["PRIM SGK", "SGK Prim", [["2026-07", 2000], ["2026-08", 4000], ["2026-09", 2000]]],
+    eq(got, [["PRIM SGK", "SGK Prim", [["2026-07", 2000]]],   # Ağustos'taki ikinci ödeme aylık tutarı ikiye katlamaz
              ["ENERJISA", "Enerjisa", [["2026-07", 900]]], ["IGDAS", "Igdas", [["2026-07", 400]]]],
        "farklı kurumlar ayrı, aynı kurumun farklı yazılışı tek")
     # eski sürümün sıralı anahtarıyla kayıtlı kira tekrar önerilmez
@@ -1705,6 +1705,61 @@ def hesap_ozeti_kesim_donemi_baslangic_ve_kalem_listesi(b, info):
     # süzgeçte tek ay seçmek özet ayını da değiştirir
     a.pg.click("#bFilter > summary"); a.pg.select_option("#bfRange", "2026-09"); a.pg.wait_for_timeout(100)
     eq(a.ev("$('bMonth').value"), "2026-09", "süzgeç ayı = özet ayı")
+    a.close()
+
+
+@test
+def hesap_ozeti_ayni_doneme_iki_odeme_ve_tarihler(b, info):
+    a = _butce_app(b, budget=False)   # kesim her ayın 26'sı
+    R = lambda d, desc, v: {"date": d, "desc": desc, "amt": v}
+    rows = [R("2026-07-25", "MAAS ODEMESI ORNEK AS", 45000), R("2026-08-27", "MAAS ODEMESI ORNEK AS", 45000), R("2026-09-25", "MAAS ODEMESI ORNEK AS", 45000)]
+    rows += [R(f"2026-0{m}-05", "SITE AIDAT", -v) for m, v in ((7, 750), (8, 750), (9, 900))]
+    rows += [R(f"2026-0{m}-10", "ORNEK SPOR KULUBU", -v) for m, v in ((7, 600), (8, 1800), (9, 600))]
+    got = a.ev("r=>Object.fromEntries(detectFixedFromBank(r).sugs.map(s=>[s.name,[s.regular,s.amts.map(x=>[x.from,x.v]),s.per['2026-09']]]))", rows)
+    # maaş kesimden sonra yattığı için Eylül döneminde iki maaş var: aylık tutar yine 45.000, Eylül toplamı 90.000 olarak gösterilir
+    eq(got["Maaş"], [True, [["2026-07", 45000]], 90000], "aynı döneme düşen iki ödeme aylık tutarı ikiye katlamaz")
+    eq(got["Aidat"], [True, [["2026-07", 750], ["2026-09", 900]], 900], "kalıcı değişiklik tutar geçmişine girer")
+    eq(got["Ornek Spor Kulubu"], [True, [["2026-07", 600]], 600], "tek seferlik sıçrama tutar geçmişine girmez")
+    # arayüz: dönemde iki ödeme yazar; eklenen kalemde ödeme tarihleri görünür ve dosyada kalır
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    a.ev("r=>{bView.bank={...detectFixedFromBank(r),n:r.length,unk:0,errs:[],files:['x'],ms:[]};renderBudget()}", rows)
+    assert "Eyl 26 ₺90.000 (2 ödeme)" in a.text("[data-sug='income|MAAS ORNEK']"), a.text("[data-sug='income|MAAS ORNEK']")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    a.ev("()=>{applyData(JSON.parse(snapshot()));render()}")
+    a.pg.select_option("#bMonth", "2026-09"); a.pg.wait_for_timeout(100)
+    eq(a.text("#bIncome b"), "₺45.000", "Eylül geliri bir maaş")
+    a.pg.click("#bIncome"); a.pg.wait_for_timeout(100)
+    t = a.text("#bKpiList")
+    assert "27.08.2026" in t and "25.09.2026" in t and "MAAS ODEMESI ORNEK AS" in t and "25.07.2026" not in t, t
+    mid = a.ev("budget.items.find(i=>i.name==='Maaş').id")
+    eq(len(a.ev(f"budget.items.find(i=>i.id==='{mid}').seen")), 3, "kalemin ödemeleri tarihleriyle dosyada")
+    a.pg.click(f"#bKpiList [data-kitem='{mid}'] button"); a.pg.wait_for_timeout(200)
+    a.pg.click(f"[data-item='{mid}'] .bdet > summary"); a.pg.wait_for_timeout(100)
+    t = a.text(f"[data-item='{mid}']"); assert "Hesap özetindeki 3 ödeme" in t and "25.07.2026" in t, t
+    a.close()
+
+
+@test
+def hesap_ozeti_bakiye_once_yazilmis(b, info):
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    _bank(a, "hesap_bakiye_once.pdf")
+    eq(a.ev(SUGS), BEKLENEN, "Bakiye sütunu Tutar'dan önce: tutar ve yön yine doğru")
+    eq(a.ev("[bView.bank.n,bView.bank.unk]"), [20, 0])
+    a.close()
+
+
+@test
+def hesap_ozeti_eski_kayit_onarimi_ve_kendi_hesap(b, info):
+    a = _butce_app(b, budget=False)
+    items = [{"id": "m", "kind": "income", "name": "Maaş", "src": "MAAS ORNEK", "amts": [{"from": "2026-07", "v": 45000}, {"from": "2026-09", "v": 90000}, {"from": "2026-10", "v": 45000}]},
+             {"id": "k", "kind": "expense", "name": "Kira", "src": "KIRA", "amts": [{"from": "2026-07", "v": 15000}, {"from": "2026-09", "v": 30000}]},
+             {"id": "z", "kind": "expense", "name": "Aidat", "src": "AIDAT", "amts": [{"from": "2026-07", "v": 750}, {"from": "2026-09", "v": 900}]},
+             {"id": "e", "kind": "income", "name": "Elle", "amts": [{"from": "2026-07", "v": 1000}, {"from": "2026-09", "v": 2000}]}]
+    got = a.ev("it=>{applyData({history:[],budget:{items:it}});return Object.fromEntries(budget.items.map(i=>[i.id,i.amts.map(x=>x.v)]))}", items)
+    eq(got, {"m": [45000], "k": [15000], "z": [750, 900], "e": [1000, 2000]}, "eski sürümün iki katı tutarları atılır; gerçek değişiklik ve elle girilen kalır")
+    rows = [{"date": f"2026-0{m}-15", "desc": "VIRMAN KENDI HESABIMA", "amt": 10000} for m in (7, 8, 9)]
+    eq(a.ev("r=>detectFixedFromBank(r).sugs.map(s=>[s.own,s.on])", rows), [[True, False]], "kendi hesaplar arası aktarım işaretsiz")
     a.close()
 
 # ----------------------------------------------------------------

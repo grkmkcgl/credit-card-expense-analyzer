@@ -362,7 +362,7 @@ def bank_rows(sep_rent=15000):
     return out
 
 
-def bank_pdf(name, rows, signed=True, newest_first=False):
+def bank_pdf(name, rows, signed=True, newest_first=False, balance_first=False):
     c = canvas.Canvas(p(name), pagesize=(700, 842)); c.setFont("D", 8)
     c.drawString(40, 810, "VADESİZ TL HESAP ÖZETİ   ORNEK BANK A.Ş.   Hesap No 1234567")
     c.drawString(40, 796, "Dönem 01.07.2026 - 30.09.2026")
@@ -373,9 +373,10 @@ def bank_pdf(name, rows, signed=True, newest_first=False):
     y = 752
     for d, desc, a, bal in lines:
         c.drawString(40, y, d); c.drawString(120, y, desc)
+        xa, xb = (620, 500) if balance_first else (500, 620)   # bazı bankalar Bakiye'yi Tutar'dan önce yazar
         if a is not None:
-            c.drawRightString(500, y, ("-" if a < 0 and signed else "") + tr(abs(a)))
-        c.drawRightString(620, y, tr(bal))
+            c.drawRightString(xa, y, ("-" if a < 0 and signed else "") + tr(abs(a)))
+        c.drawRightString(xb, y, tr(bal))
         y -= 14
     c.save()
 
@@ -385,6 +386,7 @@ def bank_statements():
     bank_pdf("hesap_isaretli.pdf", rows)
     bank_pdf("hesap_bakiye.pdf", rows, signed=False, newest_first=True)
     bank_pdf("hesap_zam.pdf", bank_rows(sep_rent=17500))
+    bank_pdf("hesap_bakiye_once.pdf", rows, signed=False, balance_first=True)
     # gelen para yanlış işaretle (başında eksi) yazılmış; bakiye artıyor → gelen olmalı
     fast = [("05.08.2026", "GELEN FAST ORNEK KISI", 3000.0, 13000.0), ("06.08.2026", "ORNEK MARKET", -200.0, 12800.0),
             ("05.09.2026", "GELEN FAST ORNEK KISI", 3000.0, 15800.0)]

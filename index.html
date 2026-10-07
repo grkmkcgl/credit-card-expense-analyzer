@@ -365,6 +365,7 @@ body:not(.tab-budget) #budget{display:none}
 .bkpil{margin:10px 0 0}
 .bkpil .bankhead button{margin:0}
 .bkpil .brow{cursor:default}
+.bseen{display:block;color:var(--muted);font-size:.78rem}
 .bkpil .linkish.bd{font-size:.9rem;font-weight:600}
 .bstart{grid-column:2/-1;margin:-2px 0 0;font-size:.8rem}
 #budget .bstart input{width:auto;margin-left:6px;padding:4px 6px}
@@ -1933,12 +1934,27 @@ const bView={month:"",open:new Set(),add:{income:{name:"",amt:"",from:""},expens
 const ASSET_TYPES={TRY:{l:"TL",u:"₺"},USD:{l:"Dolar",u:"$"},EUR:{l:"Euro",u:"€"},GAU:{l:"Gram altın",u:"gr"},CEYREK:{l:"Çeyrek altın",u:"adet"}};
 const isMonth=s=>/^\d{4}-\d{2}$/.test(s||"");
 let uidN=0; const uid=()=>Date.now().toString(36)+"-"+(uidN++).toString(36);
+/* Önceki sürüm, hesap özetinden eklenen kalemin tutarını dönem toplamından alıyordu: bir dönemde iki ödeme olunca (maaş kesimden
+   sonra yattığında) tutar geçmişine iki katı yazılıyordu. Önceki tutarın tam katı olan girişler ve önceki tutara geri dönüşler atılır.
+   Yalnızca hesap özetinden gelen ve ödeme listesi (seen) olmayan, yani eski sürümle eklenmiş kalemlere uygulanır. */
+function dropDoubled(amts){
+  const out=[amts[0]];
+  for(const a of amts.slice(1)){
+    const prev=out.at(-1).v, k=prev>0?a.v/prev:0;
+    if(k>=1.99&&Math.abs(k-Math.round(k))<0.01)continue;
+    if(Math.abs(a.v-prev)<=prev*0.01)continue;
+    out.push(a);
+  }
+  return out;
+}
 function normBudget(b){
   b=b&&typeof b==="object"?b:{};
   const num=v=>isFinite(+v)?+v:0;
-  const items=(Array.isArray(b.items)?b.items:[]).filter(i=>i&&(i.kind==="income"||i.kind==="expense")).map(i=>({id:String(i.id||uid()),kind:i.kind,name:String(i.name||"").trim()||"(adsız)",
+  const items0=(Array.isArray(b.items)?b.items:[]).filter(i=>i&&(i.kind==="income"||i.kind==="expense")).map(i=>({id:String(i.id||uid()),kind:i.kind,name:String(i.name||"").trim()||"(adsız)",
     amts:(Array.isArray(i.amts)?i.amts:[]).filter(a=>a&&isMonth(a.from)).map(a=>({from:a.from,v:num(a.v)})).sort((x,y)=>x.from.localeCompare(y.from)),
-    to:isMonth(i.to)?i.to:"",card:i.kind==="expense"&&!!i.card,...(typeof i.src==="string"&&i.src?{src:i.src}:{})})).filter(i=>i.amts.length);
+    to:isMonth(i.to)?i.to:"",card:i.kind==="expense"&&!!i.card,...(typeof i.src==="string"&&i.src?{src:i.src}:{}),
+    ...(Array.isArray(i.seen)?{seen:i.seen.filter(x=>x&&/^\d{4}-\d{2}-\d{2}$/.test(x.d)&&isFinite(+x.v)).map(x=>({d:x.d,p:isMonth(x.p)?x.p:x.d.slice(0,7),desc:String(x.desc||""),v:+x.v}))}:{})})).filter(i=>i.amts.length);
+  const items=items0.map(i=>i.src&&!i.seen&&i.amts.length>1?{...i,amts:dropDoubled(i.amts)}:i);
   const assets=(Array.isArray(b.assets)?b.assets:[]).filter(a=>a&&ASSET_TYPES[a.type]).map(a=>({id:String(a.id||uid()),name:String(a.name||"").trim()||ASSET_TYPES[a.type].l,type:a.type,qty:num(a.qty),upd:typeof a.upd==="string"?a.upd:""}));
   const rates={}; for(const k of Object.keys(ASSET_TYPES)){const r=b.rates&&b.rates[k];if(k!=="TRY"&&r&&num(r.v)>0)rates[k]={v:num(r.v),date:typeof r.date==="string"?r.date:""}}
   return {items,assets,rates};
@@ -2006,6 +2022,7 @@ function FixedItem({i,m,bm}){
     ${hits.length?hx`<p class="bhint"><small>Bu dönemin ekstresinde "${hits[0].desc}" (${fmt(hits.reduce((s,t)=>s+t.amt,0))}) var. Bu gideri kartla ödüyorsanız "Kartla ödeniyor"u işaretleyin; yoksa iki kez düşülür.</small></p>`:null}
     ${open?hx`<div class="bibody">
       ${i.src?hx`<p class="bnote"><small>Hesap özetinden eklendi; açıklamadaki sözcükler: ${i.src}</small></p>`:null}
+      ${i.seen&&i.seen.length?hx`<details class="bdet"><summary><small>Hesap özetindeki ${i.seen.length} ödeme</small></summary><div class="brows">${i.seen.slice().reverse().map(x=>hx`<div class="brow" key=${x.d+x.desc+x.v}><span></span><span><small class="bd">${x.desc}</small><small>${toDate(x.d).toLocaleDateString("tr-TR")} · ${periodLabel(x.p,true)} dönemi</small></span><small class="n">${fmt2(x.v)}</small></div>`)}</div></details>`:null}
       <table class="bamts"><tbody>${i.amts.map((a,n)=>hx`<tr key=${a.from}><td>${monthName(a.from)} ve sonrası</td><td class="n">${fmt(a.v)}</td><td class="n">${n?hx`<button class="x" title="Bu tutar değişikliğini sil" onClick=${()=>undoable(`${i.name}: tutar değişikliği silindi`,()=>i.amts.splice(n,1))}>✕</button>`:null}</td></tr>`)}</tbody></table>
       <div class="bform"><input type="text" inputmode="decimal" data-newamt placeholder="Yeni aylık tutar (₺)" aria-label="Yeni aylık tutar"/>
         <label>Şu aydan itibaren<input type="month" data-newfrom value=${m}/></label>
@@ -2138,15 +2155,26 @@ function bankRowsFromTable(tab){
   return rows;
 }
 /* PDF: pdfToRows(…, true) satırları; ilk tutar işlem, ikincisi bakiye */
+/* PDF: pdfToRows(…, true) satırları; ilk tutar işlem, ikincisi bakiye. Bazı bankalar Bakiye'yi Tutar'dan önce yazar:
+   iki dizilişten hangisinde bakiye farkı tutara daha çok satırda uyuyorsa o seçilir. */
 function bankRowsFromPdf(t){
-  const body=t.slice(1), signed=body.some(r=>/^-/.test(r[2]));
+  const body=t.slice(1);
   const n=x=>x?toNum(x.replace(/^[-+]/,""))*(/^-/.test(x)?-1:1):null;
-  return body.map(r=>{
-    const date=toISOfromTR(r[0]), am=[r[2],r[3],r[4]].filter(Boolean);
-    if(OPEN_RE.test(norm(r[1])))return {date,desc:r[1],open:true,bal:am.length?n(am.at(-1)):null};
-    const a1=am[0]||"";
-    return {date,desc:r[1],a:Math.abs(n(a1)||0),bal:am.length>1?n(am[1]):null,s:/^-/.test(a1)?-1:/^\+/.test(a1)?1:signed?1:0};
-  }).filter(r=>r.date);
+  const build=swap=>{
+    const signed=body.some(r=>/^-/.test(swap&&r[3]?r[3]:r[2]));
+    return body.map(r=>{
+      const date=toISOfromTR(r[0]), am=[r[2],r[3],r[4]].filter(Boolean);
+      if(OPEN_RE.test(norm(r[1])))return {date,desc:r[1],open:true,bal:am.length?n(am.at(-1)):null};
+      const [a1,b1]=swap&&am.length>1?[am[1],am[0]]:[am[0]||"",am[1]];
+      return {date,desc:r[1],a:Math.abs(n(a1)||0),bal:b1?n(b1):null,s:/^-/.test(a1)?-1:/^\+/.test(a1)?1:signed?1:0};
+    }).filter(r=>r.date);
+  };
+  const a=build(false), b=build(true);
+  return balanceFits(b)>balanceFits(a)?b:a;
+}
+function balanceFits(rows){
+  const fit=(i,j)=>{const a=rows[i],b=rows[j];if(!b||a.open||a.bal==null||b.bal==null)return 0;return Math.abs(Math.abs(a.bal-b.bal)-a.a)<0.01?1:0};
+  let fw=0,bw=0; rows.forEach((r,i)=>{fw+=fit(i,i-1);bw+=fit(i,i+1)}); return Math.max(fw,bw);
 }
 /* İşaretsiz satırların yönü: bakiye bir öncekine göre tutar kadar arttıysa gelen, azaldıysa giden.
    Özet eskiden yeniye ya da yeniden eskiye sıralı olabilir; daha çok satırın tuttuğu yön seçilir. */
@@ -2182,6 +2210,7 @@ async function readBankFile(f){
   }else wb=XLSX.read(buf,{type:"array",cellDates:false});
   return signFromBalance(bankRowsFromTable(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:""})));
 }
+const OWN_RE=/VIRMAN|HESAPLAR ARASI|KENDI HESAB|HESABIMA|BIRIKIM HESAB|VADELI HESAB/;
 const REST_WHY={card:"kredi kartı ödemesi (ekstrede zaten var)",small:"küçük tutar (₺100 altı)",once:"tek seferlik / düzenli değil",same:"kayıtlı kalemle aynı"};
 function detectFixedFromBank(rows){
   let cardSum=0,cardN=0;
@@ -2204,7 +2233,8 @@ function detectFixedFromBank(rows){
   const mk=x=>fillSug({kind:x.kind,key:x.key,toks:x.toks,rows:x.rows.sort((a,b)=>a.date.localeCompare(b.date))});
   for(const x of groups){
     const s=mk(x);
-    s.on=s.regular;
+    s.own=x.rows.some(r=>OWN_RE.test(norm(r.desc)));   /* kendi hesaplar arası aktarım gelir/gider değildir: işaretsiz gelir */
+    s.on=s.regular&&!s.own;
     if(s.type==="same")s.why="same"; else if(!s.regular&&!FIXED_KW.test(norm(s.desc)))s.why="once";
     (s.why?rest:sugs).push(s);
   }
@@ -2240,13 +2270,26 @@ function startAt(amts,from){
 /* Önerinin aylık tutarlarını, tutar geçmişini ve kayıtlı kalemle ilişkisini, dahil edilen hareketlerden (yeniden) hesaplar */
 function fillSug(s){
   const live=s.rows.filter(r=>!r.off), per=perMonth(s.rows);
-  const ms=Object.keys(per).sort(), vs=ms.map(k=>Math.round(per[k]*100)/100), med=[...vs].sort((a,b)=>a-b)[Math.floor(vs.length/2)];
+  const ms=Object.keys(per).sort(), vs=ms.map(k=>Math.round(per[k]*100)/100);
   const first=live[0]||s.rows[0];
   if(!s.nameEdited)s.name=bankName(first.desc);
   s.desc=first.desc; s.months=ms; s.per=Object.fromEntries(ms.map((k,i)=>[k,vs[i]]));
-  s.regular=ms.length>=2&&vs.filter(v=>Math.abs(v-med)<=med*.15).length>=Math.max(2,ms.length*.6);
-  /* Tutar geçmişi: değer %1'den fazla değişince o aydan yeni tutar (kira artışı, zam) */
-  const amts=[]; ms.forEach((k,i)=>{const last=amts.at(-1);if(!last||Math.abs(vs[i]-last.v)>last.v*.01)amts.push({from:k,v:vs[i]})});
+  const cnt={}; live.forEach(r=>{const k=r.p||r.date.slice(0,7);cnt[k]=(cnt[k]||0)+1}); s.cnt=cnt;
+  /* Aylık tutar ödeme başına hesaplanır, dönem toplamından değil: maaş kesim gününden sonra yatınca bir dönemde iki, öbüründe
+     sıfır ödeme olur; toplam alınsaydı o ayın geliri iki katı görünürdü. Dönemde genelde birden çok ödeme varsa (haftalık vb.) toplam kullanılır. */
+  const cs=Object.values(cnt), multi=cs.filter(c=>c>1).length>cs.length/2;
+  const seq=multi?ms.map((k,i)=>({p:k,v:vs[i]})):live.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(r=>({p:r.p||r.date.slice(0,7),v:Math.round(r.amt*100)/100}));
+  const sv=seq.map(x=>x.v).sort((a,b)=>a-b), med=sv[Math.floor(sv.length/2)];
+  s.regular=ms.length>=2&&seq.filter(x=>Math.abs(x.v-med)<=med*.15).length>=Math.max(2,seq.length*.6);
+  /* Tutar geçmişi: %1'den fazla değişen tutar ancak sonraki ödemede de sürerse (ya da son ödemeyse) yeni tutar sayılır
+     (kira artışı, zam); tek seferlik sıçrama (ikramiye, gecikme cezası) geçmişe girmez */
+  const amts=[];
+  seq.forEach((x,i)=>{const last=amts.at(-1),dif=v=>Math.abs(v-x.v)>Math.max(1,x.v*.01);
+    if(!last){amts.push({from:x.p,v:x.v});return}
+    if(!dif(last.v))return;
+    const next=seq[i+1]; if(next&&dif(next.v))return;
+    if(x.p===last.from)last.v=x.v; else amts.push({from:x.p,v:x.v});
+  });
   s.amts=amts.length?amts:[{from:first.date.slice(0,7),v:0}]; s.amt=fmtNum(s.amts.at(-1).v);
   /* kayıtlı kalem: kaynak sözcükleri benziyorsa (eski sürümün sıralı anahtarı da) ya da adı aynıysa */
   const it=budget.items.find(i=>i.kind===s.kind&&((i.src&&tokOverlap(bankTokens(i.src),s.toks).r>=.6)||norm(i.name)===norm(s.name)));
@@ -2284,6 +2327,9 @@ async function readBankFiles(files){
   bView.bank={...det,n:rows.length,unk,errs,files:files.map(f=>f.name),ms};
   renderBudget();
 }
+/* Kalemi oluşturan hesap hareketleri (yalnızca bu kalemin; tarih, dönem, açıklama, tutar), son 36'sı */
+const seenOf=s=>s.rows.filter(r=>!r.off).map(r=>({d:r.date,p:r.p||r.date.slice(0,7),desc:r.desc,v:Math.round(r.amt*100)/100}));
+function mergeSeen(a,b){const m=new Map();[...(a||[]),...(b||[])].forEach(x=>m.set(`${x.d}|${x.desc}|${x.v}`,x));return [...m.values()].sort((x,y)=>x.d.localeCompare(y.d)).slice(-36)}
 function applyBank(){
   const B=bView.bank, sel=B.sugs.filter(s=>s.on&&s.type!=="same"&&s.months.length&&bfSug(s));
   if(!sel.length){bView.bank=null;bView.bankMsg="Hiçbir öneri seçilmedi, hiçbir şey değişmedi.";renderBudget();return}
@@ -2295,22 +2341,23 @@ function applyBank(){
         const it=budget.items.find(i=>i.id===s.item); if(!it)continue;
         const nv=v>0?v:last.v, a=it.amts.find(x=>x.from===s.from);
         if(a)a.v=nv; else{it.amts.push({from:s.from,v:nv});it.amts.sort((x,y)=>x.from.localeCompare(y.from))}
-        it.src=s.key; continue;
+        it.src=s.key; it.seen=mergeSeen(it.seen,seenOf(s)); continue;
       }
       /* Tutar elle değiştirildiyse tek tutar: ilk görüldüğü aydan bu yana */
       const amts=startAt(v>0&&Math.abs(v-last.v)>0.005?[{from:s.amts[0].from,v}]:s.amts.map(a=>({...a})),s.start);
-      budget.items.push({id:uid(),kind:s.kind,name:s.name.trim()||bankName(s.desc),amts,to:"",card:false,src:s.key});
+      budget.items.push({id:uid(),kind:s.kind,name:s.name.trim()||bankName(s.desc),amts,to:"",card:false,src:s.key,seen:seenOf(s)});
     }
   });
 }
 function BankSug({s}){
-  const ml=s.months.map(k=>`${periodLabel(k,true)} ${fmt(s.per[k])}`).join(" · ");
+  const ml=s.months.map(k=>`${periodLabel(k,true)} ${fmt(s.per[k])}${s.cnt&&s.cnt[k]>1?` (${s.cnt[k]} ödeme)`:""}`).join(" · ");
   const variants=[...new Set(s.rows.map(r=>r.k0))];
   const tog=(r,on)=>{r.off=!on;fillSug(s);if(s.type==="same")s.on=false;renderBudget()};
   return hx`<div class="bsug" data-sug=${s.kind+"|"+s.key}>
     <label class="bchk"><input type="checkbox" data-on checked=${s.on} aria-label=${s.name+" ekle"} onChange=${e=>{s.on=e.target.checked}}/></label>
     <div class="bsugm">${s.type==="change"?hx`<b>${s.itemName}</b><br/>`:hx`<input type="text" data-name value=${s.name} aria-label="Ad" onInput=${e=>{s.name=e.target.value;s.nameEdited=true}}/>`}
       <button class="ghost bflip" data-flip title="Yön yanlış okunduysa değiştirin" onClick=${()=>flipSug(s)}>${s.kind==="income"?"Gidere çevir":"Gelire çevir"}</button>
+      ${s.own?hx`<small class="bwarn">Kendi hesaplarınız arasında aktarım olabilir (virman, birikim hesabı); gelir ya da gider değilse eklemeyin.</small><br/>`:null}
       <small>${s.type==="change"?`Kayıtlı ${fmt(s.cur)}, hesapta ${monthName(s.from)} ve sonrası farklı · `:s.type==="same"?"Kayıtlı kalemle aynı · ":""}${s.months.length?ml:"hiç hareket seçili değil"}${s.regular?"":" · düzenli değil, kontrol edin"}</small>
       </div>
     <input type="text" inputmode="decimal" data-amt value=${s.amt} aria-label="Aylık tutar" onInput=${e=>{s.amt=e.target.value}}/>
@@ -2423,7 +2470,10 @@ function KpiItems({kind,m}){
   return hx`<div class="panel bkpil" id="bKpiList">
     <div class="bankhead"><b>${monthName(m)} · ${inc?"gelirler":"sabit giderler"}</b><button class="x" aria-label="Kapat" onClick=${()=>{bView.kpi=null;renderBudget()}}>✕</button></div>
     ${on.length?hx`<div class="brows">${on.map(({i,v})=>hx`<div class="brow" key=${i.id} data-kitem=${i.id}><span></span>
-      <span><button class="linkish bd" onClick=${()=>go(i)}>${i.name}</button><small>${i.card?"kartla ödeniyor · ekstrede zaten var, ayrıca düşülmez":i.src?"hesap özetinden":"elle eklendi"}</small></span>
+      <span><button class="linkish bd" onClick=${()=>go(i)}>${i.name}</button><small>${i.card?"kartla ödeniyor · ekstrede zaten var, ayrıca düşülmez":i.src?"hesap özetinden":"elle eklendi"}</small>
+        ${i.seen?(()=>{const ps=i.seen.filter(x=>x.p===m);return ps.length?ps.map(x=>hx`<small class="bseen" key=${x.d+x.v}>${toDate(x.d).toLocaleDateString("tr-TR")} · ${x.desc} · ${fmt2(x.v)}</small>`)
+          :hx`<small class="bseen">Bu dönemde hesap özetinde ödeme görünmüyor; sabit tutar sayıldı.</small>`})():null}
+        ${i.seen&&i.seen.filter(x=>x.p===m).length>1?hx`<small class="bwarn">Bu dönemde ${i.seen.filter(x=>x.p===m).length} ödeme var; aylık tutar bir kez sayılır.</small>`:null}</span>
       <span class="n"><small class=${i.card?"":"bd"}>${fmt(v)}</small></span></div>`)}</div>
       <p class="bnote"><small>Toplam ${inc?"gelir":"kart dışı sabit gider"}: <b>${fmt(sum)}</b></small></p>`
       :hx`<p class="empty"><small>Bu ayda etkin ${inc?"gelir":"sabit gider"} kalemi yok.</small></p>`}
