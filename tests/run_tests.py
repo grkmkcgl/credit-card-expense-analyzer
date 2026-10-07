@@ -1619,6 +1619,54 @@ def hesap_ozeti_yon_bakiyeden_ve_elle(b, info):
     eq(a.ev("budget.items.map(i=>[i.kind,i.name])"), [["expense", "Ornek Kisi"]], "seçilen yönde eklendi")
     a.close()
 
+
+@test
+def birikim_suzgec(b, info):
+    a = _butce_app(b)
+    a.ev("()=>{budget.items.push({id:'s1',kind:'expense',name:'Spor salonu',amts:[{from:'2026-01',v:600}],to:'',card:false});render()}")
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    left = a.text("#bLeft")
+    _bank(a, "hesap_isaretli.pdf")
+    a.pg.click("#bFilter > summary"); a.pg.click("#bankRest > summary"); a.pg.wait_for_timeout(100)
+    rest = lambda: a.text("#bankRest")
+    # yön = gider
+    a.pg.click("#bFilter [data-dir='expense']"); a.pg.wait_for_timeout(100)
+    eq(a.pg.locator("#iAdd").count(), 0, "sabit gelirler gizli"); assert a.pg.locator("#eAdd").count() == 1
+    eq(a.ev("[...document.querySelectorAll('#bankBox [data-sug]')].map(e=>e.dataset.sug.split('|')[0])"), ["expense"], "önerilerde gelir yok")
+    eq(a.pg.locator("#bankRest .bsign.in").count(), 0, "önerilmeyenlerde gelen yok")
+    assert "Süzgeç (1)" in a.text("#bFilter > summary")
+    a.pg.click("#bfClear"); a.pg.wait_for_timeout(100)
+    # tutar en az 1.000
+    a.pg.fill("#bfMin", "1.000"); a.pg.press("#bfMin", "Enter"); a.pg.wait_for_timeout(100)
+    eq(a.ev("[...document.querySelectorAll('[data-item]')].map(e=>e.dataset.item)"), ["i1", "e1"], "Aidat ve Spor salonu gizli")
+    assert "1 / 3 gösteriliyor" in a.text("#budget"), a.text("#budget")
+    assert "ORNEK MARKET" not in rest() and "ORNEK KAFE" not in rest() and "ATM PARA" in rest()
+    eq(a.text("#bLeft"), left, "kalan süzgeçten etkilenmez")
+    a.pg.click("#bfClear"); a.pg.wait_for_timeout(100)
+    # tür çipleri
+    assert "KREDI KARTI ODEMESI" in rest()
+    a.pg.click("#bFilter [data-type='cardpay']"); a.pg.wait_for_timeout(100)
+    assert "KREDI KARTI ODEMESI" not in rest(), rest()
+    a.pg.click("#bFilter [data-type='iCard']"); a.pg.wait_for_timeout(100)
+    eq(a.pg.locator("[data-item='e2']").count(), 0, "kartla ödenen aidat gizli")
+    a.pg.click("#bfClear"); a.pg.wait_for_timeout(100)
+    # ay
+    a.pg.select_option("#bfRange", "2026-08"); a.pg.wait_for_timeout(100)
+    dates = a.ev("[...document.querySelectorAll('#bankRest .brow')].map(e=>e.innerText.match(/\\d\\d\\.(\\d\\d)\\.2026/)[1])")
+    assert dates and set(dates) == {"08"}, dates
+    eq(a.pg.locator("#budget tr[data-m]").count(), 1, "tabloda tek ay")
+    a.pg.select_option("#bfRange", "3"); a.pg.wait_for_timeout(100)
+    eq(a.ev("[...document.querySelectorAll('#budget tr[data-m]')].map(e=>e.dataset.m)"), ["2026-07", "2026-08", "2026-09"], "son 3 ay")
+    a.pg.click("#bfClear"); a.pg.wait_for_timeout(100)
+    assert a.pg.locator("#budget tr[data-m]").count() > 3 and a.pg.locator("[data-item]").count() == 4, "temizle hepsini geri getirir"
+    # süzgeçle gizlenen işaretli öneri eklenmez
+    a.pg.click("#bFilter [data-dir='income']"); a.pg.wait_for_timeout(100)
+    assert "gizlenen 1 işaretli öneri" in a.text("#bankHidden"), a.text("#bankBox")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.length"), 4, "gizli BES eklenmedi")
+    eq(sorted(json.loads(a.ev("snapshot()"))["budget"].keys()), ["assets", "items", "rates"], "süzgeç dosyaya yazılmaz")
+    a.close()
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
