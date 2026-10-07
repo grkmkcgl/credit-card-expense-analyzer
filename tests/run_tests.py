@@ -1667,6 +1667,46 @@ def birikim_suzgec(b, info):
     eq(sorted(json.loads(a.ev("snapshot()"))["budget"].keys()), ["assets", "items", "rates"], "süzgeç dosyaya yazılmaz")
     a.close()
 
+
+@test
+def hesap_ozeti_kesim_donemi_baslangic_ve_kalem_listesi(b, info):
+    a = _butce_app(b, budget=False)   # ekstreler her ayın 26'sında kesiliyor
+    rows = [{"date": d, "desc": "EFT GIDEN ORNEK EV SAHIBI KIRA", "amt": -15000} for d in ("2026-07-28", "2026-08-28", "2026-09-28")]
+    rows += [{"date": d, "desc": "SITE AIDAT", "amt": -750} for d in ("2026-07-20", "2026-08-20", "2026-09-20")]
+    got = a.ev("r=>detectFixedFromBank(r).sugs.map(s=>[s.name,s.months])", rows)
+    eq(got, [["Kira", ["2026-08", "2026-09", "2026-10"]], ["Aidat", ["2026-07", "2026-08", "2026-09"]]],
+       "kesimden (26) sonraki ödeme sonraki ekstre dönemine")
+    a.close()
+    # ekstre yoksa takvim ayı
+    a = App(b)
+    eq(a.ev("r=>detectFixedFromBank(r).sugs.map(s=>s.months[0])", rows), ["2026-07", "2026-07"], "ekstresiz: takvim ayı")
+    a.close()
+    # önizlemede başlangıç ayı, kalemde başlangıç ayı değiştirme
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    _bank(a, "hesap_isaretli.pdf")
+    a.pg.fill("[data-sug='expense|AYSE KIRA ORNEKOGLU'] [data-from]", "2026-05")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    kira = a.ev("budget.items.find(i=>i.name==='Kira').id")
+    eq(a.ev(f"budget.items.find(i=>i.id==='{kira}').amts"), [{"from": "2026-05", "v": 15000}], "seçilen başlangıç")
+    a.pg.click(f"[data-item='{kira}'] .bihead"); a.pg.wait_for_timeout(100)
+    a.pg.fill(f"[data-item='{kira}'] [data-start]", "2026-08"); a.pg.press(f"[data-item='{kira}'] [data-start]", "Tab"); a.pg.wait_for_timeout(150)
+    eq(a.ev(f"budget.items.find(i=>i.id==='{kira}').amts"), [{"from": "2026-08", "v": 15000}], "kalemde başlangıç değişti")
+    # Gelir / Sabit giderler kartı kalemleri listeler; etkin olmayanlar ayrıca yazar
+    a.pg.select_option("#bMonth", "2026-07"); a.pg.wait_for_timeout(100)
+    a.pg.click("#bFixed"); a.pg.wait_for_timeout(100)
+    t = a.text("#bKpiList")
+    assert "Temmuz 2026 · sabit giderler" in t and "Aidat" in t and "₺750" in t and "Bu ay etkin değil: Kira (Ağustos 2026 başından)" in t, t
+    a.pg.click("#bIncome"); a.pg.wait_for_timeout(100)
+    t = a.text("#bKpiList"); assert "gelirler" in t and "Maaş" in t and "₺45.000" in t, t
+    a.pg.click("#bKpiList [data-kitem] button"); a.pg.wait_for_timeout(100)
+    eq(a.pg.locator("#bKpiList").count(), 0, "kaleme gidince liste kapanır")
+    assert a.ev("bView.open.has(budget.items.find(i=>i.name==='Maaş').id)"), "Maaş ayrıntısı açıldı"
+    # süzgeçte tek ay seçmek özet ayını da değiştirir
+    a.pg.click("#bFilter > summary"); a.pg.select_option("#bfRange", "2026-09"); a.pg.wait_for_timeout(100)
+    eq(a.ev("$('bMonth').value"), "2026-09", "süzgeç ayı = özet ayı")
+    a.close()
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
