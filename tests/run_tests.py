@@ -703,6 +703,45 @@ def donem_karsilastirma(b, info):
 
 
 @test
+def donem_dugmeleri_ozet_farki_ve_simgeler(b, info):
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", _pide_history())
+    a.period("")
+    a.pg.click("#pPrev"); a.pg.wait_for_timeout(100)
+    eq(a.ev("$('period').value"), "2026-08", "tüm zamanlardan ‹ son geçmiş döneme gider")
+    assert a.ev("$('pNext').disabled"), "en yeni dönemde › kapalı"
+    c = a.text("#totalCmp"); assert "Temmuz dönemine göre ₺1.410 fazla" in c, c
+    a.pg.click("#pPrev"); a.pg.wait_for_timeout(100)
+    eq(a.ev("$('period').value"), "2026-07", "‹ bir önceki dönem")
+    assert "Haziran dönemine göre" in a.text("#totalCmp")
+    a.pg.click("#pNext"); a.pg.wait_for_timeout(100)
+    eq(a.ev("$('period').value"), "2026-08", "› bir sonraki dönem")
+    a.period("2026-04")
+    assert a.ev("$('pPrev').disabled"), "en eski dönemde ‹ kapalı"
+    eq(a.ev("$('totalCmp').textContent"), "", "önceki dönem yoksa fark yazılmaz")
+    assert a.ev("document.querySelectorAll('#cats .cat[data-k=\"Market\"] .cico svg path').length") > 0, "kategori simgesi"
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
+def gorunum_tercihi_kayit_dosyasinda(b, info):
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", _pide_history())
+    eq(a.ev("document.documentElement.dataset.theme"), "light", "varsayılan açık tema")
+    a.pg.click("#viewOpt summary")
+    a.pg.click("[data-theme-set=naruto]"); a.pg.click("[data-size-set=l]")
+    eq(a.ev("[document.documentElement.dataset.theme,document.documentElement.dataset.size]"), ["naruto", "l"], "seçim uygulanır")
+    eq(a.ev("JSON.parse(snapshot()).prefs"), {"theme": "naruto", "size": "l"}, "seçim kayıt dosyasına yazılır")
+    eq(a.ev("getComputedStyle(document.documentElement).fontSize"), "21px", "büyük yazı")
+    a.ev("h=>{applyData({history:h,prefs:{theme:'dark',size:'s'}});render()}", _pide_history())
+    eq(a.ev("[document.documentElement.dataset.theme,document.documentElement.dataset.size]"), ["dark", "s"], "dosyadaki tercih yüklenir")
+    a.ev("h=>{applyData({history:h});render()}", _pide_history())
+    eq(a.ev("document.documentElement.dataset.theme"), "dark", "tercihi olmayan eski dosya mevcut seçimi bozmaz")
+    eq(a.ev("document.querySelector('meta[name=theme-color]').content"), "#000", "tarayıcı çubuğu rengi temaya uyar")
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
 def duzenli_odemeler(b, info):
     H, i = [], 0
     def add(d, desc, amt, **kw):
