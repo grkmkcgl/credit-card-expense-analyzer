@@ -196,6 +196,7 @@ def ayni_ekstre_iki_kez_yuklenince_tekrar_etmez(b, info):
 # ---------------------------------------------------------------- Ekstre kontrolü
 def _recon(a, stmt_month="2026-08"):
     a.period(stmt_month)
+    a.ev("document.querySelectorAll('#recon details').forEach(d=>d.open=true)")  # varsayılan kapalı; sonuç başlıkta da yazar
     return a.text("#recon")
 
 
@@ -474,7 +475,7 @@ def harcama_analizi_listelerden_acilir(b, info):
         if row.get_attribute("aria-expanded") != "true": row.click(); a.pg.wait_for_timeout(100)
         a.pg.locator("#cats .catlist button[data-an]").filter(has_text="CANKAYA").first.click(); a.pg.wait_for_timeout(150)
         eq(a.ev("$('q').value"), "ege pide", f"kategori listesinden ({view})")
-    a.pg.click("#allFold > summary")
+    a.pg.click("#allFold > summary"); a.pg.click("#topFold > summary")
     for sel in ["#top", "#alltx"]:
         a.pg.fill("#q", ""); a.pg.dispatch_event("#q", "input")
         a.pg.locator(sel + " button[data-an]").first.click(); a.pg.wait_for_timeout(150)
@@ -527,8 +528,9 @@ def islem_silmeden_once_onay_sorulur(b, info):
 @test
 def katlanir_bolumler(b, info):
     a = App(b); a.import_("arti.pdf")
-    for fid in ("allFold", "unkFold", "monthsFold", "rulesFold"):
+    for fid in ("allFold", "unkFold", "monthsFold", "rulesFold", "topFold"):
         eq(a.ev(f"$('{fid}').open"), False, f"{fid} başta kapalı")
+    assert a.ev("$('top').tBodies[0].rows.length") > 0 and a.text("#topCount").endswith("yer)"), a.text("#topCount")
     assert not a.pg.is_visible("#alltx"), "kapalıyken tablo görünmemeli"
     n = a.ev("$('alltx').tBodies[0].rows.length")
     assert n > 0
@@ -613,6 +615,9 @@ def kategori_listesi_yerinde_guncellenir(b, info):
 def ekstre_kontrolu_kapali_kalir(b, info):
     a = App(b); a.import_("wp_ayri.pdf"); a.period("2026-08")
     assert a.ev("!!$('recon').querySelector('details')"), "ekstre kontrolü görünmeli"
+    eq(a.ev("$('recon').querySelector('details').open"), False, "ekstre kontrolü başta kapalı")
+    assert "Tutuyor" in a.text("#recon summary"), "sonuç başlıkta görünmeli"
+    a.ev("$('recon').querySelector('details').open=true")
     a.ev("$('recon').querySelector('details').open=false"); a.ev("render()")
     eq(a.ev("$('recon').querySelector('details').open"), False, "kullanıcının kapattığı kutu yeniden çizimde açılmamalı")
     a.pg.click("#kpiRecon"); a.pg.wait_for_timeout(100)
@@ -904,7 +909,7 @@ def kart_ayrimi(b, info):
     a.pg.select_option("#cardSel", "1234"); a.pg.wait_for_timeout(150)
     eq(a.total(), "₺1.500", "yalnızca 1234"); assert "Tutuyor" in a.text("#recon") and a.ev("document.querySelectorAll('#recon details').length") == 1
     a.pg.select_option("#cardSel", "5678"); a.pg.wait_for_timeout(150)
-    eq(a.total(), "₺500", "yalnızca 5678"); assert "SINEMA" in a.text("#top") and "MIGROS" not in a.text("#top")
+    eq(a.total(), "₺500", "yalnızca 5678"); a.ev("$('topFold').open=true"); assert "SINEMA" in a.text("#top") and "MIGROS" not in a.text("#top")
     a.pg.select_option("#cardSel", ""); a.pg.wait_for_timeout(150)
     eq(a.total(), "₺2.000", "tekrar tüm kartlar")
     # eski dosya / kartsız ekstre: seçici çıkmaz
@@ -1150,7 +1155,8 @@ def ay_sonu_kesim_kaymasi(b, info):
     opts = a.ev("[...document.querySelectorAll('#period option')].map(o=>o.value).filter(v=>/^\\d{4}-\\d{2}$/.test(v))")
     for m in ["2026-01", "2026-02", "2026-03"]:
         eq(opts.count(m), 1, f"{m} dönemi bir kez")
-    assert "Şubat 2026 ekstresi (kesim 01.03.2026)" in a.ev("document.querySelector('#period option[value=\"2026-02\"]').textContent"), a.ev("[...document.querySelectorAll('#period option')].map(o=>o.textContent)")
+    eq(a.ev("document.querySelector('#period option[value=\"2026-02\"]').textContent"), "Şubat 2026 ekstresi", "seçicide kısa ad")
+    a.period("2026-02"); assert a.text("#range").startswith("Kesim 01.03.2026 · "), a.text("#range")  # 1 Mart kesimi Şubat dönemi
     for m, v in [("2026-01", "₺1.300"), ("2026-02", "₺1.200"), ("2026-03", "₺1.400")]:
         a.period(m); eq(a.total(), v, f"{m} toplamı")
         eq(a.ev("document.querySelectorAll('#recon details').length"), 1, f"{m} tek ekstre kontrolü")

@@ -345,6 +345,21 @@ a{color:inherit}
 .empty{display:flex;align-items:center;gap:8px;color:var(--muted);padding:10px 4px}
 .empty .tick{color:var(--good);font-weight:700}
 .catrow.off{transition:opacity .2s}
+/* Bölümler: hafif renkli kartlar; her bölümün kendi tonu (--tint) var, böylece birbirinden ayrılır */
+.folds{border-top:0;margin-top:24px}
+details.fold{background:color-mix(in srgb,var(--tint,var(--muted)) 7%,var(--paper));border:1px solid color-mix(in srgb,var(--tint,var(--muted)) 28%,var(--line));border-radius:16px;padding:12px 16px;margin:10px 0}
+details.fold>summary{min-height:44px}
+details.fold>summary h2{font-size:1.1rem}
+details.fold>summary .chev{color:var(--tint,var(--muted))}
+#topFold{margin-top:22px}
+.recon{border-radius:16px}
+.recon>summary{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;min-height:40px;list-style:none}
+.recon>summary::-webkit-details-marker{display:none}
+.recon>summary .chev{color:var(--muted);font-size:.8rem;transition:transform .15s}
+.recon[open]>summary .chev{transform:rotate(90deg)}
+.recon.good{background:color-mix(in srgb,var(--good) 6%,var(--paper));border-color:color-mix(in srgb,var(--good) 30%,var(--line))}
+.recon.bad{background:color-mix(in srgb,var(--red) 5%,var(--paper));border-color:color-mix(in srgb,var(--red) 28%,var(--line))}
+@media print{details.fold,.recon{background:#fff;border:0;border-bottom:1px solid #cfd4d2;border-radius:0;padding:8px 0}}
 /* 2. adım: dönem düğmeleri, özet kutusu, kart şeklinde kategori listesi ve simgeler */
 .pnav{display:flex;align-items:center;gap:8px;flex:1;max-width:480px}
 .pnav select{flex:1;font-weight:700;min-height:50px}
@@ -507,10 +522,11 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <div><div class="strip" id="strip" aria-hidden="true"></div><div id="cats"></div></div>
 </div>
 
-<h2>En çok harcanan yerler</h2>
+<details class="fold" id="topFold" style="--tint:#c98500"><summary><span class="chev" aria-hidden="true">▶</span><h2>En çok harcanan yerler <small id="topCount"></small></h2></summary>
 <table id="top" class="top"></table>
+</details>
 
-<details class="fold" id="recurFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Düzenli ödemeler <small id="recurCount"></small></h2></summary>
+<details class="fold" id="recurFold" style="--tint:#199e70"><summary><span class="chev" aria-hidden="true">▶</span><h2>Düzenli ödemeler <small id="recurCount"></small></h2></summary>
 <p><small>En az 3 ekstre döneminde benzer tutarla (±%15) tekrar eden harcamalar: abonelikler, faturalar, aidatlar. Taksitler dahil değildir. Yıllık tutar, tipik aylık tutarın 12 katıdır.</small></p>
 <table id="recur" class="top"></table>
 </details>
@@ -522,35 +538,35 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <div id="qOut"></div>
 
 <div class="folds">
-<details class="fold" id="monthsFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Dönemlere göre <small id="monthsCount"></small></h2></summary>
+<details class="fold" id="monthsFold" style="--tint:#3987e5"><summary><span class="chev" aria-hidden="true">▶</span><h2>Dönemlere göre <small id="monthsCount"></small></h2></summary>
 <p><small>Kredi kartı işlemleri, hangi ekstrede göründülerse o ekstrenin dönemine yazılır. Banka bir harcamayı birkaç gün geç işlerse (ör. 25 Temmuz'daki harcama 26 Temmuz kesiminden sonra işlendiyse) sonraki ekstrede görünür; bu normaldir.</small></p>
 <p style="margin:0 0 6px"><small id="monthsNote" class="err"></small></p>
 <div id="months"></div>
 <div id="instCal"></div>
 </details>
 
-<details class="fold" id="trendFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategori trendleri <small id="trendCount"></small></h2></summary>
+<details class="fold" id="trendFold" style="--tint:#7d6bd1"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategori trendleri <small id="trendCount"></small></h2></summary>
 <p><small>Her kategorinin son 12 ekstre dönemi. Her kart kendi ölçeğindedir; tutarı görmek için çubuğun üzerine gelin. Bir dönem seçiliyse grafik o dönemde biter ve o dönem vurgulanır.</small></p>
 <div id="trends"></div>
 </details>
 
-<details class="fold" id="yearFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Yıllık özet <small id="yearCount"></small></h2></summary>
+<details class="fold" id="yearFold" style="--tint:#d55181"><summary><span class="chev" aria-hidden="true">▶</span><h2>Yıllık özet <small id="yearCount"></small></h2></summary>
 <div id="yearSum"></div>
 </details>
 
-<details class="fold" id="allFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Tüm işlemler <small id="allCount"></small></h2></summary>
+<details class="fold" id="allFold" style="--tint:#0e8a8a"><summary><span class="chev" aria-hidden="true">▶</span><h2>Tüm işlemler <small id="allCount"></small></h2></summary>
 <p><small>Otomatik atanan kategoriyi buradan değiştirebilirsiniz; aynı açıklamaya sahip tüm işlemler güncellenir. Yanlışlıkla eklenen bir satırı (ör. kart ödemesi) silebilirsiniz.</small></p>
 <div id="tagbar"></div>
 <div class="txbar"><input type="search" id="txq" placeholder="İşlem ara… (ör. market, #tatil)" autocomplete="off" aria-label="İşlemlerde ara"><select id="txcat" aria-label="Kategoriye göre süz"><option value="">Tüm kategoriler</option></select></div>
 <div class="scroll"><table id="alltx"></table></div>
 </details>
 
-<details class="fold" id="unkFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategorisi bulunamayanlar <small id="unkCount"></small></h2></summary>
+<details class="fold" id="unkFold" style="--tint:#d95926"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategorisi bulunamayanlar <small id="unkCount"></small></h2></summary>
 <p><small>Bir kategori seçtiğinizde aynı açıklamaya sahip tüm işlemler güncellenir.</small></p>
 <table id="unk"></table>
 </details>
 
-<details class="fold" id="rulesFold"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategori kuralları <small id="rulesCount"></small></h2></summary>
+<details class="fold" id="rulesFold" style="--tint:#5b6b8a"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategori kuralları <small id="rulesCount"></small></h2></summary>
 <p><small>Bir kategoriye tıklayıp anahtar kelime ekleyin ya da silin. Açıklamada anahtar kelime geçerse işlem o kategoriye atanır; birden çok kelime eşleşirse en uzunu kazanır.</small></p>
 <div id="rulesEd"></div>
 <details id="rulesText" class="rtext"><summary>Metin olarak düzenle (gelişmiş)</summary>
@@ -565,7 +581,7 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <div id="sharePreview" class="hide"></div>
 </details>
 
-<details class="fold" id="hist"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kayıtlı geçmiş</h2></summary>
+<details class="fold" id="hist" style="--tint:#6b7370"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kayıtlı geçmiş</h2></summary>
 <p><small id="histInfo"></small></p>
 <button class="ghost danger" id="clr">Geçmişi sil</button>
 </details>
@@ -1466,8 +1482,9 @@ function ReconBox({stmt,multi}){
       ${S.missed&&S.missed.length?hx`<p><small>Bu ekstrede işlem olarak okunamayan, tutar içeren satırlar:</small></p><div class="scroll" style="max-height:200px;font-size:.85rem">${S.missed.map((t,i)=>hx`<div key=${i+t} style="padding:4px 0;border-bottom:1px solid var(--line);display:flex;gap:10px;justify-content:space-between;align-items:center"><span>${t}</span><button class="x" data-mi=${i} title="Bu satırı bu ekstreye harcama olarak ekle" onClick=${()=>addMissed(stmt,i)}>Ekle</button></div>`)}</div>`:null}
     <//>`;
   }else verdict=hx`<p><small>Ekstrede dönem borcu bulunamadı, karşılaştırma yapılamadı.</small></p>`;
-  return hx`<div><details class="panel" style="margin-top:14px" open=${S.due!=null}>
-    <summary><b>Ekstre kontrolü</b> <small>(${multi?`kesim ${toDate(stmt).toLocaleDateString("tr-TR")}, `:""}dönem borcu ile karşılaştırma)</small></summary>
+  const dd=S.due!=null?Math.round((S.due-calc)*100)/100:null, okR=dd!=null&&Math.abs(dd)<1;
+  return hx`<div><details class=${"panel recon "+(dd==null?"":okR?"good":"bad")} style="margin-top:14px">
+    <summary><span class="chev" aria-hidden="true">▶</span><b>Ekstre kontrolü</b> ${dd==null?null:hx`<span class=${"pill "+(okR?"good":"bad")}>${okR?"✓ Tutuyor":`Fark ${fmt2(dd)}`}</span>`} <small>(${multi?`kesim ${toDate(stmt).toLocaleDateString("tr-TR")}, `:""}dönem borcu ile karşılaştırma)</small></summary>
     <table style="margin-top:8px"><tbody>
       ${hasPrev?row("Önceki dönem borcu (ekstreden)",S.prev):null}
       ${row("+ Bu ekstredeki harcamalar ve taksitler",B)}${row("− İadeler ve indirimler",C)}${hasPrev?row("− Ödemeleriniz",D):null}
@@ -2186,6 +2203,7 @@ function render(){
   const all=Object.values(byD).sort((a,b)=>b.sum-a.sum);
   const topMax=Math.max(all.length?all[0].sum:0,1);
   preact.render(hx`<tbody>${all.slice(0,10).map(d=>hx`<tr key=${d.desc}><td class="tdot"><span class="dot" style=${"background:"+d.col}></span></td><td><${AnBtn} desc=${d.desc}/><br/><small>${d.cat}, ${d.n} işlem</small><div class="mbar" aria-hidden="true"><span style=${`width:${Math.max(0,d.sum/topMax*100)}%;background:${d.col}`}></span></div></td><td class="n"><b>${fmt(d.sum)}</b></td></tr>`)}</tbody>`,$("top"));
+  $("topCount").textContent=all.length?`(${Math.min(10,all.length)} yer)`:"";
   const rec=detectRecurring(), recActive=rec.filter(r=>!r.gone);
   $("recurCount").textContent=rec.length?`(${recActive.length} · aylık ${fmt(recActive.reduce((s,r)=>s+r.med,0))})`:"";
   preact.render(hx`<tbody>${rec.length?rec.map(r=>hx`<${RecurRow} key=${r.key} r=${r}/>`):hx`<tr><td><div class="empty"><small>Henüz düzenli ödeme bulunmadı. En az 3 ekstre dönemi gerekir.</small></div></td></tr>`}</tbody>`,$("recur"));
