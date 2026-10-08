@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="tr" data-theme="light" data-size="m">
 <head>
 <meta charset="UTF-8">
 <!-- Ağ kilidi: sayfa hiçbir adrese bağlanamaz (connect-src 'none'), dışarıdan betik/stil/yazı tipi yükleyemez.
      'unsafe-eval' gömülü kütüphaneleri açmak için, blob: PDF.js worker'ı için (sayfanın kendi ürettiği adresler), 'self' service worker ve ikonlar için. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob:; style-src 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; manifest-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#f6f5f2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,39 +16,56 @@
 <link rel="icon" href="icons/icon-192.png">
 <title>Harcama Analizi (çevrimdışı)</title>
 <style>
-:root{--bg:#000;--ink:#E9EDEB;--muted:#98A29E;--line:#262B2A;--teal:#35C2AC;--mustard:#F0B93A;--red:#F0736B;--paper:#111413;--field:#1A1E1D}
+/* Renkler tek yerde: açık tema varsayılan; koyu tema ve "Oto" (cihazın ayarı) aşağıda. Yazı boyutu html'in font-size'ı. */
+:root{--bg:#f6f5f2;--ink:#1d1f1e;--muted:#5b625f;--line:#dcdad4;--acc:#1f6fd1;--accInk:#fff;--good:#13804f;--mustard:#9a6200;--red:#c2410c;--paper:#fff;--field:#f0efeb;
+--okBg:#e7f3ec;--okLine:#b9dcc8;--okInk:#15553a;--warnBg:#fff4dc;--warnLine:#ecd29a;--warnInk:#6b4500;--toastBg:#1d1f1e;--toastInk:#fff;--shadow:rgba(30,30,20,.14);color-scheme:light}
+:root[data-theme=dark]{--bg:#000;--ink:#E9EDEB;--muted:#98A29E;--line:#2a2f2e;--acc:#5aa2f2;--accInk:#06101c;--good:#35C2AC;--mustard:#F0B93A;--red:#F0736B;--paper:#111413;--field:#1A1E1D;
+--okBg:#0C2420;--okLine:#1C4A42;--okInk:#CFE9E3;--warnBg:#241a0a;--warnLine:#5a4418;--warnInk:#F7E3B0;--toastBg:#1d2322;--toastInk:#E9EDEB;--shadow:rgba(0,0,0,.5);color-scheme:dark}
+@media (prefers-color-scheme:dark){:root[data-theme=auto]{--bg:#000;--ink:#E9EDEB;--muted:#98A29E;--line:#2a2f2e;--acc:#5aa2f2;--accInk:#06101c;--good:#35C2AC;--mustard:#F0B93A;--red:#F0736B;--paper:#111413;--field:#1A1E1D;
+--okBg:#0C2420;--okLine:#1C4A42;--okInk:#CFE9E3;--warnBg:#241a0a;--warnLine:#5a4418;--warnInk:#F7E3B0;--toastBg:#1d2322;--toastInk:#E9EDEB;--shadow:rgba(0,0,0,.5);color-scheme:dark}}
+html{font-size:18px}
+html[data-size=s]{font-size:16px}
+html[data-size=l]{font-size:21px}
 *{box-sizing:border-box}
-html{color-scheme:dark}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{margin:0;background:var(--bg);color:var(--ink);font:1rem/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:900px;margin:0 auto;padding:24px 16px 64px}
 h1{font-size:1.9rem;line-height:1.15;margin:0 0 6px;letter-spacing:-.02em}
 h2{font-size:1.15rem;margin:40px 0 12px;letter-spacing:-.01em}
 p{margin:0 0 10px;max-width:68ch}
 code{background:var(--field);padding:1px 5px;border-radius:4px}
-.lock{display:flex;gap:10px;align-items:flex-start;background:#0C2420;border:1px solid #1C4A42;color:#CFE9E3;padding:14px 16px;border-radius:10px;margin:16px 0 24px;font-size:.93rem}
-.lock b{color:#fff}
-.drop{position:relative;border:2px dashed var(--teal);border-radius:12px;padding:24px 16px;text-align:center;background:var(--paper);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;margin:14px 0 0;color:var(--ink);font-size:1rem}
-.drop:hover,body.dragging .drop{background:#0C2420}
+.lock{display:flex;gap:10px;align-items:flex-start;background:var(--okBg);border:1px solid var(--okLine);color:var(--okInk);padding:14px 16px;border-radius:10px;margin:16px 0 24px;font-size:.93rem}
+.lock b{color:inherit}
+.drop{position:relative;border:2px dashed var(--acc);border-radius:12px;padding:24px 16px;text-align:center;background:var(--paper);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;margin:14px 0 0;color:var(--ink);font-size:1rem}
+.drop:hover,body.dragging .drop{background:color-mix(in srgb,var(--acc) 7%,var(--paper))}
 .drop:focus-within{outline:3px solid var(--mustard)}
 .drop .num{margin-bottom:4px}
 .drop .btn{margin:10px 0 2px}
 .vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0)}
 .panel{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:14px}
 label{font-size:.88rem;color:var(--muted);display:block;margin-bottom:4px}
-select,input[type=number],input[type=date],textarea{font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;width:100%;background:var(--field);color:var(--ink)}
+select,input[type=number],input[type=date],textarea{font:inherit;padding:8px 10px;min-height:46px;border:1px solid var(--line);border-radius:8px;width:100%;background:var(--field);color:var(--ink)}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-button,.btn{display:inline-block;font:inherit;font-weight:600;background:var(--teal);color:#001512;border:0;border-radius:8px;padding:10px 18px;cursor:pointer;margin-top:14px;line-height:1.5}
-button.ghost,.btn.ghost{background:transparent;color:var(--teal);border:1px solid var(--teal)}
+button,.btn{display:inline-block;font:inherit;font-weight:600;background:var(--acc);color:var(--accInk);border:0;border-radius:10px;padding:10px 18px;min-height:46px;cursor:pointer;margin-top:14px;line-height:1.5}
+button.ghost,.btn.ghost{background:transparent;color:var(--acc);border:1px solid var(--acc)}
 button:hover,.btn:hover{filter:brightness(1.12)}
 label.btn{margin:14px 8px 0 0}
 button.danger{color:var(--red);border-color:var(--red)}
 .head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}
 .head h1{margin:0}
-.badge{display:none;font-size:.8rem;color:#CFE9E3;background:#0C2420;border:1px solid #1C4A42;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:10px}
+.viewopt{position:relative}
+.viewopt>summary{list-style:none;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:10px;background:var(--paper);font-weight:600;font-size:.9rem;cursor:pointer}
+.viewopt>summary::-webkit-details-marker{display:none}
+.viewopt>summary span{font-weight:800}
+.viewopt>summary:focus-visible{outline:3px solid var(--mustard);outline-offset:2px}
+.vpanel{position:absolute;right:0;top:calc(100% + 6px);z-index:10;display:flex;flex-direction:column;gap:12px;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 10px 28px var(--shadow);width:max-content;max-width:calc(100vw - 32px)}
+.vpanel small{display:block;margin-bottom:4px}
+.vpanel .seg button{min-width:58px;min-height:42px}
+.badge{display:none;font-size:.8rem;color:var(--okInk);background:var(--okBg);border:1px solid var(--okLine);border-radius:999px;padding:3px 10px;white-space:nowrap}
 .stephead{display:flex;gap:12px;align-items:flex-start}
 .stephead p{margin:0}
 .step>button,.step>.btn{margin-left:40px}
-.num{flex:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--teal);color:#001512;font-weight:700;font-size:.9rem}
+.num{flex:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--acc);color:var(--accInk);font-weight:700;font-size:.9rem}
 .how{list-style:none;counter-reset:how;padding:0;margin:28px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .how li{counter-increment:how;border:1px solid var(--line);border-radius:10px;padding:14px 14px 12px}
 .how li::before{content:counter(how);display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;border:1px solid var(--muted);color:var(--muted);font-size:.8rem;font-weight:700;margin-bottom:8px}
@@ -62,7 +79,7 @@ button.danger{color:var(--red);border-color:var(--red)}
 .has-data .intro,.has-data #folderPanel,.has-data #mobilePanel,.has-data #drop,.has-data #how{display:none!important}
 .has-data .toolbar{display:flex}
 .has-data .badge{display:inline-block}
-body.dragging::after{content:"Dosyaları bırakın";position:fixed;inset:12px;z-index:20;display:flex;align-items:center;justify-content:center;border:3px dashed var(--teal);border-radius:16px;background:rgba(0,21,18,.88);color:var(--ink);font-size:1.4rem;font-weight:700;pointer-events:none}
+body.dragging::after{content:"Dosyaları bırakın";position:fixed;inset:12px;z-index:20;display:flex;align-items:center;justify-content:center;border:3px dashed var(--acc);border-radius:16px;background:color-mix(in srgb,var(--bg) 90%,transparent);color:var(--ink);font-size:1.4rem;font-weight:700;pointer-events:none}
 #msg:not(:empty){margin:14px 0 0}
 .flist{border:1px solid var(--line);border-radius:10px;margin:8px 0 6px;overflow:hidden}
 .frow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid var(--line);font-size:.9rem}
@@ -80,12 +97,12 @@ body.dragging::after{content:"Dosyaları bırakın";position:fixed;inset:12px;z-
 .kpi{display:block;margin:0;text-align:left;background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-weight:400}
 .kpi small{display:block;line-height:1.35}
 .kpi b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:1.2rem;line-height:1.25;letter-spacing:-.01em;margin:2px 0;overflow:hidden;overflow-wrap:anywhere}
-.kpi.good b{color:var(--teal)}
+.kpi.good b{color:var(--good)}
 .kpi.bad b{color:var(--red)}
 .kpi.up b{color:var(--red)}
 .delta{font-size:.72rem;font-weight:600;padding:1px 6px;border-radius:9px;white-space:nowrap;vertical-align:1px}
-.delta.up{color:var(--red);background:rgba(240,115,107,.12)}
-.delta.down{color:var(--teal);background:rgba(53,194,172,.12)}
+.delta.up{color:var(--red);background:color-mix(in srgb,var(--red) 13%,transparent)}
+.delta.down{color:var(--good);background:color-mix(in srgb,var(--good) 13%,transparent)}
 button.kpi:hover{border-color:var(--muted);filter:none}
 .search{display:flex;gap:8px}
 .search input{flex:1;min-width:0;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink)}
@@ -122,6 +139,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--mustard);outli
 .donutwrap path{cursor:pointer;transition:opacity .12s;transform-origin:120px 120px;animation:dpop .5s ease-out backwards;animation-delay:calc(var(--i,0)*60ms)}
 @keyframes dpop{from{opacity:0;transform:scale(.85) rotate(-25deg)}}
 .dcenter b{animation:popin .3s ease-out}
+.donutwrap path{stroke:var(--bg)}
 .donutwrap path:focus{outline:none}
 .donutwrap path:focus-visible{stroke:var(--mustard);stroke-width:3}
 .donutwrap.hov path:not(.on){opacity:.35}
@@ -129,22 +147,22 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--mustard);outli
 .dcenter b{font-size:1.25rem;letter-spacing:-.01em}
 .dcenter small{max-width:128px;line-height:1.3}
 .dcenter .nm{font-size:.8rem;color:var(--ink);max-width:128px;line-height:1.25;margin-bottom:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.tip{position:static;margin:0 auto 8px;max-width:240px;white-space:normal;pointer-events:none;background:#1A1E1D;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:.85rem;white-space:nowrap;z-index:3;box-shadow:0 4px 14px rgba(0,0,0,.5);display:none}
+.tip{position:static;margin:0 auto 8px;max-width:240px;white-space:normal;pointer-events:none;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:.85rem;white-space:nowrap;z-index:3;box-shadow:0 4px 14px var(--shadow);display:none}
 .tip .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
 .pienote{font-size:.8rem;color:var(--muted);text-align:center;margin:0 auto;max-width:240px}
 .catrow{display:flex;align-items:stretch;border-bottom:1px solid var(--line)}
 .catrow .row{border-bottom:0;flex:1}
 .inc{display:flex;align-items:center;padding:0 6px 0 2px;cursor:pointer;margin:0}
-.inc input{width:18px;height:18px;accent-color:var(--teal);cursor:pointer}
+.inc input{width:22px;height:22px;accent-color:var(--acc);cursor:pointer}
 .catrow.off .row{opacity:.45}
 .catrow.off .row b{text-decoration:line-through}
 .qcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
 .qcard{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .qcard b{display:block;font-size:1.25rem;letter-spacing:-.01em}
 .qcard small{display:block}
-.qtip{background:#0C2420;border:1px solid #1C4A42;color:#CFE9E3;border-radius:10px;padding:10px 12px;margin:10px 0;font-size:.92rem}
+.qtip{background:var(--okBg);border:1px solid var(--okLine);color:var(--okInk);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:.92rem}
 .linkish{background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;font-weight:inherit;text-align:left;cursor:pointer;text-decoration:none;text-underline-offset:3px}
-.linkish:hover{color:var(--teal);text-decoration:underline;filter:none}
+.linkish:hover{color:var(--acc);text-decoration:underline;filter:none}
 .excl{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:10px 0 0;font-size:.9rem}
 .excl button{margin:0 0 0 8px;padding:3px 10px;font-size:.8rem}
 .rangebox{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
@@ -163,7 +181,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--mustard);outli
 .periodbar{flex-direction:column;align-items:stretch;gap:4px}
 .periodbar select{max-width:none}
 }
-.dot{width:12px;height:12px;border-radius:3px}
+.dot{width:14px;height:14px;border-radius:4px}
 .row{cursor:pointer;width:100%;background:none;color:inherit;border:0;border-bottom:1px solid var(--line);margin:0;font:inherit;font-weight:400;text-align:left;border-radius:0;padding:9px 4px}
 .row:hover{background:var(--paper);filter:none}
 .row .chev{color:var(--muted);font-size:.8rem;transition:transform .15s}
@@ -180,7 +198,7 @@ details.fold>summary:focus-visible{outline:3px solid var(--mustard);outline-offs
 .catlist{background:var(--paper);border-bottom:1px solid var(--line);padding:4px 10px 10px 28px}
 .catlist td{font-size:.85rem}
 .pct{color:var(--muted);font-size:.85rem;min-width:44px;text-align:right}
-.bar{height:10px;background:var(--teal);border-radius:3px;transform-origin:left;transition:width .45s ease;animation:growbar .5s ease-out}
+.bar{height:10px;background:var(--acc);border-radius:3px;transform-origin:left;transition:width .45s ease;animation:growbar .5s ease-out}
 @keyframes growbar{from{transform:scaleX(0)}}
 @keyframes popin{from{opacity:0;transform:translateY(4px)}}
 .kpi b{animation:popin .35s ease-out}
@@ -192,7 +210,7 @@ td.n{text-align:right;white-space:nowrap}
 td select{padding:4px;font-size:.85rem;min-width:130px}
 .scroll{max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:0 8px}
 .err{color:var(--red);font-weight:600}
-.ok{color:var(--teal);font-weight:600}
+.ok{color:var(--good);font-weight:600}
 .hide{display:none!important}
 small{color:var(--muted)}
 details summary{cursor:pointer}
@@ -200,7 +218,7 @@ details summary{cursor:pointer}
 button{transition:filter .15s,transform .1s,background-color .15s,border-color .15s,color .15s}
 button:active:not(:disabled){transform:scale(.97)}
 .kpi,.qcard,.excl,.hero{transition:border-color .2s,box-shadow .2s,transform .2s}
-button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.45)}
+button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px var(--shadow)}
 .row,.linkish,details.fold>summary,select,input{transition:background-color .15s,color .15s,border-color .15s}
 #out:not(.hide){animation:fadein .3s ease-out}
 @keyframes fadein{from{opacity:0}}
@@ -212,15 +230,15 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 #alltx th.n{text-align:right}
 .sortbtn{background:none;border:0;margin:0;padding:2px 0;color:var(--muted);font:inherit;font-size:.8rem;font-weight:600;cursor:pointer}
 .sortbtn:hover{color:var(--ink);filter:none}
-#alltx th[aria-sort] .sortbtn{color:var(--teal)}
-.anom{background:#241a0a;border:1px solid #5a4418;border-radius:10px;padding:10px 12px;margin:10px 0 0;font-size:.9rem;animation:fadein .3s ease-out}
+#alltx th[aria-sort] .sortbtn{color:var(--acc)}
+.anom{background:var(--warnBg);border:1px solid var(--warnLine);color:var(--warnInk);border-radius:10px;padding:10px 12px;margin:10px 0 0;font-size:.9rem;animation:fadein .3s ease-out}
 .anom>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;border-radius:6px}
 .anom>summary::-webkit-details-marker{display:none}
 .anom>summary b{color:var(--mustard)}
 .anom>summary .chev{color:var(--muted);font-size:.8rem;transition:transform .15s}
 .anom[open]>summary .chev{transform:rotate(90deg)}
 .anom>summary:focus-visible{outline:3px solid var(--mustard);outline-offset:2px}
-.arow{display:flex;gap:10px;align-items:flex-start;padding:8px 0 2px;border-top:1px solid #3a2e14;margin-top:6px}
+.arow{display:flex;gap:10px;align-items:flex-start;padding:8px 0 2px;border-top:1px solid var(--warnLine);margin-top:6px}
 .arow>div{flex:1;min-width:0;overflow-wrap:anywhere}
 .aic{color:var(--mustard);font-weight:700;width:14px}
 .instcal{margin-top:16px}
@@ -243,32 +261,32 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 .rowcat{margin-top:3px}
 .rowcat select{font-size:.8rem;padding:2px 6px;min-width:0;width:auto;max-width:100%}
 .kwsug{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin:4px 0 0;font-size:.78rem;color:var(--muted)}
-.kwsug input[type=checkbox]{accent-color:var(--teal)}
+.kwsug input[type=checkbox]{accent-color:var(--acc)}
 .kwsug input[type=text]{font:inherit;font-size:.78rem;padding:2px 6px;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink);width:auto;max-width:160px}
 #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:20;width:max-content;max-width:calc(100% - 32px)}
-.toast{display:flex;align-items:center;gap:14px;background:#1d2322;border:1px solid var(--muted);color:var(--ink);border-radius:10px;padding:8px 10px 8px 14px;box-shadow:0 8px 24px rgba(0,0,0,.6);font-size:.9rem;animation:toastin .25s ease-out}
+.toast{display:flex;align-items:center;gap:14px;background:var(--toastBg);border:1px solid var(--toastBg);color:var(--toastInk);border-radius:10px;padding:8px 10px 8px 14px;box-shadow:0 8px 24px var(--shadow);font-size:.9rem;animation:toastin .25s ease-out}
 .toast span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toast button{margin:0;padding:6px 12px;font-size:.85rem}
 @keyframes toastin{from{opacity:0;transform:translateY(10px)}}
 .notecell{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .note{font-size:.8rem;color:var(--muted);font-style:italic;overflow-wrap:anywhere}
 .notebtn{margin:0;padding:0 4px;background:none;color:var(--muted);border:0;font-size:.8rem;opacity:.55;line-height:1}
-.notebtn:hover,.notebtn:focus-visible{opacity:1;color:var(--teal);filter:none}
-.noteedit input{width:100%;font:inherit;font-size:.85rem;padding:3px 6px;border:1px solid var(--teal);border-radius:4px;background:var(--field);color:var(--ink);margin-top:3px}
-.tag,.tagchip{margin:0;background:rgba(53,194,172,.12);color:var(--teal);border:0;border-radius:9px;padding:0 6px;font:inherit;font-size:.78rem;font-style:normal;cursor:pointer}
+.notebtn:hover,.notebtn:focus-visible{opacity:1;color:var(--acc);filter:none}
+.noteedit input{width:100%;font:inherit;font-size:.85rem;padding:3px 6px;border:1px solid var(--acc);border-radius:4px;background:var(--field);color:var(--ink);margin-top:3px}
+.tag,.tagchip{margin:0;background:color-mix(in srgb,var(--acc) 13%,transparent);color:var(--acc);border:0;border-radius:9px;padding:0 6px;font:inherit;font-size:.78rem;font-style:normal;cursor:pointer}
 .tagbar{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
 .tagchip{padding:3px 10px}
 .tagchip small{color:inherit;opacity:.75}
-.tagchip.on{background:var(--teal);color:#001512}
+.tagchip.on{background:var(--acc);color:var(--accInk)}
 .tag:hover,.tagchip:hover{filter:brightness(1.2)}
 /* Yazdırma / PDF olarak kaydet: açık zemin, koyu yazı, düğmeler ve girişler gizli, tüm bölümler açık ve tam uzunlukta */
 @media print{
-:root{--bg:#fff;--ink:#111;--muted:#555;--line:#cfd4d2;--teal:#0a7d6e;--mustard:#8a5d00;--red:#b3261e;--paper:#fff;--field:#f1f3f2}
+:root,:root[data-theme]{--bg:#fff;--ink:#111;--muted:#555;--line:#cfd4d2;--acc:#1f5fb4;--good:#0a7d4e;--mustard:#8a5d00;--red:#b3261e;--paper:#fff;--field:#f1f3f2}
 html{color-scheme:light}
 *{-webkit-print-color-adjust:exact;print-color-adjust:exact;animation:none!important;transition:none!important}
 body{background:#fff;color:#111;font-size:12px}
 main{max-width:none;padding:0}
-#msg,.toolbar,#saveBar,#toast,.lock,.badge,#how,.intro,.seg,.presets,.txbar,.notebtn,.noteedit,#hist,#unkFold,#rulesFold,#qOut,#q,#qClear,button.x,#exclInfo button,.anom button,input,.kwsug,.catlist select{display:none!important}
+#msg,.toolbar,#saveBar,.viewopt,#toast,.lock,.badge,#how,.intro,.seg,.presets,.txbar,.notebtn,.noteedit,#hist,#unkFold,#rulesFold,#qOut,#q,#qClear,button.x,#exclInfo button,.anom button,input,.kwsug,.catlist select{display:none!important}
 .periodbar select{border:0;background:none;color:#111;font-weight:600;appearance:none;padding:0;width:auto}
 .periodbar label{display:none}
 .hero,.panel,.kpi,.qcard{background:#fff;border-color:#cfd4d2}
@@ -293,7 +311,7 @@ a{color:inherit}
 .rbody{padding:4px 12px 12px;border-top:1px solid var(--line);animation:slidedown .25s ease-out}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .kchip{display:inline-flex;align-items:center;gap:2px;background:var(--field);border:1px solid var(--line);border-radius:14px;padding:2px 4px 2px 10px;font-size:.82rem}
-.kchip.hit{border-color:var(--teal);color:var(--teal)}
+.kchip.hit{border-color:var(--acc);color:var(--acc)}
 .kchip i{font-style:normal;color:var(--mustard);margin-left:2px}
 .kx{margin:0;padding:0 6px;background:none;border:0;color:var(--muted);font-size:.75rem;line-height:1.6}
 .kx:hover{color:var(--red);filter:none}
@@ -310,7 +328,7 @@ a{color:inherit}
 .rres{margin:8px 0 0;font-size:.9rem}
 #completeDef{margin-top:4px}
 .empty{display:flex;align-items:center;gap:8px;color:var(--muted);padding:10px 4px}
-.empty .tick{color:var(--teal);font-weight:700}
+.empty .tick{color:var(--good);font-weight:700}
 .catrow.off{transition:opacity .2s}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 </style>
@@ -344,7 +362,13 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <main>
 <header class="head">
 <h1>Harcama analizi</h1>
-<span class="badge" title="İnternet bağlantısı kullanılmaz, tarayıcıda hiçbir şey saklanmaz. Kayıtlar yalnızca harcama-verisi.json dosyanızda.">🔒 Çevrimdışı</span>
+<span class="hright"><span class="badge" title="İnternet bağlantısı kullanılmaz, tarayıcıda hiçbir şey saklanmaz. Kayıtlar yalnızca harcama-verisi.json dosyanızda.">🔒 Çevrimdışı</span>
+<details class="viewopt" id="viewOpt"><summary title="Görünüm: tema ve yazı boyutu"><span aria-hidden="true">Aa</span> Görünüm</summary>
+<div class="vpanel">
+<div><small>Tema</small><div class="seg" role="group" aria-label="Tema"><button data-theme-set="light">Açık</button><button data-theme-set="dark">Koyu</button><button data-theme-set="auto" title="Cihazın açık/koyu ayarını izler">Oto</button></div></div>
+<div><small>Yazı boyutu</small><div class="seg" role="group" aria-label="Yazı boyutu"><button data-size-set="s" aria-label="Küçük yazı" style="font-size:15px">A</button><button data-size-set="m" aria-label="Normal yazı" style="font-size:18px">A</button><button data-size-set="l" aria-label="Büyük yazı" style="font-size:22px">A</button></div></div>
+<small>Seçim kayıt dosyanıza yazılır.</small>
+</div></details></span>
 </header>
 <div class="intro">
 <p>Kredi kartı ekstrenizi (PDF) ya da bankanızdan indirdiğiniz Excel/CSV dökümünü seçin; harcamalar otomatik kategorilere ayrılsın, siz sadece tanınmayanları düzeltin.</p>
@@ -372,8 +396,8 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <span class="tbact"><button id="tbAdd">+ Ekstre ekle</button><button class="ghost" id="tbPrint" title="Sayfayı yazdır ya da PDF olarak kaydet">Yazdır</button><button class="ghost" id="tbSwitch">Klasör değiştir</button></span>
 </div>
 
-<div id="saveBar" class="hide" style="position:sticky;top:0;z-index:5;background:#2A2208;border:1px solid var(--mustard);color:#F7E3B0;border-radius:10px;padding:10px 14px;margin-top:14px;display:none;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
-<span>Kaydedilmemiş değişiklikler var.</span><button id="dl" style="margin:0;background:var(--mustard);color:#1A1400">Kaydet (dosyayı indir)</button>
+<div id="saveBar" class="hide" style="position:sticky;top:0;z-index:5;background:var(--warnBg);border:1px solid var(--warnLine);color:var(--warnInk);border-radius:10px;padding:10px 14px;margin-top:14px;display:none;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+<span>Kaydedilmemiş değişiklikler var.</span><button id="dl" style="margin:0">Kaydet (dosyayı indir)</button>
 </div>
 
 <label class="drop hide" id="drop">
@@ -541,7 +565,16 @@ let notes={}, dismissed=new Set(), removedDefaults=new Set();   /* kullanıcın�
 /* Tüm işlemler görünümü: arama, kategori süzgeci, sıralama (yalnızca bellekte) */
 const txView={q:"",cat:"",sort:"date",dir:-1};
 let cardSel="";   /* seçili kartın son 4 hanesi; boş = tüm kartlar (yalnızca bellekte) */
-function snapshot(){return JSON.stringify({version:1,updated:new Date().toISOString(),history,statements,overrides,excluded:[...excluded],viewMode,rules:$("rules").value,lastMap,notes,dismissed:[...dismissed],removedDefaults:[...removedDefaults]},null,1)}
+/* Görünüm tercihi: tarayıcıda saklanmaz, kayıt dosyasına (prefs) yazılır. Dosya yüklenmeden önce varsayılan: açık tema, normal yazı. */
+let prefs={theme:"light",size:"m"};
+function applyPrefs(){
+  const r=document.documentElement; r.dataset.theme=prefs.theme; r.dataset.size=prefs.size;
+  document.querySelector('meta[name="theme-color"]').content=getComputedStyle(r).getPropertyValue("--bg").trim()||"#f6f5f2";
+  document.querySelectorAll("[data-theme-set]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.themeSet===prefs.theme));
+  document.querySelectorAll("[data-size-set]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.sizeSet===prefs.size));
+}
+function setPref(k,v){if(prefs[k]===v)return;prefs[k]=v;applyPrefs();if(history.length)save()}
+function snapshot(){return JSON.stringify({version:1,updated:new Date().toISOString(),prefs,history,statements,overrides,excluded:[...excluded],viewMode,rules:$("rules").value,lastMap,notes,dismissed:[...dismissed],removedDefaults:[...removedDefaults]},null,1)}
 async function writeFile(name,text){const fh=await dir.getFileHandle(name,{create:true});const w=await fh.createWritable();await w.write(text);await w.close()}
 const MOBILE=!window.showDirectoryPicker;
 let mobileReady=false;
@@ -563,6 +596,7 @@ async function save(){
 function applyData(d){
   history=d.history||[];statements=d.statements||{};excluded=new Set(d.excluded||[]);viewMode=d.viewMode||"bar";overrides=d.overrides||{};lastMap=d.lastMap||null;
   notes=d.notes||{};dismissed=new Set(d.dismissed||[]);removedDefaults=new Set(d.removedDefaults||[]);
+  if(d.prefs){prefs={...prefs,...d.prefs};applyPrefs()}
   /* Kayıtlı kurallara, yeni sürümde eklenen kategori ve anahtar kelimeleri ekle */
   $("rules").value=mergeRules(d.rules||DEFAULT_RULES,defaultsText()).text;
   migrate(); expandInstallments();
@@ -1762,7 +1796,7 @@ function InstCal({up}){
   const ks=Object.keys(by).sort().slice(0,12), mx=Math.max(...ks.map(k=>by[k].v),1);
   return hx`<div class="instcal"><h3>Gelecek taksit takvimi</h3>
     <p style="margin:0 0 6px"><small>Önümüzdeki ekstrelerde kesinleşmiş taksit yükü. Serinin son taksidi olan dönemde "biter" yazar.</small></p>
-    ${ks.map(k=>{const b=by[k];return hx`<div class="mrow" key=${k}><span>${periodLabel(k,true)}</span><div><div class="bar" style=${`width:${b.v/mx*100}%;background:transparent;border:1px dashed var(--teal)`}></div>${b.end.length?hx`<small class="iend" title=${b.end.join(", ")}>${b.end.length} seri biter</small>`:null}</div><b style="text-align:right">${fmt(b.v)}<br/><small>${b.n} taksit</small></b></div>`})}
+    ${ks.map(k=>{const b=by[k];return hx`<div class="mrow" key=${k}><span>${periodLabel(k,true)}</span><div><div class="bar" style=${`width:${b.v/mx*100}%;background:transparent;border:1px dashed var(--acc)`}></div>${b.end.length?hx`<small class="iend" title=${b.end.join(", ")}>${b.end.length} seri biter</small>`:null}</div><b style="text-align:right">${fmt(b.v)}<br/><small>${b.n} taksit</small></b></div>`})}
     <p style="margin:6px 0 0"><small>Toplam kalan: <b>${fmt(up.reduce((s,t)=>s+t.amt,0))}</b></small></p></div>`;
 }
 /* Kategorisiz satır: seçilen kategori ya kural olarak (önerilen anahtar kelimeyle; aynı yerin gelecekteki işlemleri de otomatik
@@ -2043,7 +2077,7 @@ function render(){
   const ms=[...past,...fut], mx=Math.max(...ms.map(m=>m[1]),1);
   preact.render(hx`<${InstCal} up=${history.filter(t=>t.est==="future")}/>`,$("instCal"));
   $("monthsCount").textContent=ms.length?`(${ms.length} dönem)`:"";
-  preact.render(ms.length?ms.map(([k,v])=>hx`<div class="mrow" key=${k}><span>${periodLabel(k,true)}</span><div class="bar" style=${`width:${v/mx*100}%;`+(k===p?"background:var(--mustard)":k>curM?"background:transparent;border:1px dashed var(--teal)":"")}></div><b style="text-align:right">${fmt(v)}</b></div>`):hx`<small>Tarih sütunu okunamadı.</small>`,$("months"));
+  preact.render(ms.length?ms.map(([k,v])=>hx`<div class="mrow" key=${k}><span>${periodLabel(k,true)}</span><div class="bar" style=${`width:${v/mx*100}%;`+(k===p?"background:var(--mustard)":k>curM?"background:transparent;border:1px dashed var(--acc)":"")}></div><b style="text-align:right">${fmt(v)}</b></div>`):hx`<small>Tarih sütunu okunamadı.</small>`,$("months"));
 
   const byD={}; tx.forEach(t=>{const k=norm(t.desc);byD[k]=byD[k]||{desc:t.desc,sum:0,n:0,cat:t.inst?`Taksit · ${t.sub}`:t.cat,sub:t.sub,col:col[t.cat]||GRAY};byD[k].sum+=t.amt;byD[k].n++});
   const all=Object.values(byD).sort((a,b)=>b.sum-a.sum);
@@ -2080,6 +2114,10 @@ $("run").addEventListener("click",()=>{
 });
 $("period").addEventListener("change",render);
 $("tbPrint").addEventListener("click",()=>window.print());
+document.querySelectorAll("[data-theme-set]").forEach(b=>b.addEventListener("click",()=>setPref("theme",b.dataset.themeSet)));
+document.querySelectorAll("[data-size-set]").forEach(b=>b.addEventListener("click",()=>setPref("size",b.dataset.sizeSet)));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",applyPrefs);
+applyPrefs();
 /* Yazdırırken tüm bölümler açılır, sonra eski durumuna döner */
 let printOpened=[];
 window.addEventListener("beforeprint",()=>{printOpened=[...document.querySelectorAll("details:not([open])")];printOpened.forEach(d=>d.open=true)});
