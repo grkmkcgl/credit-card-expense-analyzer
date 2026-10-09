@@ -23,7 +23,10 @@ import fixtures  # noqa: E402
 PAGE = "file://" + os.path.abspath(os.path.join(HERE, "..", "index.html"))
 OUT = fixtures.OUT
 NOW = "2026-09-28T09:00:00"
-RATE_URL = "https://latest.currency-api.pages.dev/v1/currencies/usd.json"   # tek izinli ağ adresi (kurlar)
+# izinli tek ağ istekleri (kurlar): önce jsDelivr, olmazsa yedek adres; ağ kilidi yalnızca bu iki tam dosya adresine açık
+RATE_JSD = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json"
+RATE_PAGES = "https://latest.currency-api.pages.dev/v1/currencies/usd.json"
+RATE_URLS = [RATE_JSD, RATE_PAGES]
 TESTS = []
 
 
@@ -42,7 +45,8 @@ class App:
     def __init__(self, browser, width=1000, mobile=False, password=None):
         ctx = browser.new_context(viewport={"width": width, "height": 1300}, accept_downloads=True)
         # Testler ağa çıkmaz: kur servisi varsayılan olarak "internet yok" gibi davranır; kur testleri kendi sahte yanıtını verir
-        ctx.route(RATE_URL, lambda r: r.abort())
+        for u in RATE_URLS:
+            ctx.route(u, lambda r: r.abort())
         if mobile:
             ctx.add_init_script("delete window.showDirectoryPicker")
         self.pg = ctx.new_page()
@@ -1028,18 +1032,24 @@ def kural_duzenleyici_metin_ve_varsayilan(b, info):
 @test
 def ag_kilidi_baglantiya_izin_vermez(b, info):
     a = App(b)
-    blocked = a.ev("""async () => {
+    # Bu adresler sayfa içinde cevap verir: "kapalı" çıkan istek ağ yüzünden değil, ağ kilidi (CSP) yüzünden kapalıdır
+    for host in ["https://example.com/**", "https://baska.pages.dev/**", "https://cdn.jsdelivr.net/**", "https://latest.currency-api.pages.dev/**"]:
+        a.pg.route(host, lambda r: r.fulfill(status=200, headers=CORS, json=KUR))
+    urls = ['https://example.com/', 'data:text/plain,x', 'https://baska.pages.dev/x', 'https://cdn.jsdelivr.net/npm/x',
+            RATE_JSD.replace("usd.json", "eur.json"), RATE_PAGES.replace("usd.json", "eur.json"),
+            "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/", *RATE_URLS]
+    blocked = a.ev("""async urls => {
       const out = [];
-      for (const u of ['https://example.com/', 'data:text/plain,x', 'https://baska.pages.dev/x', 'https://cdn.jsdelivr.net/npm/x']) {
-        try { await fetch(u); out.push('açık'); } catch (e) { out.push('kapalı'); }
+      for (const u of urls) {
+        try { await fetch(u, {credentials: 'omit'}); out.push('açık'); } catch (e) { out.push('kapalı'); }
       }
       try { const x = new XMLHttpRequest(); x.open('GET', 'https://example.com/', false); x.send(); out.push('açık'); }
       catch (e) { out.push('kapalı'); }
       return out;
-    }""")
-    eq(blocked, ["kapalı"] * 5, "fetch/XHR engellenmeli (kur adresi dışında her yer kapalı)")
+    }""", urls)
+    eq(blocked, ["kapalı"] * 7 + ["açık"] * 2 + ["kapalı"], "fetch/XHR engellenmeli (iki kur dosyası dışında her yer kapalı)")
     csp = a.ev("document.querySelector('meta[http-equiv=Content-Security-Policy]').content")
-    assert "connect-src https://latest.currency-api.pages.dev;" in csp and "*" not in csp, csp
+    assert f"connect-src {RATE_JSD} {RATE_PAGES};" in csp and "*" not in csp, csp
     a.import_("arti.pdf")  # kilit varken PDF okuma (eval + blob worker) çalışmalı
     assert "₺" in a.total(), a.total()
     a.close()
@@ -1804,13 +1814,17 @@ def hesap_ozeti_uc_ayda_bir_ikramiye(b, info):
     a.close()
 
 
-def _kur_app(b, respond):
-    """USD ve gram altın birikimi olan bir sayfa; kur servisi `respond(route)` ile taklit edilir."""
+def _kur_app(b, respond, respond2=None):
+    """USD ve gram altın birikimi olan bir sayfa; kur servisi taklit edilir: jsDelivr `respond(route)`,
+    yedek adres `respond2` (verilmezse o da `respond`). İstekler geliş sırasıyla `reqs`'e yazılır."""
     a = _butce_app(b, budget=False)
     reqs = []
-    def handler(route):
-        reqs.append(route.request); respond(route)
-    a.pg.route(RATE_URL, handler)
+    def handler(fn):
+        def h(route):
+            reqs.append(route.request); fn(route)
+        return h
+    a.pg.route(RATE_JSD, handler(respond))
+    a.pg.route(RATE_PAGES, handler(respond2 or respond))
     a.ev("()=>{budget.assets=[{id:'u',name:'Dolar',type:'USD',qty:1000,upd:''},{id:'g',name:'Bilezik',type:'GAU',qty:10,upd:''},{id:'c',name:'Çeyrek',type:'CEYREK',qty:2,upd:''}];render()}")
     return a, reqs
 
@@ -1824,15 +1838,16 @@ def birikim_kurlar_internetten(b, info):
     a, reqs = _kur_app(b, lambda r: r.fulfill(status=200, headers=CORS, json=KUR))
     eq(len(reqs), 0, "Harcamalar sekmesi istek atmaz")
     a.pg.click("#tabBudget"); a.pg.wait_for_function("document.querySelector('#rateStatus')&&/güncellendi/.test(document.querySelector('#rateStatus').textContent)", timeout=10000)
-    eq(len(reqs), 1, "tek istek")
+    eq(len(reqs), 1, "tek istek (ilk adres çalışınca yedek denenmez)")
     r = reqs[0]
-    eq(r.url, RATE_URL, "sabit adres, veri eklenmez"); eq(r.method, "GET")
+    eq(r.url, RATE_JSD, "sabit adres, veri eklenmez"); eq(r.method, "GET")
     h = r.headers; assert "cookie" not in h and "referer" not in h, h
     gram = 41.5 / 0.00025 / 31.1034768
     eq(a.ev("budget.rates"), {"USD": {"v": 41.5, "date": "2026-09-27", "auto": True}, "EUR": {"v": round(41.5 / 0.86, 2), "date": "2026-09-27", "auto": True},
                               "GAU": {"v": round(gram, 2), "date": "2026-09-27", "auto": True}, "CEYREK": {"v": round(gram * 1.6038, 2), "date": "2026-09-27", "auto": True}}, "kurlar")
     t = a.text("#budget .rates")
-    assert "internetten" in t and "27.09.2026" in t and "ons fiyatından" in t, t
+    assert "internetten" in t and "27.09.2026" in t and "ons fiyatından" in t and "cdn.jsdelivr.net" in t, t
+    assert "yedek" not in t, t
     assert '"auto": true' in a.ev("snapshot()"), "kurlar dosyaya yazılır"
     eq(a.text("#aTotal"), f"₺{round(41.5*1000 + round(gram,2)*10 + round(gram*1.6038,2)*2):,}".replace(",", "."), "toplam")
     # sekme değiştirip dönünce yeni istek yok; düğmeyle yenilenir
@@ -1857,10 +1872,42 @@ def birikim_kurlar_internet_yoksa_kayitli(b, info):
     a.close()
     # döviz/altın birikimi yoksa hiç istek yok
     a = _butce_app(b); n = []
-    a.pg.route(RATE_URL, lambda r: (n.append(1), r.abort()))
+    for u in RATE_URLS:
+        a.pg.route(u, lambda r: (n.append(1), r.abort()))
     a.pg.click("#tabBudget"); a.pg.wait_for_timeout(300)
     eq(len(n), 0, "birikimsiz istek yok"); eq(a.pg.locator("#rateStatus").count(), 0)
     a.close()
+
+
+RATE_DONE = "(document.querySelector('#rateStatus')||{}).textContent&&!/güncelleniyor/.test(document.querySelector('#rateStatus').textContent)"
+
+
+@test
+def birikim_kurlar_yedek_adres(b, info):
+    """jsDelivr cevap vermezse yedek adres (pages.dev) denenir; ilk adresin neden çalışmadığı yazılır."""
+    ok = lambda r: r.fulfill(status=200, headers=CORS, json=KUR)
+    hang = []   # cevapsız bırakılan istekler; sayfa kapanmadan önce kapatılır
+    cases = [
+        ("bağlantı kesik", lambda r: r.abort(), None, "bağlantı kurulamadı"),
+        ("404", lambda r: r.fulfill(status=404, headers=CORS, body="yok"), None, "HTTP 404"),
+        ("yanıt yok", hang.append, "RATE_TIMEOUT=1500", "zaman aşımı"),
+    ]
+    for name, respond, setup, want in cases:
+        a, reqs = _kur_app(b, respond, ok)
+        a.ev("()=>{budget.rates={USD:{v:40,date:'2026-09-20',auto:true}}}")
+        if setup: a.ev(setup)
+        a.pg.click("#tabBudget")
+        a.pg.wait_for_function(RATE_DONE, timeout=15000)
+        eq([r.url for r in reqs], RATE_URLS, f"{name}: önce jsDelivr, sonra yedek")
+        t = a.text("#rateStatus")
+        assert "güncellendi" in t and "latest.currency-api.pages.dev" in t and "yedek" in t, f"{name}: {t}"
+        assert "cdn.jsdelivr.net" in t and want in t, f"{name}: {t}"
+        eq(a.ev("budget.rates.USD"), {"v": 41.5, "date": "2026-09-27", "auto": True}, f"{name}: yedekten gelen kur")
+        for r in hang:
+            try: r.abort()
+            except Exception: pass   # tarayıcı isteği zaten iptal etmiş olabilir
+        hang.clear()
+        a.close()
 
 
 @test
@@ -1877,9 +1924,11 @@ def birikim_kurlar_hata_ayrintisi(b, info):
         a.ev("()=>{budget.rates={USD:{v:40,date:'2026-09-20',auto:true}}}")
         if setup: a.ev(setup)
         a.pg.click("#tabBudget")
-        a.pg.wait_for_function("(document.querySelector('#rateStatus')||{}).textContent&&!/güncelleniyor/.test(document.querySelector('#rateStatus').textContent)", timeout=15000)
+        a.pg.wait_for_function(RATE_DONE, timeout=15000)
+        eq([r.url for r in reqs], RATE_URLS, f"{name}: iki adres de denenir")
         t = a.text("#rateStatus")
-        assert want in t and "Kayıt dosyanızdaki kurlar" in t and "latest.currency-api.pages.dev" in t, f"{name}: {t}"
+        assert "Kayıt dosyanızdaki kurlar" in t and "cdn.jsdelivr.net" in t and "latest.currency-api.pages.dev" in t, f"{name}: {t}"
+        assert t.count(want) == 2, f"{name}: her adresin nedeni yazılır: {t}"
         eq(a.ev("budget.rates.USD.v"), 40, f"{name}: kayıtlı kur korunur")
         a.close()
 
