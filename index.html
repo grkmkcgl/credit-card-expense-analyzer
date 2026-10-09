@@ -2083,16 +2083,33 @@ function FixedList({kind,m,bm}){
 const RATE_URL="https://latest.currency-api.pages.dev/v1/currencies/usd.json", GRAM_PER_OZ=31.1034768, CEYREK_GR=1.6038;
 let rateFetch={state:""};   /* "" | "queued" | "busy" | "ok" | "fail" (yalnızca bellekte) */
 const needRates=()=>budget.assets.some(a=>a.type!=="TRY");
+let RATE_TIMEOUT=12000;   /* ms; mobil ağlar yavaş olabilir */
+/* Hata nedeni görünür olsun: çevrimdışı, zaman aşımı, ağ kilidinin bir yönlendirmeyi durdurması, bağlantı kurulamaması,
+   sunucu hatası, beklenmeyen yanıt. Kaynak seçimi bu ayrıntıya göre yapılacak. */
 async function fetchRates(){
   if(rateFetch.state==="busy")return;
   rateFetch={state:"busy"}; renderBudget();
+  let blocked="";
+  const onCsp=e=>{if(e.violatedDirective&&/connect-src/.test(e.violatedDirective))blocked=e.blockedURI||"?"};
+  document.addEventListener("securitypolicyviolation",onCsp);
+  const ac=new AbortController(), tm=setTimeout(()=>ac.abort(),RATE_TIMEOUT);
+  const fail=(why,detail)=>{rateFetch={state:"fail",why,detail:detail||"",at:new Date()};console.warn("Kur servisi:",why,detail||"")};
   try{
-    const ac=new AbortController(), tm=setTimeout(()=>ac.abort(),8000);
-    const r=await fetch(RATE_URL,{cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer",signal:ac.signal});
-    clearTimeout(tm);
-    if(!r.ok)throw new Error("http");
-    const d=await r.json(), u=d&&d.usd, tl=+(u&&u.try);
-    if(!(tl>0))throw new Error("format");
+    let r;
+    try{r=await fetch(RATE_URL,{cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer",signal:ac.signal})}
+    catch(e){
+      await new Promise(res=>setTimeout(res,0));   /* CSP olayı fetch hatasından hemen sonra gelebilir */
+      if(e&&e.name==="AbortError")return fail(`zaman aşımı: ${Math.round(RATE_TIMEOUT/1000)} sn içinde yanıt gelmedi`);
+      /* tarayıcı gizlilik gereği yönlendirilen adresi değil, asıl adresi bildirir; hedef bilinemez */
+      if(blocked)return fail("ağ kilidi engelledi: sunucu isteği başka bir adrese yönlendirdi");
+      if(navigator.onLine===false)return fail("cihaz çevrimdışı");
+      return fail("bağlantı kurulamadı (adres bulunamadı ya da ağınız/ülke erişimi engelliyor olabilir)",String(e&&e.message||e));
+    }
+    const via=r.redirected?` (yönlendirilen adres: ${r.url})`:"";
+    if(!r.ok)return fail(`sunucu hatası: HTTP ${r.status}${via}`);
+    let d; try{d=await r.json()}catch(e){return fail(`beklenmeyen yanıt biçimi (JSON değil)${via}`)}
+    const u=d&&d.usd, tl=+(u&&u.try);
+    if(!(tl>0))return fail(`beklenmeyen yanıt biçimi (usd.try yok)${via}`);
     const date=/^\d{4}-\d{2}-\d{2}$/.test(d.date)?d.date:iso(new Date()), next={USD:tl};
     if(+u.eur>0)next.EUR=tl/u.eur;
     if(+u.xau>0){next.GAU=tl/u.xau/GRAM_PER_OZ;next.CEYREK=next.GAU*CEYREK_GR}
@@ -2104,8 +2121,8 @@ async function fetchRates(){
     }
     rateFetch={state:"ok",date};
     if(changed)save();
-  }catch(e){rateFetch={state:"fail"}}
-  renderBudget();
+  }catch(e){fail("beklenmeyen hata",String(e&&e.message||e))}
+  finally{clearTimeout(tm);document.removeEventListener("securitypolicyviolation",onCsp);renderBudget()}
 }
 function setRate(t,raw){
   if(!String(raw).trim()){if(budget.rates[t])undoable(`${ASSET_TYPES[t].l} kuru silindi`,()=>{delete budget.rates[t]});return}
@@ -2141,7 +2158,8 @@ function AssetsBox({total,vals}){
     ${missing.length?hx`<p class="bnote err" id="aMissing"><small class="err">Kuru girilmemiş: ${missing.join(", ")}. Aşağıdan kur girin; o zamana kadar toplama katılmaz.</small></p>`:null}
     ${used.length?hx`<div class="rates panel"><div class="bankhead"><b>Kurlar</b><button class="ghost" id="rateRefresh" disabled=${rateFetch.state==="busy"} onClick=${fetchRates}>Kurları güncelle</button></div>
       <small>İnternet varsa günlük kurlar bir kur servisinden alınır (isteğe hiçbir veriniz eklenmez); yoksa kayıt dosyanızdaki son kurlar kullanılır. İsterseniz elle de girebilirsiniz (1 birimin TL karşılığı).</small>
-      ${rateFetch.state?hx`<p class="bnote" id="rateStatus"><small class=${rateFetch.state==="fail"?"bwarn":""}>${rateFetch.state==="busy"||rateFetch.state==="queued"?"Kurlar güncelleniyor…":rateFetch.state==="ok"?`İnternetten güncellendi (servis tarihi ${toDate(rateFetch.date).toLocaleDateString("tr-TR")}).`:"İnternete ya da kur servisine ulaşılamadı; kayıt dosyanızdaki kurlar kullanılıyor."}</small></p>`:null}
+      ${rateFetch.state?hx`<p class="bnote" id="rateStatus"><small class=${rateFetch.state==="fail"?"bwarn":""}>${rateFetch.state==="busy"||rateFetch.state==="queued"?"Kurlar güncelleniyor…":rateFetch.state==="ok"?`İnternetten güncellendi (servis tarihi ${toDate(rateFetch.date).toLocaleDateString("tr-TR")}).`:`Kur servisine ulaşılamadı (ayrıntı: ${rateFetch.why}). Kayıt dosyanızdaki kurlar kullanılıyor.`}</small>
+        ${rateFetch.state==="fail"?hx`<small class="bseen">Denenen adres: ${RATE_URL} · ${rateFetch.at.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}${rateFetch.detail?` · ${rateFetch.detail}`:""}</small>`:null}</p>`:null}
       <div class="grid">${used.map(t=>{const r=budget.rates[t], age=r&&r.date?Math.round((toDate(today)-toDate(r.date))/864e5):0;
         return hx`<div key=${t}><label for=${"rate-"+t}>${ASSET_TYPES[t].l} (₺)</label><input type="text" inputmode="decimal" id=${"rate-"+t} value=${r?fmtNum(r.v):""} placeholder="Kur girin" onChange=${e=>setRate(t,e.target.value)} onKeyDown=${enterBlur}/>
           <small class=${age>7?"bwarn":""}>${r?hx`<span class="pqty">${fmtNum(r.v)} ₺ · </span>${r.auto?(rateFetch.state==="ok"?"internetten":"kayıtlı (internetten alınmıştı)"):"elle girildi"} · ${r.date?toDate(r.date).toLocaleDateString("tr-TR"):""}${age>7?` · ${age} gün önce, güncelleyin`:""}`:"kur yok"}</small>

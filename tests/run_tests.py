@@ -1862,6 +1862,27 @@ def birikim_kurlar_internet_yoksa_kayitli(b, info):
     eq(len(n), 0, "birikimsiz istek yok"); eq(a.pg.locator("#rateStatus").count(), 0)
     a.close()
 
+
+@test
+def birikim_kurlar_hata_ayrintisi(b, info):
+    cases = [
+        ("bağlantı kesik", lambda r: r.abort(), None, "bağlantı kurulamadı"),
+        ("404", lambda r: r.fulfill(status=404, headers=CORS, body="yok"), None, "HTTP 404"),
+        ("bozuk JSON", lambda r: r.fulfill(status=200, headers=CORS, body="<html>"), None, "beklenmeyen yanıt"),
+        ("zaman aşımı", lambda r: r.fulfill(status=200, headers=CORS, json=KUR), "RATE_TIMEOUT=1", "zaman aşımı"),
+        ("yönlendirme", lambda r: r.fulfill(status=302, headers={**CORS, "Location": "https://example.com/kur.json"}), None, "ağ kilidi engelledi"),
+    ]
+    for name, respond, setup, want in cases:
+        a, reqs = _kur_app(b, respond)
+        a.ev("()=>{budget.rates={USD:{v:40,date:'2026-09-20',auto:true}}}")
+        if setup: a.ev(setup)
+        a.pg.click("#tabBudget")
+        a.pg.wait_for_function("(document.querySelector('#rateStatus')||{}).textContent&&!/güncelleniyor/.test(document.querySelector('#rateStatus').textContent)", timeout=15000)
+        t = a.text("#rateStatus")
+        assert want in t and "Kayıt dosyanızdaki kurlar" in t and "latest.currency-api.pages.dev" in t, f"{name}: {t}"
+        eq(a.ev("budget.rates.USD.v"), 40, f"{name}: kayıtlı kur korunur")
+        a.close()
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
