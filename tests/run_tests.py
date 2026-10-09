@@ -23,6 +23,7 @@ import fixtures  # noqa: E402
 PAGE = "file://" + os.path.abspath(os.path.join(HERE, "..", "index.html"))
 OUT = fixtures.OUT
 NOW = "2026-09-28T09:00:00"
+RATE_URL = "https://latest.currency-api.pages.dev/v1/currencies/usd.json"   # tek izinli ağ adresi (kurlar)
 TESTS = []
 
 
@@ -40,6 +41,8 @@ class App:
 
     def __init__(self, browser, width=1000, mobile=False, password=None):
         ctx = browser.new_context(viewport={"width": width, "height": 1300}, accept_downloads=True)
+        # Testler ağa çıkmaz: kur servisi varsayılan olarak "internet yok" gibi davranır; kur testleri kendi sahte yanıtını verir
+        ctx.route(RATE_URL, lambda r: r.abort())
         if mobile:
             ctx.add_init_script("delete window.showDirectoryPicker")
         self.pg = ctx.new_page()
@@ -1027,14 +1030,16 @@ def ag_kilidi_baglantiya_izin_vermez(b, info):
     a = App(b)
     blocked = a.ev("""async () => {
       const out = [];
-      for (const u of ['https://example.com/', 'data:text/plain,x']) {
+      for (const u of ['https://example.com/', 'data:text/plain,x', 'https://baska.pages.dev/x', 'https://cdn.jsdelivr.net/npm/x']) {
         try { await fetch(u); out.push('açık'); } catch (e) { out.push('kapalı'); }
       }
       try { const x = new XMLHttpRequest(); x.open('GET', 'https://example.com/', false); x.send(); out.push('açık'); }
       catch (e) { out.push('kapalı'); }
       return out;
     }""")
-    eq(blocked, ["kapalı"] * 3, "fetch/XHR engellenmeli")
+    eq(blocked, ["kapalı"] * 5, "fetch/XHR engellenmeli (kur adresi dışında her yer kapalı)")
+    csp = a.ev("document.querySelector('meta[http-equiv=Content-Security-Policy]').content")
+    assert "connect-src https://latest.currency-api.pages.dev;" in csp and "*" not in csp, csp
     a.import_("arti.pdf")  # kilit varken PDF okuma (eval + blob worker) çalışmalı
     assert "₺" in a.total(), a.total()
     a.close()
@@ -1796,6 +1801,65 @@ def hesap_ozeti_uc_ayda_bir_ikramiye(b, info):
     # elle her ay olarak kaydedilmiş ikramiye: yeniden yüklemede sıklık değişikliği önerilir
     a.ev("o=>{applyData({history:[],budget:{items:[{...o,every:1}]}});render()}", old)
     eq(a.ev("r=>detectFixedFromBank(r).sugs.filter(s=>s.type==='change').map(s=>[s.itemName,s.freqFrom,s.every,s.amtCh])", rows), [["İkramiye", 1, 3, False]], "sıklık değişikliği önerisi")
+    a.close()
+
+
+def _kur_app(b, respond):
+    """USD ve gram altın birikimi olan bir sayfa; kur servisi `respond(route)` ile taklit edilir."""
+    a = _butce_app(b, budget=False)
+    reqs = []
+    def handler(route):
+        reqs.append(route.request); respond(route)
+    a.pg.route(RATE_URL, handler)
+    a.ev("()=>{budget.assets=[{id:'u',name:'Dolar',type:'USD',qty:1000,upd:''},{id:'g',name:'Bilezik',type:'GAU',qty:10,upd:''},{id:'c',name:'Çeyrek',type:'CEYREK',qty:2,upd:''}];render()}")
+    return a, reqs
+
+
+KUR = {"date": "2026-09-27", "usd": {"try": 41.5, "eur": 0.86, "xau": 0.00025, "gbp": 0.75}}
+CORS = {"Access-Control-Allow-Origin": "*"}
+
+
+@test
+def birikim_kurlar_internetten(b, info):
+    a, reqs = _kur_app(b, lambda r: r.fulfill(status=200, headers=CORS, json=KUR))
+    eq(len(reqs), 0, "Harcamalar sekmesi istek atmaz")
+    a.pg.click("#tabBudget"); a.pg.wait_for_function("document.querySelector('#rateStatus')&&/güncellendi/.test(document.querySelector('#rateStatus').textContent)", timeout=10000)
+    eq(len(reqs), 1, "tek istek")
+    r = reqs[0]
+    eq(r.url, RATE_URL, "sabit adres, veri eklenmez"); eq(r.method, "GET")
+    h = r.headers; assert "cookie" not in h and "referer" not in h, h
+    gram = 41.5 / 0.00025 / 31.1034768
+    eq(a.ev("budget.rates"), {"USD": {"v": 41.5, "date": "2026-09-27", "auto": True}, "EUR": {"v": round(41.5 / 0.86, 2), "date": "2026-09-27", "auto": True},
+                              "GAU": {"v": round(gram, 2), "date": "2026-09-27", "auto": True}, "CEYREK": {"v": round(gram * 1.6038, 2), "date": "2026-09-27", "auto": True}}, "kurlar")
+    t = a.text("#budget .rates")
+    assert "internetten" in t and "27.09.2026" in t and "ons fiyatından" in t, t
+    assert '"auto": true' in a.ev("snapshot()"), "kurlar dosyaya yazılır"
+    eq(a.text("#aTotal"), f"₺{round(41.5*1000 + round(gram,2)*10 + round(gram*1.6038,2)*2):,}".replace(",", "."), "toplam")
+    # sekme değiştirip dönünce yeni istek yok; düğmeyle yenilenir
+    a.pg.click("#tabSpend"); a.pg.click("#tabBudget"); a.pg.wait_for_timeout(200); eq(len(reqs), 1, "oturumda bir kez")
+    a.pg.click("#rateRefresh"); a.pg.wait_for_timeout(300); eq(len(reqs), 2, "Kurları güncelle")
+    a.close()
+
+
+@test
+def birikim_kurlar_internet_yoksa_kayitli(b, info):
+    a, reqs = _kur_app(b, lambda r: r.abort())
+    a.ev("()=>{budget.rates={USD:{v:40,date:'2026-09-20',auto:true},GAU:{v:5000,date:'2026-09-28'}}}")
+    a.pg.click("#tabBudget"); a.pg.wait_for_function("/ulaşılamadı/.test((document.querySelector('#rateStatus')||{}).textContent||'')", timeout=10000)
+    eq(a.ev("budget.rates"), {"USD": {"v": 40, "date": "2026-09-20", "auto": True}, "GAU": {"v": 5000, "date": "2026-09-28"}}, "kayıtlı kurlar korunur")
+    assert "kayıtlı" in a.text("#budget .rates") and "elle girildi" in a.text("#budget .rates"), a.text("#budget .rates")
+    a.close()
+    # internet varken: aynı gün elle girilmiş gram altın ezilmez, eski otomatik dolar güncellenir
+    a, reqs = _kur_app(b, lambda r: r.fulfill(status=200, headers=CORS, json=KUR))
+    a.ev("()=>{budget.rates={USD:{v:40,date:'2026-09-20',auto:true},GAU:{v:5000,date:'2026-09-28'}}}")
+    a.pg.click("#tabBudget"); a.pg.wait_for_function("/güncellendi/.test((document.querySelector('#rateStatus')||{}).textContent||'')", timeout=10000)
+    eq(a.ev("[budget.rates.USD.v,budget.rates.GAU.v,!!budget.rates.GAU.auto]"), [41.5, 5000, False], "elle girilen yeni kur korunur")
+    a.close()
+    # döviz/altın birikimi yoksa hiç istek yok
+    a = _butce_app(b); n = []
+    a.pg.route(RATE_URL, lambda r: (n.append(1), r.abort()))
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(300)
+    eq(len(n), 0, "birikimsiz istek yok"); eq(a.pg.locator("#rateStatus").count(), 0)
     a.close()
 
 # ----------------------------------------------------------------

@@ -2,9 +2,11 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<!-- Ağ kilidi: sayfa hiçbir adrese bağlanamaz (connect-src 'none'), dışarıdan betik/stil/yazı tipi yükleyemez.
+<!-- Ağ kilidi: sayfa dışarıdan betik/stil/yazı tipi yükleyemez; bağlanabildiği TEK adres kur servisidir (connect-src):
+     sahibinin kararıyla, Birikim sekmesinde döviz/altın birikimi varken günlük kurlar sabit bir adresten okunur, isteğe hiçbir veri eklenmez.
+     Başka adres EKLEMEYİN.
      'unsafe-eval' gömülü kütüphaneleri açmak için, blob: PDF.js worker'ı için (sayfanın kendi ürettiği adresler), 'self' service worker ve ikonlar için. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob:; style-src 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; manifest-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob:; style-src 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; manifest-src 'self'; connect-src https://latest.currency-api.pages.dev; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -356,6 +358,7 @@ body:not(.tab-budget) #budget{display:none}
 .bamts td{font-size:.88rem}
 .bwarn{color:var(--mustard)}
 .rates .grid{margin-top:6px}
+.rates .bankhead button{margin:0;padding:4px 12px;font-size:.85rem}
 .atab td{vertical-align:middle}
 .aqty{width:150px}
 .aqty input{width:100px!important;padding:5px 8px!important;text-align:right}
@@ -450,14 +453,14 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <main>
 <header class="head">
 <h1>Harcama analizi</h1>
-<span class="badge" title="İnternet bağlantısı kullanılmaz, tarayıcıda hiçbir şey saklanmaz. Kayıtlar yalnızca harcama-verisi.json dosyanızda.">🔒 Çevrimdışı</span>
+<span class="badge" title="Ekstreler ve kayıtlar hiçbir yere gönderilmez, tarayıcıda hiçbir şey saklanmaz; kayıtlar yalnızca harcama-verisi.json dosyanızda. Tek bağlantı: birikimlerinizde döviz/altın varsa günlük kurlar bir kur servisinden okunur (isteğe veri eklenmez).">🔒 Çevrimdışı</span>
 </header>
 <div class="intro">
 <p>Kredi kartı ekstrenizi (PDF) ya da bankanızdan indirdiğiniz Excel/CSV dökümünü seçin; harcamalar otomatik kategorilere ayrılsın, siz sadece tanınmayanları düzeltin.</p>
 
 <div class="lock" role="note">
 <span aria-hidden="true">🔒</span>
-<span><b>İnternet bağlantısı gerekmez, tarayıcıda hiçbir şey saklanmaz.</b> Tüm kayıtlar sadece sizin <code>harcama-verisi.json</code> dosyanızda tutulur. Bilgisayarda Chrome veya Edge ile açın; telefonda da çalışır.</span>
+<span><b>İnternet bağlantısı gerekmez, tarayıcıda hiçbir şey saklanmaz.</b> Tüm kayıtlar sadece sizin <code>harcama-verisi.json</code> dosyanızda tutulur. (Tek istisna: birikimlerinizde döviz/altın varsa, internet açıkken günlük kurlar bir kur servisinden okunur; bu isteğe hiçbir veriniz eklenmez.) Bilgisayarda Chrome veya Edge ile açın; telefonda da çalışır.</span>
 </div>
 </div>
 
@@ -741,6 +744,7 @@ $("pick").addEventListener("click",async()=>{
     history=[];overrides={};lastMap=null;notes={};dismissed=new Set();removedDefaults=new Set();budget=normBudget();$("rules").value=DEFAULT_RULES;
     let found=false;
     try{applyData(JSON.parse(await (await (await dir.getFileHandle(DATA_FILE)).getFile()).text()));found=true}catch(e){}
+    rateFetch={state:""};
     $("folderInfo").textContent=`Seçili klasör: ${dir.name}. `+(found?"Kayıtlı veriler yüklendi.":"Burada henüz kayıt yok; ilk dökümle oluşturulacak.");
     $("pick").textContent="Başka klasör seç";
     ["drop","hist"].forEach(id=>$(id).classList.remove("hide"));
@@ -752,7 +756,7 @@ $("clr").addEventListener("click",async()=>{
   history=[];await save();render();$("msg").textContent="İşlemler silindi. Özetleri yeniden yükleyebilirsiniz; kategori seçimleriniz korundu.";
 });
 function startMobile(info){
-  mobileReady=true;
+  mobileReady=true; rateFetch={state:""};   /* yeni kayıt dosyası: kurlar yeniden denenir */
   $("mobileInfo").innerHTML=`<small>${info}</small>`;
   ["drop","hist"].forEach(id=>$(id).classList.remove("hide"));
   $("msg").textContent=""; render();
@@ -1960,7 +1964,7 @@ function normBudget(b){
   const items=items0.map(i=>i.src&&!i.seen&&i.amts.length>1?{...i,amts:dropDoubled(i.amts)}:i)
     .map(i=>i.every==null&&i.seen&&i.seen.length>1?{...i,every:inferEvery(i.seen.map(x=>x.d))||1}:i);
   const assets=(Array.isArray(b.assets)?b.assets:[]).filter(a=>a&&ASSET_TYPES[a.type]).map(a=>({id:String(a.id||uid()),name:String(a.name||"").trim()||ASSET_TYPES[a.type].l,type:a.type,qty:num(a.qty),upd:typeof a.upd==="string"?a.upd:""}));
-  const rates={}; for(const k of Object.keys(ASSET_TYPES)){const r=b.rates&&b.rates[k];if(k!=="TRY"&&r&&num(r.v)>0)rates[k]={v:num(r.v),date:typeof r.date==="string"?r.date:""}}
+  const rates={}; for(const k of Object.keys(ASSET_TYPES)){const r=b.rates&&b.rates[k];if(k!=="TRY"&&r&&num(r.v)>0)rates[k]={v:num(r.v),date:typeof r.date==="string"?r.date:"",...(r.auto===true?{auto:true}:{})}}
   return {items,assets,rates};
 }
 /* Türkçe yazılmış tutar: "45.000" (binlik nokta), "1.234,56", "41,5", "₺15000" */
@@ -2071,6 +2075,38 @@ function FixedList({kind,m,bm}){
   </div>
   ${msg?hx`<p class="rmsg err">${msg}</p>`:null}`;
 }
+/* ---------- Kurlar: internetten, yoksa kayıt dosyasından ----------
+   Sahibinin kararıyla uygulamanın TEK ağ isteği: Birikim sekmesi açıkken ve döviz/altın birikimi varken, oturumda bir kez (ve
+   "Kurları güncelle" ile) sabit bir adresten günlük kurlar okunur. İsteğe hiçbir veri eklenmez (sabit adres, çerez/referer yok);
+   CSP connect-src yalnızca bu adrese açıktır. Gram altın ons fiyatından hesaplanır (işçiliksiz, yaklaşık); çeyrek ≈ 1,6038 gram.
+   Ulaşılamazsa kayıt dosyasındaki kurlar kullanılır. Elle girilmiş, servisten yeni ya da aynı günkü kur ezilmez. */
+const RATE_URL="https://latest.currency-api.pages.dev/v1/currencies/usd.json", GRAM_PER_OZ=31.1034768, CEYREK_GR=1.6038;
+let rateFetch={state:""};   /* "" | "queued" | "busy" | "ok" | "fail" (yalnızca bellekte) */
+const needRates=()=>budget.assets.some(a=>a.type!=="TRY");
+async function fetchRates(){
+  if(rateFetch.state==="busy")return;
+  rateFetch={state:"busy"}; renderBudget();
+  try{
+    const ac=new AbortController(), tm=setTimeout(()=>ac.abort(),8000);
+    const r=await fetch(RATE_URL,{cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer",signal:ac.signal});
+    clearTimeout(tm);
+    if(!r.ok)throw new Error("http");
+    const d=await r.json(), u=d&&d.usd, tl=+(u&&u.try);
+    if(!(tl>0))throw new Error("format");
+    const date=/^\d{4}-\d{2}-\d{2}$/.test(d.date)?d.date:iso(new Date()), next={USD:tl};
+    if(+u.eur>0)next.EUR=tl/u.eur;
+    if(+u.xau>0){next.GAU=tl/u.xau/GRAM_PER_OZ;next.CEYREK=next.GAU*CEYREK_GR}
+    let changed=false;
+    for(const [k,v] of Object.entries(next)){
+      const cur=budget.rates[k], nv=Math.round(v*100)/100;
+      if(cur&&!cur.auto&&cur.date&&cur.date>=date)continue;
+      if(!cur||!cur.auto||cur.v!==nv||cur.date!==date){budget.rates[k]={v:nv,date,auto:true};changed=true}
+    }
+    rateFetch={state:"ok",date};
+    if(changed)save();
+  }catch(e){rateFetch={state:"fail"}}
+  renderBudget();
+}
 function setRate(t,raw){
   if(!String(raw).trim()){if(budget.rates[t])undoable(`${ASSET_TYPES[t].l} kuru silindi`,()=>{delete budget.rates[t]});return}
   const v=parseMoney(raw);
@@ -2103,10 +2139,13 @@ function AssetsBox({total,vals}){
     ${total>0?hx`<div class="strip" aria-hidden="true">${types.map(([t,v])=>hx`<span key=${t} style=${`width:${v/total*100}%;background:${ASSET_COL[t]}`} title=${ASSET_TYPES[t].l}></span>`)}</div>
       <div class="bleg">${types.map(([t,v])=>hx`<span key=${t}><span class="dot" style=${"background:"+ASSET_COL[t]}></span>${ASSET_TYPES[t].l} ${fmt(v)} · %${(v/total*100).toFixed(1)}</span>`)}</div>`:null}
     ${missing.length?hx`<p class="bnote err" id="aMissing"><small class="err">Kuru girilmemiş: ${missing.join(", ")}. Aşağıdan kur girin; o zamana kadar toplama katılmaz.</small></p>`:null}
-    ${used.length?hx`<div class="rates panel"><b>Kurlar</b><br/><small>İnternete bağlanılmaz; güncel kuru kendiniz girin (1 birimin TL karşılığı).</small>
+    ${used.length?hx`<div class="rates panel"><div class="bankhead"><b>Kurlar</b><button class="ghost" id="rateRefresh" disabled=${rateFetch.state==="busy"} onClick=${fetchRates}>Kurları güncelle</button></div>
+      <small>İnternet varsa günlük kurlar bir kur servisinden alınır (isteğe hiçbir veriniz eklenmez); yoksa kayıt dosyanızdaki son kurlar kullanılır. İsterseniz elle de girebilirsiniz (1 birimin TL karşılığı).</small>
+      ${rateFetch.state?hx`<p class="bnote" id="rateStatus"><small class=${rateFetch.state==="fail"?"bwarn":""}>${rateFetch.state==="busy"||rateFetch.state==="queued"?"Kurlar güncelleniyor…":rateFetch.state==="ok"?`İnternetten güncellendi (servis tarihi ${toDate(rateFetch.date).toLocaleDateString("tr-TR")}).`:"İnternete ya da kur servisine ulaşılamadı; kayıt dosyanızdaki kurlar kullanılıyor."}</small></p>`:null}
       <div class="grid">${used.map(t=>{const r=budget.rates[t], age=r&&r.date?Math.round((toDate(today)-toDate(r.date))/864e5):0;
         return hx`<div key=${t}><label for=${"rate-"+t}>${ASSET_TYPES[t].l} (₺)</label><input type="text" inputmode="decimal" id=${"rate-"+t} value=${r?fmtNum(r.v):""} placeholder="Kur girin" onChange=${e=>setRate(t,e.target.value)} onKeyDown=${enterBlur}/>
-          <small class=${age>7?"bwarn":""}>${r?hx`<span class="pqty">${fmtNum(r.v)} ₺ · </span>${r.date?toDate(r.date).toLocaleDateString("tr-TR"):""} tarihli${age>7?` · ${age} gün önce, güncelleyin`:""}`:"kur yok"}</small></div>`})}</div>
+          <small class=${age>7?"bwarn":""}>${r?hx`<span class="pqty">${fmtNum(r.v)} ₺ · </span>${r.auto?(rateFetch.state==="ok"?"internetten":"kayıtlı (internetten alınmıştı)"):"elle girildi"} · ${r.date?toDate(r.date).toLocaleDateString("tr-TR"):""}${age>7?` · ${age} gün önce, güncelleyin`:""}`:"kur yok"}</small>
+          ${r&&r.auto&&(t==="GAU"||t==="CEYREK")?hx`<small class="bseen">yaklaşık: ons fiyatından, işçiliksiz</small>`:null}</div>`})}</div>
       ${msg("rates")}</div>`:null}
     ${vals.length?hx`<table class="top atab"><tbody>${vals.map(({a,v})=>hx`<tr key=${a.id} data-asset=${a.id}>
       <td><b>${a.name}</b><br/><small>${ASSET_TYPES[a.type].l}${a.upd?` · ${toDate(a.upd).toLocaleDateString("tr-TR")}`:""}</small></td>
@@ -2510,6 +2549,7 @@ function KpiItems({kind,m}){
   </div>`;
 }
 function BudgetTab(){
+  if(!rateFetch.state&&needRates()){rateFetch={state:"queued"};setTimeout(fetchRates,0)}
   const now=iso(new Date()).slice(0,7), months=budgetMonths();
   if(!months.includes(bView.month))bView.month=defaultBudgetMonth();
   const m=bView.month, bm=monthBudget(m), fut=m>now;

@@ -6,12 +6,13 @@ A single-file web tool that analyzes credit card statements and bank exports **e
 ## Gizlilik / Privacy
 
 - Dosyalar hiçbir sunucuya gönderilmez; tüm okuma ve hesaplama tarayıcıda yapılır. Sayfa açıldıktan sonra internet kapatılsa da çalışır.
-- Ağ kilidi: sayfadaki güvenlik kuralı (`Content-Security-Policy`, `connect-src 'none'`) hiçbir adrese bağlantı kurulmasına izin vermez; kod istese bile veri dışarı gidemez.
+- Ağ kilidi: sayfadaki güvenlik kuralı (`Content-Security-Policy`, `connect-src`) yalnızca kur servisine (aşağıdaki istisna) bağlantıya izin verir; başka hiçbir adrese bağlantı kurulamaz, kod istese bile ekstre ve kayıt verisi dışarı gidemez.
+- **Tek istisna, kurlar:** Birikim sekmesinde döviz/altın birikimi varsa, internet açıkken günlük kurlar tek bir sabit adresten (`latest.currency-api.pages.dev`) okunur. Bu isteğe hiçbir veriniz eklenmez, ama servis IP adresinizi ve uygulamayı ne zaman açtığınızı görebilir. İnternet yoksa kayıt dosyanızdaki son kurlar kullanılır; kurları elle de girebilirsiniz. Ağ kilidi bu adres dışındaki her yere kapalıdır.
 - Tarayıcıda (localStorage vb.) hiçbir veri saklanmaz. Kayıtlar yalnızca kullanıcının seçtiği `harcama-verisi.json` dosyasında tutulur. Telefonda internetsiz açılabilmesi için tarayıcı önbelleğinde yalnızca uygulamanın kendi dosyaları (sayfa, ikonlar) tutulur.
 - PDF şifreleri sadece sayfa açıkken bellekte tutulur.
 - `.gitignore`, ekstre ve kayıt dosyalarının yanlışlıkla depoya girmesini engeller. **Bu depoya asla gerçek ekstre veya `harcama-verisi.json` eklemeyin.**
 
-Files are never uploaded anywhere; parsing and calculations run in the browser, and the page keeps working offline once loaded. Nothing is stored in browser storage — records live only in the user's own `harcama-verisi.json`. Never commit real statements or data files to this repo.
+Files are never uploaded anywhere; parsing and calculations run in the browser, and the page keeps working offline once loaded. Nothing is stored in browser storage — records live only in the user's own `harcama-verisi.json`. Never commit real statements or data files to this repo. The single exception: when the budget tab holds foreign-currency or gold savings, daily exchange rates are read from one fixed URL (no user data in the request); the CSP allows only that host.
 
 ## Kullanım / Usage
 
