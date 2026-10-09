@@ -1762,6 +1762,42 @@ def hesap_ozeti_eski_kayit_onarimi_ve_kendi_hesap(b, info):
     eq(a.ev("r=>detectFixedFromBank(r).sugs.map(s=>[s.own,s.on])", rows), [[True, False]], "kendi hesaplar arası aktarım işaretsiz")
     a.close()
 
+
+@test
+def hesap_ozeti_uc_ayda_bir_ikramiye(b, info):
+    a = _butce_app(b, budget=False)   # kesim her ayın 26'sı
+    R = lambda d, desc, v: {"date": d, "desc": desc, "amt": v}
+    # maaş her ay (Ağustos'ta kesimden sonra yatıyor), ikramiye 3 ayda bir
+    rows = [R(d, "MAAS ODEMESI ORNEK AS", 45000) for d in ("2026-04-15", "2026-05-15", "2026-06-15", "2026-07-25", "2026-08-27", "2026-09-25")]
+    rows += [R("2026-04-20", "IKRAMIYE ODEMESI ORNEK AS", 30000), R("2026-07-20", "IKRAMIYE ODEMESI ORNEK AS", 30000)]
+    got = a.ev("r=>Object.fromEntries(detectFixedFromBank(r).sugs.map(s=>[s.name,[s.every,s.regular,s.amts.map(x=>[x.from,x.v])]]))", rows)
+    eq(got["Maaş"], [1, True, [["2026-04", 45000]]], "maaş her ay (dönemler atlasa da tarihler aylık)")
+    eq(got["İkramiye"], [3, True, [["2026-04", 30000]]], "ikramiye 3 ayda bir")
+    eq(a.ev("r=>detectFixedFromBank([...r,{date:'2026-05-02',desc:'ORNEK DANISMANLIK',amt:5000},{date:'2026-06-01',desc:'ORNEK DANISMANLIK',amt:5000},{date:'2026-09-28',desc:'ORNEK DANISMANLIK',amt:5000}]).rest.filter(s=>s.irregular).map(s=>s.name)", rows),
+       ["Ornek Danismanlik"], "düzensiz aralıklı ödeme önerilmez")
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    a.ev("r=>{bView.bank={...detectFixedFromBank(r),n:r.length,unk:0,errs:[],files:['x'],ms:[]};renderBudget()}", rows)
+    eq(a.ev("document.querySelector(\"[data-sug='income|IKRAMIYE ORNEK'] [data-every]\").value"), "3", "önizlemede sıklık")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    inc = lambda m: a.ev(f"monthBudget('{m}').income")
+    eq([inc(m) for m in ("2026-07", "2026-08", "2026-09", "2026-10")], [75000, 45000, 45000, 75000], "ikramiye yalnızca Temmuz ve Ekim'de")
+    ik = a.ev("budget.items.find(i=>i.name==='İkramiye').id")
+    assert "3 ayda bir" in a.text(f"[data-item='{ik}'] .bihead")
+    a.pg.select_option("#bMonth", "2026-08"); a.pg.click("#bIncome"); a.pg.wait_for_timeout(100)
+    assert "İkramiye (3 ayda bir, sonraki Ekim 2026)" in a.text("#bKpiList"), a.text("#bKpiList")
+    # elle her aya çevirince her ay sayılır; geri al
+    a.pg.click(f"[data-item='{ik}'] .bihead"); a.pg.wait_for_timeout(100)
+    a.pg.select_option(f"[data-item='{ik}'] [data-every]", "1"); a.pg.wait_for_timeout(150)
+    eq(inc("2026-08"), 75000, "her ay"); a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150); eq(inc("2026-08"), 45000, "geri al")
+    # önceki sürümle (sıklıksız) eklenmiş ikramiye açılışta ödeme tarihlerinden 3 ayda bire döner
+    old = {"id": "o", "kind": "income", "name": "İkramiye", "src": "IKRAMIYE ORNEK", "amts": [{"from": "2026-04", "v": 30000}],
+           "seen": [{"d": "2026-04-20", "p": "2026-04", "desc": "IKRAMIYE", "v": 30000}, {"d": "2026-07-20", "p": "2026-07", "desc": "IKRAMIYE", "v": 30000}]}
+    eq(a.ev("o=>{applyData({history:[],budget:{items:[o]}});return [budget.items[0].every,monthBudget('2026-08').income]}", old), [3, 0], "eski kayıt onarıldı")
+    # elle her ay olarak kaydedilmiş ikramiye: yeniden yüklemede sıklık değişikliği önerilir
+    a.ev("o=>{applyData({history:[],budget:{items:[{...o,every:1}]}});render()}", old)
+    eq(a.ev("r=>detectFixedFromBank(r).sugs.filter(s=>s.type==='change').map(s=>[s.itemName,s.freqFrom,s.every,s.amtCh])", rows), [["İkramiye", 1, 3, False]], "sıklık değişikliği önerisi")
+    a.close()
+
 # ----------------------------------------------------------------
 def main():
     only = sys.argv[1:] and sys.argv[1]
