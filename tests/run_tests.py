@@ -1444,8 +1444,15 @@ def birikim_varliklar_ve_kur(b, info):
     a.pg.click(f"[data-asset='{gau}'] [data-del]"); a.pg.wait_for_timeout(100); eq(a.text("#aTotal"), "₺154.250", "vazgeçince kalır")
     a.pg.click(f"[data-asset='{gau}'] [data-del]"); a.pg.wait_for_timeout(120); eq(a.text("#aTotal"), "₺112.250", "silindi")
     assert "Birikim yeter" in a.text("#budget .hero"), "birikim / ortalama gider"
+    # 22 ayar gram altın: ayrı tür, kendi kuru
+    assert "Gram altın (22 ayar)" in a.text("#aType"), a.text("#aType")
+    add("Bilezik 22", "G22", "20")
+    a.pg.fill("#rate-G22", "3.850"); a.pg.press("#rate-G22", "Enter"); a.pg.wait_for_timeout(120)
+    eq(a.text("#aTotal"), "₺189.250", "112.250 + 20 gr × 3.850")
     snap = json.loads(a.ev("snapshot()"))
-    eq(len(snap["budget"]["assets"]), 2, "dosyada birikimler"); eq(snap["budget"]["rates"]["USD"]["v"], 41.5)
+    eq(len(snap["budget"]["assets"]), 3, "dosyada birikimler"); eq(snap["budget"]["rates"]["USD"]["v"], 41.5)
+    a.ev("s=>{applyData(JSON.parse(s));render()}", a.ev("snapshot()")); a.pg.wait_for_timeout(100)
+    eq(a.ev("[budget.assets.find(x=>x.name==='Bilezik 22').type,budget.rates.G22.v]"), ["G22", 3850], "dosyadan geri okunur")
     assert "budget" not in json.loads(a.ev("shareSnapshot()")), "kategori paylaşımına bütçe girmez"
     eq(a.ev("localStorage.length+sessionStorage.length"), 0, "tarayıcıda saklanmaz")
     a.close()
@@ -1636,6 +1643,22 @@ def hesap_ozeti_yon_bakiyeden_ve_elle(b, info):
 
 
 @test
+def birikim_geri_al_telefonda_sigar(b, info):
+    """Uzun etiketli Geri al bildirimi dar ekranda taşmaz; düğme ekranda kalır."""
+    a = App(b, width=360)
+    a.ev("()=>undoable('Gram altın (24 ayar) kuru internetten: ₺5.337,02',()=>{})"); a.pg.wait_for_timeout(100)
+    for sel in ("#toast .toast", "#undoBtn"):
+        box = a.pg.locator(sel).bounding_box()
+        assert box and box["x"] >= 0 and box["x"] + box["width"] <= 360, f"{sel}: {box}"
+    lines = "s=>{const r=document.createRange();r.selectNodeContents(document.querySelector(s));return r.getClientRects().length}"
+    eq(a.ev(lines, "#undoBtn"), 1, "Geri al tek satır")
+    eq(a.ev("(e=>e.scrollWidth<=e.clientWidth)(document.querySelector('#toast .toast span'))"), True, "etiket kesilmez, satır kırar")
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(100)
+    assert "Geri alındı" in a.text("#toast"), a.text("#toast")
+    a.close()
+
+
+@test
 def birikim_suzgec(b, info):
     """Süzgeç etkilediği listenin hemen üstünde; ayrı ay seçimi yok, her şey üstteki "Ay"a göre."""
     a = _butce_app(b)
@@ -1696,17 +1719,55 @@ def birikim_suzgec(b, info):
     assert "KREDI KARTI ODEMESI" in rest() and "ATM PARA" not in rest(), rest()
     a.pg.click("#bankRest [data-why='']"); a.pg.wait_for_timeout(100)
     assert "ATM PARA" in rest(), rest()
-    # ay: üstteki "Ay" (Ağustos)
-    a.pg.check("#bkMonth"); a.pg.wait_for_timeout(100)
-    dates = a.ev("[...document.querySelectorAll('#bankRest .brow')].map(e=>e.innerText.match(/\\d\\d\\.(\\d\\d)\\.2026/)[1])")
-    assert dates and set(dates) == {"08"}, dates
-    a.pg.click("#bkClear"); a.pg.wait_for_timeout(100)
+    # dönem: süzgecin kendi listesi (yalnızca özetteki dönemler); üstteki "Ay"a bağlı değil, onu değiştirmez
+    eq(a.pg.locator("#bkMonth").count(), 0, "üstteki Ay'a bağlı kutu yok")
+    month = a.ev("$('bMonth').value")
+    opts = a.ev("[...$('bkPer').options].map(o=>o.value)")
+    eq(opts[0], "", "Tüm dönemler"); assert "2026-08" in opts and opts[1:] == sorted(opts[1:], reverse=True), opts
+    a.pg.select_option("#bkPer", "2026-08"); a.pg.wait_for_timeout(100)
+    dates = lambda: a.ev("[...document.querySelectorAll('#bankRest .brow')].map(e=>e.innerText.match(/\\d\\d\\.(\\d\\d)\\.2026/)[1])")
+    assert dates() and set(dates()) == {"08"}, dates()
+    eq(a.ev("$('bMonth').value"), month, "üstteki Ay değişmez")
+    a.pg.select_option("#bkPer", ""); a.pg.wait_for_timeout(100)
+    assert len(set(dates())) > 1, dates()
     # süzgeçle gizlenen işaretli öneri eklenmez
     a.pg.click("#bkFilter [data-dir='income']"); a.pg.wait_for_timeout(100)
     assert "gizlenen 1 işaretli öneri" in a.text("#bankHidden"), a.text("#bankBox")
     a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
     eq(a.ev("budget.items.length"), 5, "gizli BES eklenmedi")
     eq(sorted(json.loads(a.ev("snapshot()"))["budget"].keys()), ["assets", "items", "rates"], "süzgeç dosyaya yazılmaz")
+    a.close()
+
+
+@test
+def hesap_ozeti_para_gonderme_ayri(b, info):
+    """Bankanın her havaleye yazdığı genel sözcükler (PARA GÖNDERME, banka adı, kanal) farklı kişilere gönderimleri birleştirmez;
+    "Öneri yap" yalnızca tıklanan satıra benzeyenleri taşır."""
+    a = _butce_app(b, budget=False)
+    # ORNEKBANK DIJITAL KANAL: sabit listede olmayan, bu özetteki her havalede geçen sözcükler
+    R = lambda d, who, v: {"date": d, "desc": f"ORNEKBANK DIJITAL KANAL PARA GONDERME {who}", "amt": -v}
+    rows = [R(f"2026-0{m}-03", "AHMET ORNEKCI KIRA", 15000) for m in (7, 8, 9)]
+    rows += [R("2026-07-12", "MEHMET DENEME", 2000), R("2026-08-21", "MEHMET DENEME", 3500), R("2026-09-02", "MEHMET DENEME", 750)]
+    rows += [R("2026-07-18", "ZEYNEP TESTOGLU", 400), R("2026-09-15", "ALI ORNEK", 5000)]
+    who = "x=>x.desc.split(' ').slice(5).join(' ')"
+    det = a.ev(f"r=>{{const d=detectFixedFromBank(r);return {{s:d.sugs.map(s=>[s.name,s.rows.map({who})]),r:d.rest.map(s=>[...new Set(s.rows.map({who}))])}}}}", rows)
+    eq(det["s"], [["Kira", ["AHMET ORNEKCI KIRA"] * 3]], "kira ayrı öneri, yalnızca kendi 3 hareketi")
+    eq(sorted(det["r"]), [["ALI ORNEK"], ["MEHMET DENEME"], ["ZEYNEP TESTOGLU"]], "diğer gönderimler kişi kişi ayrı")
+    # arayüz: Mehmet satırında "Öneri yap" yalnızca Mehmet'i taşır
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    a.ev("r=>{const d=detectFixedFromBank(r),ms=[...new Set([...d.sugs,...d.rest].flatMap(s=>s.rows.map(x=>x.p)))].sort();"
+         "bView.bank={...d,n:r.length,unk:0,errs:[],files:['ornek.csv'],ms};renderBudget()}", rows)
+    a.pg.click("#bankRest > summary"); a.pg.wait_for_timeout(100)
+    a.pg.locator("#bankRest .brow", has_text="MEHMET DENEME").first.locator("[data-promote]").click(); a.pg.wait_for_timeout(100)
+    got = a.ev(f"[bView.bank.sugs.map(s=>[s.name,[...new Set(s.rows.map({who}))]]),bView.bank.rest.map(s=>[...new Set(s.rows.map({who}))])]")
+    eq(got[0], [["Kira", ["AHMET ORNEKCI KIRA"]], ["Mehmet Deneme", ["MEHMET DENEME"]]], "yalnızca Mehmet öneriye geçti")
+    eq(sorted(got[1]), [["ALI ORNEK"], ["ZEYNEP TESTOGLU"]], "diğerleri listede kalır")
+    # yanlışlıkla birleşmiş bir grupta bile yalnızca tıklanan satıra benzeyenler taşınır
+    got = a.ev("""()=>{const B=bView.bank, row=(d,desc,v)=>({date:d,p:d.slice(0,7),desc,amt:v,k0:bankKey(desc)});
+      const s=fillSug({kind:'expense',key:'karisik',toks:['karisik'],rows:[row('2026-07-05','EFT AYSE KIRA',9000),row('2026-08-05','EFT AYSE KIRA',9000),row('2026-08-09','EFT BURAK SPOR',1200)]});
+      s.why='once'; B.rest.push(s); promoteRest(s,s.rows[2]);
+      return [B.sugs.at(-1).rows.map(r=>r.desc),B.rest.filter(x=>x.rows.some(r=>r.desc==='EFT AYSE KIRA')).map(x=>[x.why,x.rows.length])]}""")
+    eq(got, [["EFT BURAK SPOR"], [["once", 2]]], "tıklanan satır taşındı, AYŞE satırları listede kaldı")
     a.close()
 
 
@@ -1851,7 +1912,7 @@ def _kur_app(b, respond, respond2=None):
         return h
     a.pg.route(RATE_JSD, handler(respond))
     a.pg.route(RATE_PAGES, handler(respond2 or respond))
-    a.ev("()=>{budget.assets=[{id:'u',name:'Dolar',type:'USD',qty:1000,upd:''},{id:'g',name:'Bilezik',type:'GAU',qty:10,upd:''},{id:'c',name:'Çeyrek',type:'CEYREK',qty:2,upd:''}];render()}")
+    a.ev("()=>{budget.assets=[{id:'u',name:'Dolar',type:'USD',qty:1000,upd:''},{id:'g',name:'Bilezik',type:'GAU',qty:10,upd:''},{id:'c',name:'Çeyrek',type:'CEYREK',qty:2,upd:''},{id:'b',name:'Bilezik 22',type:'G22',qty:5,upd:''}];render()}")
     return a, reqs
 
 
@@ -1876,17 +1937,19 @@ def birikim_kurlar_internetten(b, info):
     h = r.headers; assert "cookie" not in h and "referer" not in h, h
     gram = 41.5 / 0.00025 / 31.1034768
     eq(a.ev("budget.rates"), {"USD": {"v": 41.5, "date": "2026-09-27", "auto": True}, "EUR": {"v": round(41.5 / 0.86, 2), "date": "2026-09-27", "auto": True},
-                              "GAU": {"v": round(gram, 2), "date": "2026-09-27", "auto": True}, "CEYREK": {"v": round(gram * 1.6038, 2), "date": "2026-09-27", "auto": True}}, "kurlar")
+                              "GAU": {"v": round(gram, 2), "date": "2026-09-27", "auto": True}, "G22": {"v": round(gram * 22 / 24, 2), "date": "2026-09-27", "auto": True},
+                              "CEYREK": {"v": round(gram * 1.6038, 2), "date": "2026-09-27", "auto": True}}, "kurlar (22 ayar = 24 ayar × 22/24)")
     t = a.text("#budget .rates")
     assert "internetten" in t and "27.09.2026" in t and "ons fiyatından" in t and "cdn.jsdelivr.net" in t, t
     assert "yedek" not in t and "korundu" not in t, t
     # güncellemeden sonra kısa özet: dört kurun yeni fiyatı
     s = a.text("#rateSum")
-    for want in ("Yeni kurlar", "Dolar", tl2(41.5), "Euro", tl2(round(41.5 / 0.86, 2)), "Gram altın", tl2(round(GRAM, 2)), "Çeyrek altın", tl2(round(GRAM * 1.6038, 2))):
+    for want in ("Yeni kurlar", "Dolar", tl2(41.5), "Euro", tl2(round(41.5 / 0.86, 2)), "Gram altın (24 ayar)", tl2(round(GRAM, 2)),
+                 "Gram altın (22 ayar)", tl2(round(GRAM * 22 / 24, 2)), "Çeyrek altın", tl2(round(GRAM * 1.6038, 2))):
         assert want in s, f"{want}: {s}"
-    eq(s.count("yeni"), 4, "önceki kayıt yoktu"); assert "elle" not in s, s
+    eq(s.count("yeni"), 5, "önceki kayıt yoktu"); assert "elle" not in s, s
     assert '"auto": true' in a.ev("snapshot()"), "kurlar dosyaya yazılır"
-    eq(a.text("#aTotal"), f"₺{round(41.5*1000 + round(gram,2)*10 + round(gram*1.6038,2)*2):,}".replace(",", "."), "toplam")
+    eq(a.text("#aTotal"), f"₺{round(41.5*1000 + round(gram,2)*10 + round(gram*1.6038,2)*2 + round(gram*22/24,2)*5):,}".replace(",", "."), "toplam")
     # sekme değiştirip dönünce yeni istek yok; düğmeyle yenilenir
     a.pg.click("#tabSpend"); a.pg.click("#tabBudget"); a.pg.wait_for_timeout(200); eq(len(reqs), 1, "oturumda bir kez")
     a.pg.click("#rateRefresh"); a.pg.wait_for_timeout(300); eq(len(reqs), 2, "Kurları güncelle")
@@ -1915,6 +1978,7 @@ def birikim_kurlar_internet_yoksa_kayitli(b, info):
     # "Bunu kullan": internetteki gram fiyatına geçer, geri alınabilir
     a.pg.click("#rateSum [data-use='GAU']"); a.pg.wait_for_timeout(150)
     eq(a.ev("budget.rates.GAU"), {"v": round(GRAM, 2), "date": "2026-09-27", "auto": True}, "internetteki kur kullanıldı")
+    eq(json.loads(a.ev("snapshot()"))["budget"]["rates"]["GAU"], {"v": round(GRAM, 2), "date": "2026-09-27", "auto": True}, "kayıt dosyasına da yazılır")
     s = a.text("#rateSum"); assert "elle girdiğiniz ₺5.000,00" not in s and "Gram altın" in s, s
     a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150)
     eq(a.ev("budget.rates.GAU"), {"v": 5000, "date": "2026-09-28"}, "geri al")

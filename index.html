@@ -250,8 +250,8 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px r
 .kwsug input[type=text]{font:inherit;font-size:.78rem;padding:2px 6px;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink);width:auto;max-width:160px}
 #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:20;width:max-content;max-width:calc(100% - 32px)}
 .toast{display:flex;align-items:center;gap:14px;background:#1d2322;border:1px solid var(--muted);color:var(--ink);border-radius:10px;padding:8px 10px 8px 14px;box-shadow:0 8px 24px rgba(0,0,0,.6);font-size:.9rem;animation:toastin .25s ease-out}
-.toast span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.toast button{margin:0;padding:6px 12px;font-size:.85rem}
+.toast span{min-width:0;flex:1 1 auto;overflow-wrap:anywhere}   /* dar ekranda kesilmez, satır kırar; düğme ekranda kalır */
+.toast button{margin:0;padding:6px 12px;font-size:.85rem;flex:none;white-space:nowrap}
 @keyframes toastin{from{opacity:0;transform:translateY(10px)}}
 .notecell{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .note{font-size:.8rem;color:var(--muted);font-style:italic;overflow-wrap:anywhere}
@@ -375,7 +375,7 @@ body:not(.tab-budget) #budget{display:none}
 #budget .bstart input,#budget .bstart select{width:auto;margin-left:6px;padding:4px 6px}
 .ratesum{margin:4px 0 10px}
 .rsrow{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline;padding:4px 0;border-top:1px solid var(--line)}
-.rsrow>span{min-width:7.5em}
+.rsrow>span{min-width:10.5em}
 .rsrow>small{color:var(--muted)}
 .rsrow button{margin:0;padding:2px 10px;font-size:.8rem}
 .bfilter{margin:14px 0 4px;border:1px solid var(--line);border-radius:10px;padding:4px 12px}
@@ -1942,11 +1942,13 @@ document.addEventListener("keydown",e=>{
    değiştirmez. Bir ayın kalanı = gelir − kart dışı sabit giderler − o ayın ekstresi (periodKey). Kartla ödenen sabit gider (card)
    ekstrede zaten olduğu için ayrıca düşülmez. Kurlar elle girilir; internetten hiçbir şey alınmaz. */
 let tab="spend";   /* açık sekme (yalnızca bellekte) */
-/* Süzgeçler: yalnızca bellekte, yalnızca gösterilenleri daraltır; ay her zaman üstteki "Ay" (bView.month) */
-const FI_NEW=()=>({dir:"",q:"",type:"",month:false,min:"",max:""}), FB_NEW=()=>({dir:"",min:"",max:"",month:false,why:""});
+/* Süzgeçler: yalnızca bellekte, yalnızca gösterilenleri daraltır. Kalem süzgecinin ayı üstteki "Ay" (bView.month);
+   hesap özeti süzgecinin kendi dönem listesi var (per), çünkü o kutu "Ay"ın üstünde duruyor */
+const FI_NEW=()=>({dir:"",q:"",type:"",month:false,min:"",max:""}), FB_NEW=()=>({dir:"",min:"",max:"",per:"",why:""});
 const bView={month:"",open:new Set(),add:{income:{name:"",amt:"",from:""},expense:{name:"",amt:"",from:"",card:false}},asset:{name:"",type:"TRY",qty:""},msg:null,bank:null,bankMsg:"",
   fi:FI_NEW(), fb:FB_NEW()};   /* fi: sabit kalemler süzgeci, fb: hesap özeti süzgeci */
-const ASSET_TYPES={TRY:{l:"TL",u:"₺"},USD:{l:"Dolar",u:"$"},EUR:{l:"Euro",u:"€"},GAU:{l:"Gram altın",u:"gr"},CEYREK:{l:"Çeyrek altın",u:"adet"}};
+const ASSET_TYPES={TRY:{l:"TL",u:"₺"},USD:{l:"Dolar",u:"$"},EUR:{l:"Euro",u:"€"},GAU:{l:"Gram altın (24 ayar)",u:"gr"},G22:{l:"Gram altın (22 ayar)",u:"gr"},CEYREK:{l:"Çeyrek altın",u:"adet"}};
+const GOLD=new Set(["GAU","G22","CEYREK"]);
 const isMonth=s=>/^\d{4}-\d{2}$/.test(s||"");
 let uidN=0; const uid=()=>Date.now().toString(36)+"-"+(uidN++).toString(36);
 /* Önceki sürüm, hesap özetinden eklenen kalemin tutarını dönem toplamından alıyordu: bir dönemde iki ödeme olunca (maaş kesimden
@@ -2090,11 +2092,11 @@ function FixedList({kind,m,bm}){
    Sahibinin kararıyla uygulamanın TEK ağ isteği: Birikim sekmesi açıkken ve döviz/altın birikimi varken, oturumda bir kez (ve
    "Kurları güncelle" ile) sabit bir dosyadan günlük kurlar okunur: önce jsDelivr, cevap gelmezse yedek adres (aynı servis, aynı
    dosya; pages.dev sahibin ağında zaman aşımına uğradı). İsteğe hiçbir veri eklenmez (sabit adres, çerez/referer yok); CSP
-   connect-src yalnızca bu iki tam dosya adresine açıktır. Gram altın ons fiyatından hesaplanır (işçiliksiz, yaklaşık); çeyrek ≈ 1,6038 gram.
+   connect-src yalnızca bu iki tam dosya adresine açıktır. Gram altın ons fiyatından hesaplanır (işçiliksiz, yaklaşık); 22 ayar = 24 ayar × 22/24; çeyrek ≈ 1,6038 gram.
    Ulaşılamazsa kayıt dosyasındaki kurlar kullanılır. Elle girilmiş kur hiç ezilmez (sahibin kararı); özet (RateSum) internetteki
    fiyatı ve "Bunu kullan" düğmesini gösterir. */
 const RATE_URLS=["https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json",
-                 "https://latest.currency-api.pages.dev/v1/currencies/usd.json"], GRAM_PER_OZ=31.1034768, CEYREK_GR=1.6038;
+                 "https://latest.currency-api.pages.dev/v1/currencies/usd.json"], GRAM_PER_OZ=31.1034768, CEYREK_GR=1.6038, AYAR22=22/24;
 const rateHost=u=>{try{return new URL(u).host}catch(e){return u}};
 let rateFetch={state:""};   /* "" | "queued" | "busy" | "ok" | "fail" (yalnızca bellekte); tries = çalışmayan adresler ve nedenleri */
 const needRates=()=>budget.assets.some(a=>a.type!=="TRY");
@@ -2143,7 +2145,7 @@ async function fetchRates(){
     const u=d.usd, tl=+u.try;
     const date=/^\d{4}-\d{2}-\d{2}$/.test(d.date)?d.date:iso(new Date()), next={USD:tl};
     if(+u.eur>0)next.EUR=tl/u.eur;
-    if(+u.xau>0){next.GAU=tl/u.xau/GRAM_PER_OZ;next.CEYREK=next.GAU*CEYREK_GR}
+    if(+u.xau>0){next.GAU=tl/u.xau/GRAM_PER_OZ;next.G22=next.GAU*AYAR22;next.CEYREK=next.GAU*CEYREK_GR}
     let changed=false; const got={}, prev={};
     for(const [k,v] of Object.entries(next)){
       const cur=budget.rates[k], nv=Math.round(v*100)/100;
@@ -2196,7 +2198,7 @@ function addAsset(){
   bView.msg=null; bView.asset={name:"",type,qty:""};
   undoable(`${name} eklendi`,()=>budget.assets.push({id:uid(),name,type,qty:v,upd:iso(new Date())}));
 }
-const ASSET_COL={TRY:PAL[2],USD:PAL[0],EUR:PAL[4],GAU:PAL[3],CEYREK:PAL[1]};
+const ASSET_COL={TRY:PAL[2],USD:PAL[0],EUR:PAL[4],GAU:PAL[3],G22:PAL[5],CEYREK:PAL[1]};
 function AssetsBox({total,vals}){
   const today=iso(new Date()), f=bView.asset;
   const used=Object.keys(ASSET_TYPES).filter(t=>t!=="TRY"&&budget.assets.some(a=>a.type===t));
@@ -2219,7 +2221,7 @@ function AssetsBox({total,vals}){
       <div class="grid">${used.map(t=>{const r=budget.rates[t], age=r&&r.date?Math.round((toDate(today)-toDate(r.date))/864e5):0;
         return hx`<div key=${t}><label for=${"rate-"+t}>${ASSET_TYPES[t].l} (₺)</label><input type="text" inputmode="decimal" id=${"rate-"+t} value=${r?fmtNum(r.v):""} placeholder="Kur girin" onChange=${e=>setRate(t,e.target.value)} onKeyDown=${enterBlur}/>
           <small class=${age>7?"bwarn":""}>${r?hx`<span class="pqty">${fmtNum(r.v)} ₺ · </span>${r.auto?(rateFetch.state==="ok"?"internetten":"kayıtlı (internetten alınmıştı)"):"elle girildi"} · ${r.date?toDate(r.date).toLocaleDateString("tr-TR"):""}${age>7?` · ${age} gün önce, güncelleyin`:""}`:"kur yok"}</small>
-          ${r&&r.auto&&(t==="GAU"||t==="CEYREK")?hx`<small class="bseen">yaklaşık: ons fiyatından, işçiliksiz</small>`:null}</div>`})}</div>
+          ${r&&r.auto&&GOLD.has(t)?hx`<small class="bseen">yaklaşık: ons fiyatından, işçiliksiz</small>`:null}</div>`})}</div>
       ${msg("rates")}</div>`:null}
     ${vals.length?hx`<table class="top atab"><tbody>${vals.map(({a,v})=>hx`<tr key=${a.id} data-asset=${a.id}>
       <td><b>${a.name}</b><br/><small>${ASSET_TYPES[a.type].l}${a.upd?` · ${toDate(a.upd).toLocaleDateString("tr-TR")}`:""}</small></td>
@@ -2243,7 +2245,10 @@ const OPEN_RE=/DEVREDEN|ACILIS BAKIYE|ONCEKI BAKIYE|GECEN BAKIYE/;
 const CARDPAY_RE=/KREDI KARTI|KREDI KART|KART ODEME|KARTI ODEME|KK ODEME|KARTA ODEME/;
 const FIXED_KW=/(^|[^A-Z])(KIRA|AIDAT|MAAS|UCRET|KREDI TAKSIT|BES([^A-Z]|$))/;
 const BANK_NOISE=new Set(["EFT","HAVALE","FAST","GIDEN","GELEN","REF","NO","ACIKLAMA","ISLEM","IBAN","TR","HESAP","HESABA","HESAPTAN","OTOMATIK","ODEME","ODEMESI","TALIMAT","TALIMATI","VIRMAN","TL","AS","A.S","LTD","STI",
-  "DIGER","FATURA","FATURASI","KURUM","TAHSILAT","TAHSILATI","ISLEMI","NOLU","ABONE"]);
+  "DIGER","FATURA","FATURASI","KURUM","TAHSILAT","TAHSILATI","ISLEMI","NOLU","ABONE",
+  /* bankaların her havaleye yazdığı kanal/işlem sözcükleri: farklı kişilere gönderimleri birleştirmesin */
+  "PARA","GONDERME","GONDERIM","GONDERIMI","GONDERILEN","TRANSFER","TRANSFERI","INTERNET","MOBIL","SUBE","BANKACILIGI","BANKACILIK",
+  "ALICI","GONDEREN","ACIKLAMASI","HIZLI"]);
 let monthWords; const isMonthWord=w=>(monthWords||(monthWords=new Set(Object.keys(MONTH_IDX).map(norm)))).has(w);
 /* Karşı tarafın ayırt edici sözcükleri (açıklamadaki sırayla, tekrarsız): rakam içerenler (referans, tarih, hesap no),
    ay adları ve EFT/HAVALE/FATURA/DİĞER gibi sözcükler atılır. Banka aynı ödemeyi aydan aya farklı sırayla yazabilir
@@ -2253,6 +2258,21 @@ function bankTokens(desc){
   return [...new Set(w.length?w:norm(desc).split(" ").filter(Boolean))];
 }
 const bankKey=desc=>[...bankTokens(desc)].sort().join(" ");
+/* Bu özette çok sayıda farklı karşı tarafın açıklamasında geçen sözcükler (bankanın adı, kanal, "PARA GÖNDERME" gibi; sabit listede
+   olmayanlar dahil) ayırt edici değildir: aynı yöndeki farklı yazılışların en az 4'ünde ve %30'unda geçen sözcük birleştirmede,
+   kayıtlı kalemle eşleştirmede ve adda sayılmaz. detectFixedFromBank her özet için yeniden hesaplar. */
+let bankCommon={income:new Set(),expense:new Set()};
+function commonToks(rows){
+  const sp={income:new Set(),expense:new Set()}; rows.forEach(r=>sp[r.amt>0?"income":"expense"].add(bankKey(r.desc)));
+  const out={};
+  for(const [k,set] of Object.entries(sp)){
+    const df={}; set.forEach(key=>key.split(" ").forEach(t=>{df[t]=(df[t]||0)+1}));
+    out[k]=new Set(Object.keys(df).filter(t=>df[t]>=4&&df[t]>=set.size*.3&&!FIXED_KW.test(t)));
+  }
+  return out;
+}
+/* Ayırt edici sözcükler; hepsi genelse olduğu gibi */
+const bankDistinct=(toks,kind)=>{const c=bankCommon[kind]||new Set(), d=toks.filter(t=>!c.has(t));return d.length?d:toks};
 /* İki sözcük kümesi aynı karşı taraf mı: ortak sözcükler küçük kümenin en az %60'ı */
 function tokOverlap(a,b){const B=new Set(b), n=a.filter(x=>B.has(x)).length;return {n,r:n/Math.max(1,Math.min(a.length,b.length))}}
 function bankName(desc){
@@ -2262,8 +2282,9 @@ function bankName(desc){
   if(/IKRAMIYE/.test(d))return "İkramiye";
   if(/MAAS|UCRET/.test(d))return "Maaş";
   if(/KREDI (TAKSIT|ODEME|GERI)/.test(d))return "Kredi taksiti";
-  /* 3 harfli kısaltmalar (BES, SGK) büyük harf kalır */
-  return bankTokens(desc).slice(0,3).map(w=>w.length<=3?w:w[0]+w.slice(1).toLowerCase()).join(" ");
+  /* 3 harfli kısaltmalar (BES, SGK) büyük harf kalır; özetteki genel sözcükler (banka adı, kanal) ad olmaz */
+  const t=bankTokens(desc), c=new Set([...bankCommon.income,...bankCommon.expense]), own=t.filter(w=>!c.has(w));
+  return (own.length?own:t).slice(0,3).map(w=>w.length<=3?w:w[0]+w.slice(1).toLowerCase()).join(" ");
 }
 /* Excel/CSV: tarih, açıklama ve ya tek "Tutar" sütunu ya da ayrı Borç/Alacak sütunları; Bakiye tutar sayılmaz */
 function bankRowsFromTable(tab){
@@ -2350,6 +2371,7 @@ const REST_WHY={card:"kredi kartı ödemesi (ekstrede zaten var)",small:"küçü
 function detectFixedFromBank(rows){
   let cardSum=0,cardN=0;
   const g={}, side={}, period=bankPeriodFn();
+  bankCommon=commonToks(rows);
   for(const r of rows){
     const d=norm(r.desc), kind=r.amt>0?"income":"expense", key=bankKey(r.desc);
     const why=r.amt<0&&CARDPAY_RE.test(d)?"card":Math.abs(r.amt)<100?"small":"";
@@ -2361,7 +2383,7 @@ function detectFixedFromBank(rows){
   const med=x=>{const v=Object.values(perMonth(x.rows)).sort((a,b)=>a-b);return v[Math.floor(v.length/2)]};
   const groups=[];
   for(const x of Object.values(g).sort((a,b)=>a.toks.length-b.toks.length||a.key.localeCompare(b.key))){
-    const h=groups.find(h=>{if(h.kind!==x.kind)return false;const o=tokOverlap(h.toks,x.toks);return o.r>=.6&&(o.n>=2||Math.abs(med(h)-med(x))<=med(h)*.15)});
+    const h=groups.find(h=>{if(h.kind!==x.kind)return false;const o=tokOverlap(bankDistinct(h.toks,h.kind),bankDistinct(x.toks,x.kind));return o.r>=.6&&(o.n>=2||Math.abs(med(h)-med(x))<=med(h)*.15)});
     if(h)h.rows.push(...x.rows); else groups.push(x);
   }
   const sugs=[], rest=[];
@@ -2377,8 +2399,18 @@ function detectFixedFromBank(rows){
   const ord={income:0,expense:1};
   return {sugs:sugs.sort((a,b)=>(a.type==="change")-(b.type==="change")||ord[a.kind]-ord[b.kind]||b.amts.at(-1).v-a.amts.at(-1).v),rest,cardSum,cardN};
 }
-/* Önerilmeyen bir grubu (aynı karşı taraftan tüm hareketleriyle) işaretli öneriye taşır */
-function promoteRest(s){const B=bView.bank;B.rest=B.rest.filter(x=>x!==s);delete s.why;s.on=true;B.sugs.push(s);renderBudget()}
+/* Önerilmeyen hareketi işaretli öneriye taşır: grubundan yalnızca tıklanan harekete benzeyenler (aynı yazılış ya da ayırt edici
+   sözcüklerin ≥%60'ı ortak) gider, gerisi listede kalır. Kira yazan bir havaleyi seçmek tüm havaleleri taşımasın. */
+function promoteRest(s,r){
+  const B=bView.bank, toks=x=>bankDistinct(x.split(" "),s.kind), ref=r?toks(r.k0):null;
+  const like=x=>!r||x.k0===r.k0||tokOverlap(ref,toks(x.k0)).r>=.6;
+  const take=s.rows.filter(like), keep=s.rows.filter(x=>!like(x));
+  B.rest=B.rest.filter(x=>x!==s);
+  if(keep.length){const k=fillSug({kind:s.kind,key:s.key,toks:s.toks,rows:keep});k.why=s.why;k.on=false;B.rest.push(k)}
+  const n=keep.length?fillSug({kind:s.kind,key:r.k0,toks:r.k0.split(" "),rows:take}):s;
+  delete n.why; n.on=true; n.own=take.some(x=>OWN_RE.test(norm(x.desc)));
+  B.sugs.push(n); renderBudget();
+}
 /* Önerinin yönünü elle değiştirir (bankanın işareti yanlış okunduysa) */
 function flipSug(s){s.kind=s.kind==="income"?"expense":"income";fillSug(s);s.on=s.type!=="same";renderBudget()}
 function perMonth(rows){const per={};rows.forEach(r=>{if(!r.off){const m=r.p||r.date.slice(0,7);per[m]=(per[m]||0)+r.amt}});return per}
@@ -2431,7 +2463,7 @@ function fillSug(s){
   s.irregular=ev===0; if(ev===0)s.regular=false;
   if(!s.everyEdited)s.every=ev||1;
   /* kayıtlı kalem: kaynak sözcükleri benziyorsa (eski sürümün sıralı anahtarı da) ya da adı aynıysa */
-  const it=budget.items.find(i=>i.kind===s.kind&&((i.src&&tokOverlap(bankTokens(i.src),s.toks).r>=.6)||norm(i.name)===norm(s.name)));
+  const it=budget.items.find(i=>i.kind===s.kind&&((i.src&&tokOverlap(bankDistinct(bankTokens(i.src),s.kind),bankDistinct(s.toks,s.kind)).r>=.6)||norm(i.name)===norm(s.name)));
   delete s.item; s.type="new";
   if(it&&ms.length){
     const last=s.amts.at(-1), cur=amtAt({...it,every:1},ms.at(-1)), freq=(it.every||1)!==s.every;
@@ -2550,13 +2582,14 @@ function RestList({rest}){
     <div class="brows">${shown.map(({r,s})=>{const inc=s.kind==="income";
       return hx`<div class="brow" key=${s.kind+s.key+r.date+r.desc+r.amt}><span class=${"bsign "+(inc?"in":"out")}>${inc?"+":"−"}</span>
         <span><small class="bd">${r.desc}</small><small>${toDate(r.date).toLocaleDateString("tr-TR")} · ${REST_WHY[s.why]}</small></span>
-        <span class="n"><small class=${inc?"ok":"err"}>${inc?"+":"−"}${fmt2(r.amt)}</small>${s.why!=="same"?hx`<button class="ghost" data-promote onClick=${()=>promoteRest(s)}>Öneri yap</button>`:null}</span></div>`})}
+        <span class="n"><small class=${inc?"ok":"err"}>${inc?"+":"−"}${fmt2(r.amt)}</small>${s.why!=="same"?hx`<button class="ghost" data-promote onClick=${()=>promoteRest(s,r)}>Öneri yap</button>`:null}</span></div>`})}
       ${shown.length?null:hx`<small>Aramaya ya da süzgece uyan hareket yok.</small>`}</div>
   </details>`;
 }
 /* ---------- Birikim süzgeçleri ----------
    Her süzgeç etkilediği listenin hemen üstünde: sabit kalemler (ItemFilter) listelerin, hesap özeti (BankFilter) önerilerin üstünde;
-   neden çipleri "Önerilmeyen hareketler"in içinde. Ayrı ay seçimi yok: "yalnızca bu ay" üstteki "Ay"ı kullanır.
+   neden çipleri "Önerilmeyen hareketler"in içinde. Kalem süzgecinin "yalnızca bu ay"ı üstteki "Ay"ı kullanır; hesap özeti
+   süzgecinde yalnızca yüklenen özetteki dönemlerden oluşan kendi listesi vardır (üstteki "Ay"ı değiştirmez).
    Kalan ve toplamlar süzgeçten etkilenmez. */
 const FI_TYPES=[["","Hepsi"],["iCard","Kartla ödenen"],["iNoCard","Kart dışı"],["iBank","Hesap özetinden"],["iManual","Elle eklenen"]];
 const FB_WHY=[["","Hepsi"],["once","Tek seferlik"],["card","Kredi kartı ödemesi"],["small","Küçük tutar"],["same","Kayıtlı kalemle aynı"]];
@@ -2571,10 +2604,10 @@ function bfItem(i){
   return inRange(v||i.amts.at(-1).v,f);
 }
 const fbDir=kind=>!bView.fb.dir||bView.fb.dir===kind;
-const bfSug=s=>{const f=bView.fb;return fbDir(s.kind)&&!(f.month&&!s.months.includes(bView.month))&&inRange(s.amts.at(-1).v,f)};
-const bfRow=(r,s)=>{const f=bView.fb;return fbDir(s.kind)&&!(f.month&&(r.p||r.date.slice(0,7))!==bView.month)&&inRange(r.amt,f)&&(!f.why||f.why===s.why)};
+const bfSug=s=>{const f=bView.fb;return fbDir(s.kind)&&!(f.per&&!s.months.includes(f.per))&&inRange(s.amts.at(-1).v,f)};
+const bfRow=(r,s)=>{const f=bView.fb;return fbDir(s.kind)&&!(f.per&&(r.p||r.date.slice(0,7))!==f.per)&&inRange(r.amt,f)&&(!f.why||f.why===s.why)};
 const fiActive=()=>{const f=bView.fi;return !!(f.dir||f.q||f.type||f.month||f.min||f.max)};
-const fbActive=()=>{const f=bView.fb;return !!(f.dir||f.month||f.min||f.max)};
+const fbActive=()=>{const f=bView.fb;return !!(f.dir||f.per||f.min||f.max)};
 function fiClear(){bView.fi=FI_NEW();renderBudget()}
 function fbClear(){bView.fb={...FB_NEW(),why:bView.fb.why};renderBudget()}
 const Seg=({label,opts,val,set})=>hx`<div class="seg" role="group" aria-label=${label}>${opts.map(([k,l])=>hx`<button key=${k||"all"} data-dir=${k} aria-pressed=${String(val===k)} onClick=${()=>set(k)}>${l}</button>`)}</div>`;
@@ -2595,12 +2628,13 @@ function ItemFilter(){
   </div>`;
 }
 function BankFilter(){
-  const f=bView.fb;
+  const f=bView.fb, ms=(bView.bank.ms||[]).slice().reverse();
   return hx`<div class="bfilter" id="bkFilter">
     <div class="bfrow"><small class="bflabel">Hareketleri süz</small>
       <${Seg} label="Yön" opts=${[["","Hepsi"],["income","Gelen"],["expense","Giden"]]} val=${f.dir} set=${k=>{f.dir=k;renderBudget()}}/>
+      <select id="bkPer" aria-label="Ekstre dönemi" onChange=${e=>{f.per=e.target.value;renderBudget()}}>
+        <option value="" selected=${!f.per}>Tüm dönemler</option>${ms.map(k=>hx`<option key=${k} value=${k} selected=${f.per===k}>${monthName(k)}</option>`)}</select>
       <${MoneyRange} f=${f} p="bk"/>
-      <${OnlyMonth} f=${f} id="bkMonth" label=${`Yalnızca ${monthName(bView.month)} dönemi`}/>
       ${fbActive()?hx`<button class="linkish" id="bkClear" onClick=${fbClear}>Temizle</button>`:null}</div>
   </div>`;
 }
