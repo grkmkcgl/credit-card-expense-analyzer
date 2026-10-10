@@ -6,12 +6,13 @@ A single-file web tool that analyzes credit card statements and bank exports **e
 ## Gizlilik / Privacy
 
 - Dosyalar hiçbir sunucuya gönderilmez; tüm okuma ve hesaplama tarayıcıda yapılır. Sayfa açıldıktan sonra internet kapatılsa da çalışır.
-- Ağ kilidi: sayfadaki güvenlik kuralı (`Content-Security-Policy`, `connect-src 'none'`) hiçbir adrese bağlantı kurulmasına izin vermez; kod istese bile veri dışarı gidemez.
+- Ağ kilidi: sayfadaki güvenlik kuralı (`Content-Security-Policy`, `connect-src`) yalnızca kur servisinin iki sabit dosyasına (aşağıdaki istisna) bağlantıya izin verir. Kilit sunucuya değil tam dosya adresine açıktır: aynı sunuculardaki başka bir dosyaya da, başka hiçbir adrese de bağlantı kurulamaz; kod istese bile ekstre ve kayıt verisi dışarı gidemez.
+- **Tek istisna, kurlar:** Birikim sekmesinde döviz/altın birikimi varsa, internet açıkken günlük kurlar sabit bir dosyadan okunur: önce jsDelivr'den (`cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json`), oraya ulaşılamazsa aynı dosyanın yedek adresinden (`latest.currency-api.pages.dev/v1/currencies/usd.json`). Bu isteğe hiçbir veriniz eklenmez, ama servis IP adresinizi ve uygulamayı ne zaman açtığınızı görebilir. İnternet yoksa kayıt dosyanızdaki son kurlar kullanılır; kurları elle de girebilirsiniz. Ağ kilidi bu iki dosya dışındaki her yere kapalıdır.
 - Tarayıcıda (localStorage vb.) hiçbir veri saklanmaz. Kayıtlar yalnızca kullanıcının seçtiği `harcama-verisi.json` dosyasında tutulur. Telefonda internetsiz açılabilmesi için tarayıcı önbelleğinde yalnızca uygulamanın kendi dosyaları (sayfa, ikonlar) tutulur.
 - PDF şifreleri sadece sayfa açıkken bellekte tutulur.
 - `.gitignore`, ekstre ve kayıt dosyalarının yanlışlıkla depoya girmesini engeller. **Bu depoya asla gerçek ekstre veya `harcama-verisi.json` eklemeyin.**
 
-Files are never uploaded anywhere; parsing and calculations run in the browser, and the page keeps working offline once loaded. Nothing is stored in browser storage — records live only in the user's own `harcama-verisi.json`. Never commit real statements or data files to this repo.
+Files are never uploaded anywhere; parsing and calculations run in the browser, and the page keeps working offline once loaded. Nothing is stored in browser storage — records live only in the user's own `harcama-verisi.json`. Never commit real statements or data files to this repo. The single exception: when the budget tab holds foreign-currency or gold savings, daily exchange rates are read from one fixed file (jsDelivr first, the service's pages.dev copy as fallback; no user data in the request); the CSP allows only those two exact file URLs.
 
 ## Kullanım / Usage
 
@@ -40,6 +41,13 @@ Files are never uploaded anywhere; parsing and calculations run in the browser, 
 - Düzenli ödemeler (abonelikler, faturalar): aylık/yıllık tutar, "tutar arttı", "son 2 dönemde yok"
 - Olağandışı harcama uyarıları: çift çekim şüphesi, bir yerin ortalamasının çok üstündeki harcama
 - Yer bazında harcama analizi; birden fazla kart varsa karta göre süzme
+
+**Birikim ve bütçe** (ayrı sekme)
+- Sabit aylık gelir (maaş) ve sabit giderler (kira, aidat); zam/kira artışı o aydan itibaren geçerli olur, geçmiş aylar değişmez
+- Her ay için gelir − sabit giderler − o ayın ekstresi = kalan; aylara göre tablo, gelecek aylar planlı taksitlerle tahmini; kartla ödenen sabit gider iki kez düşülmez
+- Vadesiz hesap özetinden (PDF, Excel, CSV) düzenli gelir ve giderleri (maaş, kira, aidat) bulma; öneriler onaylanınca eklenir, hesap hareketleri kaydedilmez, kart ödemeleri atlanır, kira artışı tutar değişikliği olarak önerilir; önerilmeyen hareketler de nedeniyle listelenir ve oradan eklenebilir, yön yanlış okunduysa elle çevrilir
+- Süzgeç: gelir/gider, ay aralığı, tutar aralığı ve türe göre (kartla ödenen, hesap özetinden eklenen, tek seferlik, kart ödemesi…) listeleri daraltma; özet rakamlar değişmez
+- TL, dolar, euro, gram/çeyrek altın birikimleri; kurlar elle girilir (internete bağlanılmaz), toplam TL karşılığı ve birikimin kaç aylık gidere yettiği
 
 **Kategoriler**
 - Otomatik kategori; kuralları kartlar ve anahtar kelime çipleriyle düzenleme, "Kural dene"

@@ -23,6 +23,10 @@ import fixtures  # noqa: E402
 PAGE = "file://" + os.path.abspath(os.path.join(HERE, "..", "index.html"))
 OUT = fixtures.OUT
 NOW = "2026-09-28T09:00:00"
+# izinli tek ağ istekleri (kurlar): önce jsDelivr, olmazsa yedek adres; ağ kilidi yalnızca bu iki tam dosya adresine açık
+RATE_JSD = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json"
+RATE_PAGES = "https://latest.currency-api.pages.dev/v1/currencies/usd.json"
+RATE_URLS = [RATE_JSD, RATE_PAGES]
 TESTS = []
 
 
@@ -40,6 +44,9 @@ class App:
 
     def __init__(self, browser, width=1000, mobile=False, password=None):
         ctx = browser.new_context(viewport={"width": width, "height": 1300}, accept_downloads=True)
+        # Testler ağa çıkmaz: kur servisi varsayılan olarak "internet yok" gibi davranır; kur testleri kendi sahte yanıtını verir
+        for u in RATE_URLS:
+            ctx.route(u, lambda r: r.abort())
         if mobile:
             ctx.add_init_script("delete window.showDirectoryPicker")
         self.pg = ctx.new_page()
@@ -486,6 +493,7 @@ def harcama_analizi_listelerden_acilir(b, info):
 def veri_yuklenince_sade_ust_kisim_ve_ozet_kartlari(b, info):
     a = App(b)
     assert a.pg.is_visible("#how") and not a.pg.is_visible("#toolbar"), "boşken adımlar görünmeli"
+    assert not a.pg.is_visible("#tabs"), "veri kaynağı açılmadan sekmeler görünmemeli"
     a.import_("wp_ayri.pdf")
     for sel in ["#folderPanel", "#drop", "#how", ".intro"]:
         assert not a.pg.is_visible(sel), f"veri varken {sel} gizlenmeli"
@@ -884,6 +892,7 @@ def yazdirma_gorunumu(b, info):
     css = lambda sel, prop: a.ev(f"getComputedStyle(document.querySelector('{sel}')).{prop}")
     eq(css("body", "backgroundColor"), "rgb(255, 255, 255)", "baskıda beyaz zemin")
     eq(css("#toolbar", "display"), "none", "araç çubuğu gizli")
+    eq(css("#tabs", "display"), "none", "sekmeler baskıda yok")
     eq(css("#rulesFold", "display"), "none", "kurallar baskıda yok")
     assert css("body", "color") != "rgb(233, 237, 235)", "koyu tema rengi baskıda kalmamalı"
     a.ev("window.dispatchEvent(new Event('beforeprint'))")
@@ -1023,16 +1032,24 @@ def kural_duzenleyici_metin_ve_varsayilan(b, info):
 @test
 def ag_kilidi_baglantiya_izin_vermez(b, info):
     a = App(b)
-    blocked = a.ev("""async () => {
+    # Bu adresler sayfa içinde cevap verir: "kapalı" çıkan istek ağ yüzünden değil, ağ kilidi (CSP) yüzünden kapalıdır
+    for host in ["https://example.com/**", "https://baska.pages.dev/**", "https://cdn.jsdelivr.net/**", "https://latest.currency-api.pages.dev/**"]:
+        a.pg.route(host, lambda r: r.fulfill(status=200, headers=CORS, json=KUR))
+    urls = ['https://example.com/', 'data:text/plain,x', 'https://baska.pages.dev/x', 'https://cdn.jsdelivr.net/npm/x',
+            RATE_JSD.replace("usd.json", "eur.json"), RATE_PAGES.replace("usd.json", "eur.json"),
+            "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/", *RATE_URLS]
+    blocked = a.ev("""async urls => {
       const out = [];
-      for (const u of ['https://example.com/', 'data:text/plain,x']) {
-        try { await fetch(u); out.push('açık'); } catch (e) { out.push('kapalı'); }
+      for (const u of urls) {
+        try { await fetch(u, {credentials: 'omit'}); out.push('açık'); } catch (e) { out.push('kapalı'); }
       }
       try { const x = new XMLHttpRequest(); x.open('GET', 'https://example.com/', false); x.send(); out.push('açık'); }
       catch (e) { out.push('kapalı'); }
       return out;
-    }""")
-    eq(blocked, ["kapalı"] * 3, "fetch/XHR engellenmeli")
+    }""", urls)
+    eq(blocked, ["kapalı"] * 7 + ["açık"] * 2 + ["kapalı"], "fetch/XHR engellenmeli (iki kur dosyası dışında her yer kapalı)")
+    csp = a.ev("document.querySelector('meta[http-equiv=Content-Security-Policy]').content")
+    assert f"connect-src {RATE_JSD} {RATE_PAGES};" in csp and "*" not in csp, csp
     a.import_("arti.pdf")  # kilit varken PDF okuma (eval + blob worker) çalışmalı
     assert "₺" in a.total(), a.total()
     a.close()
@@ -1337,6 +1354,696 @@ def kategori_trendleri(b, info):
     eq(a.ev("$('trendFold').open"), True, "yeniden çizimde açık kalmalı")
     a.close()
 
+
+# ---------------------------------------------------------------- Birikim ve bütçe
+def _butce_app(b, budget=True):
+    """2026-06…09 MİGROS 1.500/dönem; Eylül'de kartla ödenen aidat 750 ve 2 taksitlik IKEA (2/2 Ekim'de planlı)."""
+    H = [{"id": f"m{i}", "date": m + "-10", "stmt": m + "-26", "desc": "MİGROS ANKARA TR", "amt": 1500}
+         for i, m in enumerate(["2026-06", "2026-07", "2026-08", "2026-09"])]
+    H += [{"id": "a1", "date": "2026-09-05", "stmt": "2026-09-26", "desc": "ORNEK SITE AIDAT", "amt": 750},
+          {"id": "t1", "date": "2026-09-26", "stmt": "2026-09-26", "pdate": "2026-09-03", "desc": "ORNEK MOBILYA IKEA", "amt": 400,
+           "inst": {"n": 1, "m": 2, "total": 800}}]
+    B = {"items": [
+        {"id": "i1", "kind": "income", "name": "Maaş", "amts": [{"from": "2026-01", "v": 40000}, {"from": "2026-08", "v": 45000}]},
+        {"id": "e1", "kind": "expense", "name": "Kira", "amts": [{"from": "2026-01", "v": 15000}]},
+        {"id": "e2", "kind": "expense", "name": "Aidat", "amts": [{"from": "2026-01", "v": 750}], "card": True}]}
+    a = App(b)
+    a.ev("([h,bd])=>{applyData(bd?{history:h,budget:bd}:{history:h});render()}", [H, B if budget else None])
+    return a
+
+
+def _row(a, m):
+    return a.pg.locator(f"#budget tr[data-m='{m}']").inner_text()
+
+
+@test
+def birikim_gelir_gider_kalan(b, info):
+    a = _butce_app(b)
+    assert a.pg.is_visible("#tabs") and a.pg.is_visible("#out") and not a.pg.is_visible("#budget")
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    assert not a.pg.is_visible("#out") and a.pg.is_visible("#budget"), "sekme değişmeli"
+    eq(a.ev("$('bMonth').value"), "2026-09", "varsayılan: son ekstreli dönem")
+    # Eylül: 45.000 − 15.000 (kira; aidat kartla ödendiği için düşülmez) − 2.650 (1.500 + 750 + 400)
+    eq(a.text("#bLeft"), "₺27.350", "Eylül kalanı")
+    for s in ["₺45.000", "₺15.000", "₺2.650", "₺750 kartla ödenen"]:
+        assert s in a.text("#budget .hero"), s
+    assert "₺23.500" in _row(a, "2026-07"), "Temmuz: eski maaş 40.000"
+    assert "₺29.600" in _row(a, "2026-10") and "fut" in a.ev("document.querySelector(\"#budget tr[data-m='2026-10']\").className"), "Ekim tahmini"
+    assert "–" in _row(a, "2026-03"), "ekstresiz ay"
+    a.pg.click("#budget tr[data-m='2026-10']"); a.pg.wait_for_timeout(100)
+    assert "henüz yok" in a.text("#bStatus") and "₺400" in a.text("#bStatus"), a.text("#bStatus")
+    a.pg.select_option("#bMonth", "2026-09"); a.pg.wait_for_timeout(100)
+    # Kira Eylül'den itibaren 17.500: Eylül değişir, Temmuz değişmez
+    a.pg.click("[data-item='e1'] .bihead"); a.pg.wait_for_timeout(100)
+    a.pg.fill("[data-item='e1'] [data-newamt]", "17.500"); a.pg.click("[data-item='e1'] [data-setamt]"); a.pg.wait_for_timeout(150)
+    eq(a.text("#bLeft"), "₺24.850", "zam sonrası Eylül"); assert "₺23.500" in _row(a, "2026-07"), "Temmuz aynı kalmalı"
+    eq(a.ev("budget.items.find(i=>i.id==='e1').amts.length"), 2, "tutar geçmişi")
+    # Aidat kart dışı yapılınca ikinci kez düşülür ve ekstrede geçtiği hatırlatılır
+    a.pg.click("[data-item='e2'] .bihead"); a.pg.wait_for_timeout(100)
+    a.pg.uncheck("[data-item='e2'] [data-card]"); a.pg.wait_for_timeout(150)
+    eq(a.text("#bLeft"), "₺24.100", "aidat kart dışı")
+    assert "ORNEK SITE AIDAT" in a.text("[data-item='e2'] .bhint"), "çift sayım ipucu"
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150)
+    eq(a.text("#bLeft"), "₺24.850", "geri al"); eq(a.pg.locator("[data-item='e2'] .bhint").count(), 0)
+    # Çıkarılan kategori kart harcamasından düşer
+    a.ev("()=>{excluded.add('Market');render()}")
+    eq(a.text("#bLeft"), "₺26.350", "Market çıkarılınca"); assert "Market" in a.text("#budget") and "dahil değil" in a.text("#budget")
+    a.ev("()=>{excluded.clear();render()}")
+    # Kart harcaması kartı Harcamalar sekmesinde o dönemi açar
+    a.pg.select_option("#bMonth", "2026-08"); a.pg.click("#bCardKpi"); a.pg.wait_for_timeout(150)
+    assert a.pg.is_visible("#out") and not a.pg.is_visible("#budget"); eq(a.ev("$('period').value"), "2026-08", "dönem")
+    # Harcamalar'da "Gelirden kalan" kartı ve geri dönüş
+    a.period("2026-09")
+    k = a.text("#kpis"); assert "Gelirden kalan" in k and "₺24.850" in k, k
+    a.pg.click("#kpiLeft"); a.pg.wait_for_timeout(150)
+    assert a.pg.is_visible("#budget"); eq(a.ev("$('bMonth').value"), "2026-09", "Birikim sekmesi o ayla açılır")
+    a.close()
+
+
+@test
+def birikim_varliklar_ve_kur(b, info):
+    a = _butce_app(b, budget=False)   # bütçesiz eski dosya hatasız açılır
+    eq(a.ev("JSON.stringify(budget)"), '{"items":[],"assets":[],"rates":{}}', "boş bütçe")
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    def add(name, typ, qty):
+        a.pg.fill("#aName", name); a.pg.select_option("#aType", typ); a.pg.fill("#aQty", qty); a.pg.click("#aAdd"); a.pg.wait_for_timeout(120)
+    add("Vadeli hesap", "TRY", "50.000"); add("Dolar", "USD", "1.000"); add("Bilezik", "GAU", "10")
+    eq(a.text("#aTotal"), "₺50.000", "kursuz varlıklar toplama katılmaz")
+    m = a.text("#aMissing"); assert "Dolar" in m and "Gram altın" in m, m
+    a.pg.fill("#rate-USD", "41,50"); a.pg.press("#rate-USD", "Enter"); a.pg.wait_for_timeout(120)
+    a.pg.fill("#rate-GAU", "4.200"); a.pg.press("#rate-GAU", "Enter"); a.pg.wait_for_timeout(120)
+    eq(a.text("#aTotal"), "₺133.500", "50.000 + 41.500 + 42.000")
+    eq(a.pg.locator("#aMissing").count(), 0)
+    eq(a.ev("budget.rates.USD"), {"v": 41.5, "date": "2026-09-28"}, "kur ve tarihi")
+    usd = a.ev("budget.assets.find(x=>x.type==='USD').id")
+    a.pg.fill(f"[data-asset='{usd}'] [data-qty]", "1.500"); a.pg.press(f"[data-asset='{usd}'] [data-qty]", "Enter"); a.pg.wait_for_timeout(120)
+    eq(a.text("#aTotal"), "₺154.250", "miktar düzenleme")
+    answers = [False, True]
+    a.pg.on("dialog", lambda d: d.accept() if answers.pop(0) else d.dismiss())
+    gau = a.ev("budget.assets.find(x=>x.type==='GAU').id")
+    a.pg.click(f"[data-asset='{gau}'] [data-del]"); a.pg.wait_for_timeout(100); eq(a.text("#aTotal"), "₺154.250", "vazgeçince kalır")
+    a.pg.click(f"[data-asset='{gau}'] [data-del]"); a.pg.wait_for_timeout(120); eq(a.text("#aTotal"), "₺112.250", "silindi")
+    assert "Birikim yeter" in a.text("#budget .hero"), "birikim / ortalama gider"
+    # 22 ayar gram altın: ayrı tür, kendi kuru
+    assert "Gram altın (22 ayar)" in a.text("#aType"), a.text("#aType")
+    add("Bilezik 22", "G22", "20")
+    a.pg.fill("#rate-G22", "3.850"); a.pg.press("#rate-G22", "Enter"); a.pg.wait_for_timeout(120)
+    eq(a.text("#aTotal"), "₺189.250", "112.250 + 20 gr × 3.850")
+    snap = json.loads(a.ev("snapshot()"))
+    eq(len(snap["budget"]["assets"]), 3, "dosyada birikimler"); eq(snap["budget"]["rates"]["USD"]["v"], 41.5)
+    a.ev("s=>{applyData(JSON.parse(s));render()}", a.ev("snapshot()")); a.pg.wait_for_timeout(100)
+    eq(a.ev("[budget.assets.find(x=>x.name==='Bilezik 22').type,budget.rates.G22.v]"), ["G22", 3850], "dosyadan geri okunur")
+    assert "budget" not in json.loads(a.ev("shareSnapshot()")), "kategori paylaşımına bütçe girmez"
+    eq(a.ev("localStorage.length+sessionStorage.length"), 0, "tarayıcıda saklanmaz")
+    a.close()
+
+
+@test
+def birikim_ekstresiz_telefonda(b, info):
+    a = App(b, width=390, mobile=True)
+    assert not a.pg.is_visible("#tabs"), "kayıt açılmadan sekme yok"
+    a.pg.click("#fresh"); a.pg.wait_for_timeout(100)
+    assert a.pg.is_visible("#tabs"), "kayıt açılınca ekstresiz de sekme var"
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    assert not a.pg.is_visible("#drop") and not a.pg.is_visible("#mobilePanel")
+    a.pg.fill("#iName", "Maaş"); a.pg.fill("#iAmt", "45.000"); a.pg.click("#iAdd"); a.pg.wait_for_timeout(120)
+    a.pg.fill("#eName", "Kira"); a.pg.fill("#eAmt", "15000"); a.pg.click("#eAdd"); a.pg.wait_for_timeout(120)
+    eq(a.text("#bLeft"), "₺30.000", "gelir − kira")
+    a.pg.fill("#eName", ""); a.pg.click("#eAdd"); a.pg.wait_for_timeout(100)
+    assert "ad ve sıfırdan" in a.text("#budget").lower() or "Bir ad" in a.text("#budget"), "boş form uyarısı"
+    assert a.pg.is_visible("#saveBar"), "kaydet çubuğu görünmeli"
+    with a.pg.expect_download() as d:
+        a.pg.click("#dl")
+    path = os.path.join(OUT, "butce.json"); d.value.save_as(path)
+    a.pg.reload(); a.pg.wait_for_function("window.libsReady"); a.pg.set_input_files("#openData", path); a.pg.wait_for_timeout(200)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    eq(a.text("#bLeft"), "₺30.000", "tekrar açınca bütçe yerinde")
+    a.close()
+
+
+# ---------------------------------------------------------------- Vadesiz hesap özeti (Birikim sekmesi)
+SUGS = "bView.bank.sugs.map(s=>[s.type,s.kind,s.name,s.amts.at(-1).v,s.amts[0].from,s.on])"
+BEKLENEN = [["new", "income", "Maaş", 45000, "2026-07", True], ["new", "expense", "Kira", 15000, "2026-07", True],
+            ["new", "expense", "BES", 1500, "2026-07", True], ["new", "expense", "Aidat", 750, "2026-07", True]]
+
+
+def _bank(a, name):
+    a.ev("bView.bank=null")
+    a.pg.set_input_files("#bankFile", f(name))
+    a.pg.wait_for_function("bView.bank&&!bView.bank.busy", timeout=20000)
+    a.pg.wait_for_timeout(100)
+
+
+@test
+def hesap_ozeti_duzenli_kalemleri_onerir(b, info):
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    hist = a.ev("JSON.stringify(history)")
+    _bank(a, "hesap_isaretli.pdf")
+    eq(a.ev(SUGS), BEKLENEN, "öneriler: maaş, kira, aidat; kart ödemesi ve tek seferlikler yok")
+    t = a.text("#bankInfo"); assert "20 hareket" in t and "3 kredi kartı ödemesi (₺24.650) atlandı" in t and "kaydedilmedi" in t, t
+    eq(a.ev("budget.items.length"), 0, "Ekle'den önce bütçe değişmez")
+    a.pg.uncheck("[data-sug='expense|AIDAT SITE YONETIMI'] [data-on]")
+    a.pg.uncheck("[data-sug='expense|BES'] [data-on]")
+    a.pg.fill("[data-sug='expense|AYSE KIRA ORNEKOGLU'] [data-name]", "Ev kirası")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.map(i=>[i.kind,i.name,i.amts,i.src])"),
+       [["income", "Maaş", [{"from": "2026-07", "v": 45000}], "MAAS ORNEK YAZILIM"],
+        ["expense", "Ev kirası", [{"from": "2026-07", "v": 15000}], "AYSE KIRA ORNEKOGLU"]], "seçilenler eklendi")
+    eq(a.text("#bLeft"), "₺27.350", "Eylül: 45.000 − 15.000 − 2.650")
+    eq(a.ev("JSON.stringify(history)"), hist, "kart geçmişine hesap hareketi girmez")
+    snap = a.ev("snapshot()")
+    assert "KREDI KARTI ODEMESI" not in snap and "HAVALE GELEN" not in snap, "hesap hareketleri dosyaya yazılmaz"
+    assert "Hesap özetinden 2 kalem" in a.text("#bankMsg") or "2 kalem" in a.text("#bankMsg")
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.length"), 0, "geri al")
+    # tekrar: hepsini ekle, sonra aynı özet yeni öneri getirmez
+    _bank(a, "hesap_isaretli.pdf"); a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.length"), 4)
+    _bank(a, "hesap_isaretli.pdf")
+    eq(a.ev("bView.bank.sugs.length"), 0, "kayıtlı kalemler tekrar önerilmez")
+    assert "bulunamadı" in a.text("#bankPrev")
+    a.pg.click("#bankCancel"); a.pg.wait_for_timeout(100)
+    eq(a.pg.locator("#bankPrev").count(), 0)
+    eq(a.ev("localStorage.length+sessionStorage.length"), 0)
+    a.close()
+
+
+@test
+def hesap_ozeti_isaret_bakiyeden_ve_csv(b, info):
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    for name in ["hesap_bakiye.pdf", "hesap_borc_alacak.csv"]:
+        _bank(a, name)
+        eq(a.ev(SUGS), BEKLENEN, f"{name}: öneriler")
+        eq(a.ev("[bView.bank.n,bView.bank.unk,bView.bank.cardN]"), [20, 0, 3], f"{name}: tüm satırların yönü bulundu")
+    a.pg.click("#bankCancel"); a.pg.wait_for_timeout(100)
+    eq(a.ev("budget.items.length"), 0, "vazgeçince bir şey değişmez")
+    assert "değişmedi" in a.text("#bankMsg")
+    a.close()
+
+
+@test
+def hesap_ozeti_tutar_degisikligi(b, info):
+    a = _butce_app(b)   # Maaş, Kira 15.000, Aidat 750 kayıtlı
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    _bank(a, "hesap_zam.pdf")
+    eq(a.ev("bView.bank.sugs.map(s=>[s.type,s.name,s.itemName,s.from,s.amts.at(-1).v,s.cur])"),
+       [["new", "BES", None, None, 1500, None], ["change", "Kira", "Kira", "2026-09", 17500, 15000]], "BES yeni; kira (açıklaması da değişen) tek öneri")
+    assert "Kayıtlı ₺15.000" in a.text("#bankPrev")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.find(i=>i.id==='e1').amts"), [{"from": "2026-01", "v": 15000}, {"from": "2026-09", "v": 17500}], "Eylül'den yeni tutar")
+    # Eylül: 45.000 − 17.500 (kira) − 1.500 (yeni BES) − 2.650 (kart); aidat kartla ödendiği için düşülmez
+    eq(a.text("#bLeft"), "₺23.350", "Eylül kalanı"); assert "₺22.000" in _row(a, "2026-07"), "Temmuz: kira eski tutarda (40.000 − 15.000 − 1.500 − 1.500)"
+    _bank(a, "hesap_zam.pdf"); eq(a.ev("bView.bank.sugs.length"), 0, "artık güncel")
+
+
+@test
+def hesap_ozeti_benzer_aciklamalar_birlesir(b, info):
+    a = _butce_app(b, budget=False)
+    rows = [{"date": f"2026-0{m}-08", "desc": d, "amt": v} for m in (7, 8, 9) for d, v in
+            [("FATURA ODEMESI ENERJISA " + str(m), -900), ("FATURA ODEMESI IGDAS", -400), ("SGK PRIM ODEMESI", -2000)]]
+    rows.append({"date": "2026-08-12", "desc": "DIGER SGK PRIM", "amt": -2000})   # aynı ay: toplanır
+    got = a.ev("r=>detectFixedFromBank(r).sugs.map(s=>[s.key,s.name,s.amts.map(x=>[x.from,x.v])])", rows)
+    eq(got, [["PRIM SGK", "SGK Prim", [["2026-07", 2000]]],   # Ağustos'taki ikinci ödeme aylık tutarı ikiye katlamaz
+             ["ENERJISA", "Enerjisa", [["2026-07", 900]]], ["IGDAS", "Igdas", [["2026-07", 400]]]],
+       "farklı kurumlar ayrı, aynı kurumun farklı yazılışı tek")
+    # eski sürümün sıralı anahtarıyla kayıtlı kira tekrar önerilmez
+    a.ev("()=>{budget.items=[{id:'k',kind:'expense',name:'Ev',amts:[{from:'2026-07',v:15000}],to:'',card:false,src:'AYSE ORNEKOGLU KIRA'}];render()}")
+    got = a.ev("r=>detectFixedFromBank(r).sugs.map(s=>s.key)", [{"date": f"2026-0{m}-03", "desc": "EFT GIDEN AYSE ORNEKOGLU KIRA", "amt": -15000} for m in (7, 8)])
+    eq(got, [], "eski src ile eşleşir")
+    a.close()
+    a.close()
+
+
+
+@test
+def hesap_ozeti_hareketleri_gosterir_ve_ayirir(b, info):
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    _bank(a, "hesap_isaretli.pdf")
+    bes = "[data-sug='expense|BES']"
+    assert "Tem 26 ₺1.500 · Ağu 26 ₺1.500 · Eyl 26 ₺1.500" in a.text(bes), a.text(bes)
+    a.pg.click(bes + " .bdet summary"); a.pg.wait_for_timeout(100)
+    t = a.text(bes + " .bdet")
+    assert "DIGER DIGER BES ODEMESI 1234" in t and "FATURA ODEMESI DIGER BES 5678" in t and "₺1.500,00" in t and "01.07.2026" not in t, t
+    eq(a.pg.locator(bes + " .bdet .brow").count(), 3, "BES'in 3 hareketi")
+    # bir hareketi çıkarınca aylar yeniden hesaplanır ve açık liste kapanmaz
+    a.pg.uncheck(bes + " .brow[data-row='2'] [data-inc]"); a.pg.wait_for_timeout(100)
+    eq(a.ev("bView.bank.sugs.find(s=>s.key==='BES').months"), ["2026-07", "2026-08"], "Eylül çıkarıldı")
+    eq(a.ev("document.querySelector(\"[data-sug='expense|BES'] .bdet\").open"), True, "liste açık kalır")
+    # kira iki yazılışlı: EYLUL KIRASI ayrı kalem yapılır
+    kira = "[data-sug='expense|AYSE KIRA ORNEKOGLU']"
+    a.pg.click(kira + " .bdet summary"); a.pg.wait_for_timeout(100)
+    assert "2 farklı yazılış" in a.text(kira), a.text(kira)
+    a.pg.click(kira + " [data-split='AYSE KIRASI ORNEKOGLU']"); a.pg.wait_for_timeout(100)
+    eq(a.ev("bView.bank.sugs.filter(s=>s.kind==='expense').map(s=>[s.key,s.months.length,s.on])"),
+       [["AYSE KIRA ORNEKOGLU", 2, True], ["AYSE KIRASI ORNEKOGLU", 1, False], ["BES", 2, True], ["AIDAT SITE YONETIMI", 3, True]], "ayrılan yazılış ayrı öneri")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.map(i=>[i.name,i.amts.length])"), [["Maaş", 1], ["Kira", 1], ["BES", 1], ["Aidat", 1]], "işaretsiz ayrılan eklenmez")
+    a.close()
+
+
+@test
+def hesap_ozeti_onerilmeyenler_listelenir_ve_eklenir(b, info):
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    assert a.ev("$('bankBox').compareDocumentPosition($('bMonth'))&Node.DOCUMENT_POSITION_FOLLOWING"), "kutu ay seçicinin üstünde"
+    _bank(a, "hesap_isaretli.pdf")
+    eq(a.ev("bView.bank.rest.reduce((n,g)=>n+g.rows.length,0)"), 8, "önerilmeyen 8 hareket")
+    a.pg.click("#bankRest > summary"); a.pg.wait_for_timeout(100)
+    t = a.text("#bankRest")
+    for s in ["Önerilmeyen 8 hareket", "ORNEK MARKET ANKARA", "FAST GIDEN 77123 MEHMET ORNEK", "−₺5.000,00", "HAVALE GELEN ORNEK KISI", "+₺2.500,00",
+              "ATM PARA CEKME", "ORNEK KAFE", "küçük tutar", "kredi kartı ödemesi", "tek seferlik"]:
+        assert s in t, f"{s!r} listede yok:\n{t}"
+    a.pg.fill("#restQ", "havale"); a.pg.wait_for_timeout(100)
+    eq(a.pg.locator("#bankRest .brow").count(), 1, "arama süzer")
+    a.pg.click("#bankRest [data-promote]"); a.pg.wait_for_timeout(100)
+    eq(a.ev("bView.bank.sugs.filter(s=>s.kind==='income').map(s=>[s.name,s.on,s.amts.at(-1).v])"), [["Maaş", True, 45000], ["Ornek Kisi", True, 2500]], "öneriye taşındı")
+    eq(a.ev("bView.bank.rest.reduce((n,g)=>n+g.rows.length,0)"), 7, "listeden kalktı")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    assert ["income", "Ornek Kisi"] in a.ev("budget.items.map(i=>[i.kind,i.name])"), a.ev("budget.items.map(i=>i.name)")
+    snap = a.ev("snapshot()"); assert "ATM PARA CEKME" not in snap and "ORNEK MARKET" not in snap, "hareketler kaydedilmez"
+    a.close()
+
+
+@test
+def hesap_ozeti_yon_bakiyeden_ve_elle(b, info):
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    for name in ["hesap_gelen_fast.pdf", "hesap_gelen_fast.csv"]:
+        _bank(a, name)
+        eq(a.ev(SUGS), [["new", "income", "Ornek Kisi", 3000, "2026-08", True]], f"{name}: gelen para gelir")
+    a.pg.click("[data-sug='income|KISI ORNEK'] [data-flip]"); a.pg.wait_for_timeout(100)
+    eq(a.ev("bView.bank.sugs.map(s=>s.kind)"), ["expense"], "elle gidere çevrildi")
+    assert a.pg.locator("[data-sug='expense|KISI ORNEK']").count() == 1
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.map(i=>[i.kind,i.name])"), [["expense", "Ornek Kisi"]], "seçilen yönde eklendi")
+    a.close()
+
+
+@test
+def birikim_geri_al_telefonda_sigar(b, info):
+    """Uzun etiketli Geri al bildirimi dar ekranda taşmaz; düğme ekranda kalır."""
+    a = App(b, width=360)
+    a.ev("()=>undoable('Gram altın (24 ayar) kuru internetten: ₺5.337,02',()=>{})"); a.pg.wait_for_timeout(100)
+    for sel in ("#toast .toast", "#undoBtn"):
+        box = a.pg.locator(sel).bounding_box()
+        assert box and box["x"] >= 0 and box["x"] + box["width"] <= 360, f"{sel}: {box}"
+    lines = "s=>{const r=document.createRange();r.selectNodeContents(document.querySelector(s));return r.getClientRects().length}"
+    eq(a.ev(lines, "#undoBtn"), 1, "Geri al tek satır")
+    eq(a.ev("(e=>e.scrollWidth<=e.clientWidth)(document.querySelector('#toast .toast span'))"), True, "etiket kesilmez, satır kırar")
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(100)
+    assert "Geri alındı" in a.text("#toast"), a.text("#toast")
+    a.close()
+
+
+@test
+def birikim_suzgec(b, info):
+    """Süzgeç etkilediği listenin hemen üstünde; ayrı ay seçimi yok, her şey üstteki "Ay"a göre."""
+    a = _butce_app(b)
+    a.ev("()=>{budget.items.push({id:'s1',kind:'expense',name:'Spor salonu',amts:[{from:'2026-01',v:600}],to:'',card:false},"
+         "{id:'s2',kind:'expense',name:'Eski abonelik',amts:[{from:'2026-01',v:200}],to:'2026-08',card:false});render()}")
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    left, nrows = a.text("#bLeft"), a.pg.locator("#budget tr[data-m]").count()
+    items = lambda: a.ev("[...document.querySelectorAll('[data-item]')].map(e=>e.dataset.item)")
+    clear = lambda: (a.pg.click("#ifClear"), a.pg.wait_for_timeout(100))
+    eq(a.pg.locator("#bFilter, #bfRange").count(), 0, "ikinci ay seçimi yok")
+    eq(a.ev("(e=>e.tagName+' '+e.textContent)($('iFilter').nextElementSibling)"), "H2 Sabit gelirler", "süzgeç listelerin hemen üstünde")
+    _bank(a, "hesap_isaretli.pdf")
+    sugs = lambda: a.ev("[...document.querySelectorAll('#bankBox [data-sug]')].map(e=>e.dataset.sug)")
+    all_sugs = sugs()
+    assert a.ev("!!($('bkFilter').compareDocumentPosition(document.querySelector('#bankBox [data-sug]'))&4)"), "hesap süzgeci önerilerin üstünde"
+    # kalem süzgeci: yön
+    a.pg.click("#iFilter [data-dir='expense']"); a.pg.wait_for_timeout(100)
+    eq(a.pg.locator("#iAdd").count(), 0, "sabit gelirler gizli"); assert a.pg.locator("#eAdd").count() == 1
+    eq(sugs(), all_sugs, "kalem süzgeci hesap önerilerini etkilemez")
+    assert "4 / 5 kalem gösteriliyor" in a.text("#iFilter"), a.text("#iFilter")
+    clear()
+    # adda arama
+    a.pg.fill("#ifQ", "spor"); a.pg.wait_for_timeout(100)
+    eq(items(), ["s1"], "ad araması")
+    clear(); eq(a.ev("$('ifQ').value"), "", "temizle aramayı da siler")
+    # tür: yalnızca seçilen
+    a.pg.click("#iFilter [data-type='iCard']"); a.pg.wait_for_timeout(100)
+    eq(items(), ["e2"], "yalnızca kartla ödenen")
+    clear()
+    # tutar
+    a.pg.fill("#ifMin", "1.000"); a.pg.press("#ifMin", "Enter"); a.pg.wait_for_timeout(100)
+    eq(items(), ["i1", "e1"], "en az 1.000")
+    assert "2 / 5 kalem gösteriliyor" in a.text("#iFilter"), a.text("#iFilter")
+    eq(a.text("#bLeft"), left, "kalan süzgeçten etkilenmez")
+    eq(a.pg.locator("#budget tr[data-m]").count(), nrows, "aylar tablosu süzgeçten etkilenmez")
+    clear()
+    # ay: üstteki "Ay"
+    a.pg.check("#ifMonth"); a.pg.wait_for_timeout(100)
+    assert "Eylül 2026" in a.text("#iFilter"), a.text("#iFilter")
+    eq(items(), ["i1", "e1", "e2", "s1"], "Ağustos'ta biten kalem Eylül'de gizli")
+    a.pg.select_option("#bMonth", "2026-08"); a.pg.wait_for_timeout(100)
+    assert "s2" in items() and "Ağustos 2026" in a.text("#iFilter"), items()
+    clear(); eq(len(items()), 5, "temizle hepsini geri getirir")
+    # hesap özeti süzgeci
+    a.pg.click("#bankRest > summary"); a.pg.wait_for_timeout(100)
+    rest = lambda: a.text("#bankRest")
+    a.pg.click("#bkFilter [data-dir='expense']"); a.pg.wait_for_timeout(100)
+    eq({s.split("|")[0] for s in sugs()}, {"expense"}, "önerilerde gelir yok")
+    eq(a.pg.locator("#bankRest .bsign.in").count(), 0, "önerilmeyenlerde gelen yok")
+    eq(len(items()), 5, "hesap süzgeci kalemleri etkilemez")
+    a.pg.click("#bkClear"); a.pg.wait_for_timeout(100)
+    a.pg.fill("#bkMin", "1.000"); a.pg.press("#bkMin", "Enter"); a.pg.wait_for_timeout(100)
+    assert "ORNEK MARKET" not in rest() and "ORNEK KAFE" not in rest() and "ATM PARA" in rest(), rest()
+    a.pg.click("#bkClear"); a.pg.wait_for_timeout(100)
+    # neden çipleri listenin içinde, yalnızca seçilen neden
+    assert "ATM PARA" in rest() and "KREDI KARTI ODEMESI" in rest(), rest()
+    a.pg.click("#bankRest [data-why='card']"); a.pg.wait_for_timeout(100)
+    assert "KREDI KARTI ODEMESI" in rest() and "ATM PARA" not in rest(), rest()
+    a.pg.click("#bankRest [data-why='']"); a.pg.wait_for_timeout(100)
+    assert "ATM PARA" in rest(), rest()
+    # dönem: süzgecin kendi listesi (yalnızca özetteki dönemler); üstteki "Ay"a bağlı değil, onu değiştirmez
+    eq(a.pg.locator("#bkMonth").count(), 0, "üstteki Ay'a bağlı kutu yok")
+    month = a.ev("$('bMonth').value")
+    opts = a.ev("[...$('bkPer').options].map(o=>o.value)")
+    eq(opts[0], "", "Tüm dönemler"); assert "2026-08" in opts and opts[1:] == sorted(opts[1:], reverse=True), opts
+    a.pg.select_option("#bkPer", "2026-08"); a.pg.wait_for_timeout(100)
+    dates = lambda: a.ev("[...document.querySelectorAll('#bankRest .brow')].map(e=>e.innerText.match(/\\d\\d\\.(\\d\\d)\\.2026/)[1])")
+    assert dates() and set(dates()) == {"08"}, dates()
+    eq(a.ev("$('bMonth').value"), month, "üstteki Ay değişmez")
+    a.pg.select_option("#bkPer", ""); a.pg.wait_for_timeout(100)
+    assert len(set(dates())) > 1, dates()
+    # süzgeçle gizlenen işaretli öneri eklenmez
+    a.pg.click("#bkFilter [data-dir='income']"); a.pg.wait_for_timeout(100)
+    assert "gizlenen 1 işaretli öneri" in a.text("#bankHidden"), a.text("#bankBox")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.items.length"), 5, "gizli BES eklenmedi")
+    eq(sorted(json.loads(a.ev("snapshot()"))["budget"].keys()), ["assets", "items", "rates"], "süzgeç dosyaya yazılmaz")
+    a.close()
+
+
+@test
+def hesap_ozeti_para_gonderme_ayri(b, info):
+    """Bankanın her havaleye yazdığı genel sözcükler (PARA GÖNDERME, banka adı, kanal) farklı kişilere gönderimleri birleştirmez;
+    "Öneri yap" yalnızca tıklanan satıra benzeyenleri taşır."""
+    a = _butce_app(b, budget=False)
+    # ORNEKBANK DIJITAL KANAL: sabit listede olmayan, bu özetteki her havalede geçen sözcükler
+    R = lambda d, who, v: {"date": d, "desc": f"ORNEKBANK DIJITAL KANAL PARA GONDERME {who}", "amt": -v}
+    rows = [R(f"2026-0{m}-03", "AHMET ORNEKCI KIRA", 15000) for m in (7, 8, 9)]
+    rows += [R("2026-07-12", "MEHMET DENEME", 2000), R("2026-08-21", "MEHMET DENEME", 3500), R("2026-09-02", "MEHMET DENEME", 750)]
+    rows += [R("2026-07-18", "ZEYNEP TESTOGLU", 400), R("2026-09-15", "ALI ORNEK", 5000)]
+    who = "x=>x.desc.split(' ').slice(5).join(' ')"
+    det = a.ev(f"r=>{{const d=detectFixedFromBank(r);return {{s:d.sugs.map(s=>[s.name,s.rows.map({who})]),r:d.rest.map(s=>[...new Set(s.rows.map({who}))])}}}}", rows)
+    eq(det["s"], [["Kira", ["AHMET ORNEKCI KIRA"] * 3]], "kira ayrı öneri, yalnızca kendi 3 hareketi")
+    eq(sorted(det["r"]), [["ALI ORNEK"], ["MEHMET DENEME"], ["ZEYNEP TESTOGLU"]], "diğer gönderimler kişi kişi ayrı")
+    # arayüz: Mehmet satırında "Öneri yap" yalnızca Mehmet'i taşır
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    a.ev("r=>{const d=detectFixedFromBank(r),ms=[...new Set([...d.sugs,...d.rest].flatMap(s=>s.rows.map(x=>x.p)))].sort();"
+         "bView.bank={...d,n:r.length,unk:0,errs:[],files:['ornek.csv'],ms};renderBudget()}", rows)
+    a.pg.click("#bankRest > summary"); a.pg.wait_for_timeout(100)
+    a.pg.locator("#bankRest .brow", has_text="MEHMET DENEME").first.locator("[data-promote]").click(); a.pg.wait_for_timeout(100)
+    got = a.ev(f"[bView.bank.sugs.map(s=>[s.name,[...new Set(s.rows.map({who}))]]),bView.bank.rest.map(s=>[...new Set(s.rows.map({who}))])]")
+    eq(got[0], [["Kira", ["AHMET ORNEKCI KIRA"]], ["Mehmet Deneme", ["MEHMET DENEME"]]], "yalnızca Mehmet öneriye geçti")
+    eq(sorted(got[1]), [["ALI ORNEK"], ["ZEYNEP TESTOGLU"]], "diğerleri listede kalır")
+    # yanlışlıkla birleşmiş bir grupta bile yalnızca tıklanan satıra benzeyenler taşınır
+    got = a.ev("""()=>{const B=bView.bank, row=(d,desc,v)=>({date:d,p:d.slice(0,7),desc,amt:v,k0:bankKey(desc)});
+      const s=fillSug({kind:'expense',key:'karisik',toks:['karisik'],rows:[row('2026-07-05','EFT AYSE KIRA',9000),row('2026-08-05','EFT AYSE KIRA',9000),row('2026-08-09','EFT BURAK SPOR',1200)]});
+      s.why='once'; B.rest.push(s); promoteRest(s,s.rows[2]);
+      return [B.sugs.at(-1).rows.map(r=>r.desc),B.rest.filter(x=>x.rows.some(r=>r.desc==='EFT AYSE KIRA')).map(x=>[x.why,x.rows.length])]}""")
+    eq(got, [["EFT BURAK SPOR"], [["once", 2]]], "tıklanan satır taşındı, AYŞE satırları listede kaldı")
+    a.close()
+
+
+@test
+def hesap_ozeti_kesim_donemi_baslangic_ve_kalem_listesi(b, info):
+    a = _butce_app(b, budget=False)   # ekstreler her ayın 26'sında kesiliyor
+    rows = [{"date": d, "desc": "EFT GIDEN ORNEK EV SAHIBI KIRA", "amt": -15000} for d in ("2026-07-28", "2026-08-28", "2026-09-28")]
+    rows += [{"date": d, "desc": "SITE AIDAT", "amt": -750} for d in ("2026-07-20", "2026-08-20", "2026-09-20")]
+    got = a.ev("r=>detectFixedFromBank(r).sugs.map(s=>[s.name,s.months])", rows)
+    eq(got, [["Kira", ["2026-08", "2026-09", "2026-10"]], ["Aidat", ["2026-07", "2026-08", "2026-09"]]],
+       "kesimden (26) sonraki ödeme sonraki ekstre dönemine")
+    a.close()
+    # ekstre yoksa takvim ayı
+    a = App(b)
+    eq(a.ev("r=>detectFixedFromBank(r).sugs.map(s=>s.months[0])", rows), ["2026-07", "2026-07"], "ekstresiz: takvim ayı")
+    a.close()
+    # önizlemede başlangıç ayı, kalemde başlangıç ayı değiştirme
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    _bank(a, "hesap_isaretli.pdf")
+    a.pg.fill("[data-sug='expense|AYSE KIRA ORNEKOGLU'] [data-from]", "2026-05")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    kira = a.ev("budget.items.find(i=>i.name==='Kira').id")
+    eq(a.ev(f"budget.items.find(i=>i.id==='{kira}').amts"), [{"from": "2026-05", "v": 15000}], "seçilen başlangıç")
+    a.pg.click(f"[data-item='{kira}'] .bihead"); a.pg.wait_for_timeout(100)
+    a.pg.fill(f"[data-item='{kira}'] [data-start]", "2026-08"); a.pg.press(f"[data-item='{kira}'] [data-start]", "Tab"); a.pg.wait_for_timeout(150)
+    eq(a.ev(f"budget.items.find(i=>i.id==='{kira}').amts"), [{"from": "2026-08", "v": 15000}], "kalemde başlangıç değişti")
+    # Gelir / Sabit giderler kartı kalemleri listeler; etkin olmayanlar ayrıca yazar
+    a.pg.select_option("#bMonth", "2026-07"); a.pg.wait_for_timeout(100)
+    a.pg.click("#bFixed"); a.pg.wait_for_timeout(100)
+    t = a.text("#bKpiList")
+    assert "Temmuz 2026 · sabit giderler" in t and "Aidat" in t and "₺750" in t and "Bu ay etkin değil: Kira (Ağustos 2026 başından)" in t, t
+    a.pg.click("#bIncome"); a.pg.wait_for_timeout(100)
+    t = a.text("#bKpiList"); assert "gelirler" in t and "Maaş" in t and "₺45.000" in t, t
+    a.pg.click("#bKpiList [data-kitem] button"); a.pg.wait_for_timeout(100)
+    eq(a.pg.locator("#bKpiList").count(), 0, "kaleme gidince liste kapanır")
+    assert a.ev("bView.open.has(budget.items.find(i=>i.name==='Maaş').id)"), "Maaş ayrıntısı açıldı"
+    # tek ay seçimi: süzgeçte ayrı ay yok
+    eq(a.pg.locator("#bfRange, #bFilter").count(), 0, "ikinci ay seçimi yok")
+    a.close()
+
+
+@test
+def hesap_ozeti_ayni_doneme_iki_odeme_ve_tarihler(b, info):
+    a = _butce_app(b, budget=False)   # kesim her ayın 26'sı
+    R = lambda d, desc, v: {"date": d, "desc": desc, "amt": v}
+    rows = [R("2026-07-25", "MAAS ODEMESI ORNEK AS", 45000), R("2026-08-27", "MAAS ODEMESI ORNEK AS", 45000), R("2026-09-25", "MAAS ODEMESI ORNEK AS", 45000)]
+    rows += [R(f"2026-0{m}-05", "SITE AIDAT", -v) for m, v in ((7, 750), (8, 750), (9, 900))]
+    rows += [R(f"2026-0{m}-10", "ORNEK SPOR KULUBU", -v) for m, v in ((7, 600), (8, 1800), (9, 600))]
+    got = a.ev("r=>Object.fromEntries(detectFixedFromBank(r).sugs.map(s=>[s.name,[s.regular,s.amts.map(x=>[x.from,x.v]),s.per['2026-09']]]))", rows)
+    # maaş kesimden sonra yattığı için Eylül döneminde iki maaş var: aylık tutar yine 45.000, Eylül toplamı 90.000 olarak gösterilir
+    eq(got["Maaş"], [True, [["2026-07", 45000]], 90000], "aynı döneme düşen iki ödeme aylık tutarı ikiye katlamaz")
+    eq(got["Aidat"], [True, [["2026-07", 750], ["2026-09", 900]], 900], "kalıcı değişiklik tutar geçmişine girer")
+    eq(got["Ornek Spor Kulubu"], [True, [["2026-07", 600]], 600], "tek seferlik sıçrama tutar geçmişine girmez")
+    # arayüz: dönemde iki ödeme yazar; eklenen kalemde ödeme tarihleri görünür ve dosyada kalır
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    a.ev("r=>{bView.bank={...detectFixedFromBank(r),n:r.length,unk:0,errs:[],files:['x'],ms:[]};renderBudget()}", rows)
+    assert "Eyl 26 ₺90.000 (2 ödeme)" in a.text("[data-sug='income|MAAS ORNEK']"), a.text("[data-sug='income|MAAS ORNEK']")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    a.ev("()=>{applyData(JSON.parse(snapshot()));render()}")
+    a.pg.select_option("#bMonth", "2026-09"); a.pg.wait_for_timeout(100)
+    eq(a.text("#bIncome b"), "₺45.000", "Eylül geliri bir maaş")
+    a.pg.click("#bIncome"); a.pg.wait_for_timeout(100)
+    t = a.text("#bKpiList")
+    assert "27.08.2026" in t and "25.09.2026" in t and "MAAS ODEMESI ORNEK AS" in t and "25.07.2026" not in t, t
+    mid = a.ev("budget.items.find(i=>i.name==='Maaş').id")
+    eq(len(a.ev(f"budget.items.find(i=>i.id==='{mid}').seen")), 3, "kalemin ödemeleri tarihleriyle dosyada")
+    a.pg.click(f"#bKpiList [data-kitem='{mid}'] button"); a.pg.wait_for_timeout(200)
+    a.pg.click(f"[data-item='{mid}'] .bdet > summary"); a.pg.wait_for_timeout(100)
+    t = a.text(f"[data-item='{mid}']"); assert "Hesap özetindeki 3 ödeme" in t and "25.07.2026" in t, t
+    a.close()
+
+
+@test
+def hesap_ozeti_bakiye_once_yazilmis(b, info):
+    a = _butce_app(b, budget=False)
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    _bank(a, "hesap_bakiye_once.pdf")
+    eq(a.ev(SUGS), BEKLENEN, "Bakiye sütunu Tutar'dan önce: tutar ve yön yine doğru")
+    eq(a.ev("[bView.bank.n,bView.bank.unk]"), [20, 0])
+    a.close()
+
+
+@test
+def hesap_ozeti_eski_kayit_onarimi_ve_kendi_hesap(b, info):
+    a = _butce_app(b, budget=False)
+    items = [{"id": "m", "kind": "income", "name": "Maaş", "src": "MAAS ORNEK", "amts": [{"from": "2026-07", "v": 45000}, {"from": "2026-09", "v": 90000}, {"from": "2026-10", "v": 45000}]},
+             {"id": "k", "kind": "expense", "name": "Kira", "src": "KIRA", "amts": [{"from": "2026-07", "v": 15000}, {"from": "2026-09", "v": 30000}]},
+             {"id": "z", "kind": "expense", "name": "Aidat", "src": "AIDAT", "amts": [{"from": "2026-07", "v": 750}, {"from": "2026-09", "v": 900}]},
+             {"id": "e", "kind": "income", "name": "Elle", "amts": [{"from": "2026-07", "v": 1000}, {"from": "2026-09", "v": 2000}]}]
+    got = a.ev("it=>{applyData({history:[],budget:{items:it}});return Object.fromEntries(budget.items.map(i=>[i.id,i.amts.map(x=>x.v)]))}", items)
+    eq(got, {"m": [45000], "k": [15000], "z": [750, 900], "e": [1000, 2000]}, "eski sürümün iki katı tutarları atılır; gerçek değişiklik ve elle girilen kalır")
+    rows = [{"date": f"2026-0{m}-15", "desc": "VIRMAN KENDI HESABIMA", "amt": 10000} for m in (7, 8, 9)]
+    eq(a.ev("r=>detectFixedFromBank(r).sugs.map(s=>[s.own,s.on])", rows), [[True, False]], "kendi hesaplar arası aktarım işaretsiz")
+    a.close()
+
+
+@test
+def hesap_ozeti_uc_ayda_bir_ikramiye(b, info):
+    a = _butce_app(b, budget=False)   # kesim her ayın 26'sı
+    R = lambda d, desc, v: {"date": d, "desc": desc, "amt": v}
+    # maaş her ay (Ağustos'ta kesimden sonra yatıyor), ikramiye 3 ayda bir
+    rows = [R(d, "MAAS ODEMESI ORNEK AS", 45000) for d in ("2026-04-15", "2026-05-15", "2026-06-15", "2026-07-25", "2026-08-27", "2026-09-25")]
+    rows += [R("2026-04-20", "IKRAMIYE ODEMESI ORNEK AS", 30000), R("2026-07-20", "IKRAMIYE ODEMESI ORNEK AS", 30000)]
+    got = a.ev("r=>Object.fromEntries(detectFixedFromBank(r).sugs.map(s=>[s.name,[s.every,s.regular,s.amts.map(x=>[x.from,x.v])]]))", rows)
+    eq(got["Maaş"], [1, True, [["2026-04", 45000]]], "maaş her ay (dönemler atlasa da tarihler aylık)")
+    eq(got["İkramiye"], [3, True, [["2026-04", 30000]]], "ikramiye 3 ayda bir")
+    eq(a.ev("r=>detectFixedFromBank([...r,{date:'2026-05-02',desc:'ORNEK DANISMANLIK',amt:5000},{date:'2026-06-01',desc:'ORNEK DANISMANLIK',amt:5000},{date:'2026-09-28',desc:'ORNEK DANISMANLIK',amt:5000}]).rest.filter(s=>s.irregular).map(s=>s.name)", rows),
+       ["Ornek Danismanlik"], "düzensiz aralıklı ödeme önerilmez")
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(100)
+    a.ev("r=>{bView.bank={...detectFixedFromBank(r),n:r.length,unk:0,errs:[],files:['x'],ms:[]};renderBudget()}", rows)
+    eq(a.ev("document.querySelector(\"[data-sug='income|IKRAMIYE ORNEK'] [data-every]\").value"), "3", "önizlemede sıklık")
+    a.pg.click("#bankApply"); a.pg.wait_for_timeout(150)
+    inc = lambda m: a.ev(f"monthBudget('{m}').income")
+    eq([inc(m) for m in ("2026-07", "2026-08", "2026-09", "2026-10")], [75000, 45000, 45000, 75000], "ikramiye yalnızca Temmuz ve Ekim'de")
+    ik = a.ev("budget.items.find(i=>i.name==='İkramiye').id")
+    assert "3 ayda bir" in a.text(f"[data-item='{ik}'] .bihead")
+    a.pg.select_option("#bMonth", "2026-08"); a.pg.click("#bIncome"); a.pg.wait_for_timeout(100)
+    assert "İkramiye (3 ayda bir, sonraki Ekim 2026)" in a.text("#bKpiList"), a.text("#bKpiList")
+    # elle her aya çevirince her ay sayılır; geri al
+    a.pg.click(f"[data-item='{ik}'] .bihead"); a.pg.wait_for_timeout(100)
+    a.pg.select_option(f"[data-item='{ik}'] [data-every]", "1"); a.pg.wait_for_timeout(150)
+    eq(inc("2026-08"), 75000, "her ay"); a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150); eq(inc("2026-08"), 45000, "geri al")
+    # önceki sürümle (sıklıksız) eklenmiş ikramiye açılışta ödeme tarihlerinden 3 ayda bire döner
+    old = {"id": "o", "kind": "income", "name": "İkramiye", "src": "IKRAMIYE ORNEK", "amts": [{"from": "2026-04", "v": 30000}],
+           "seen": [{"d": "2026-04-20", "p": "2026-04", "desc": "IKRAMIYE", "v": 30000}, {"d": "2026-07-20", "p": "2026-07", "desc": "IKRAMIYE", "v": 30000}]}
+    eq(a.ev("o=>{applyData({history:[],budget:{items:[o]}});return [budget.items[0].every,monthBudget('2026-08').income]}", old), [3, 0], "eski kayıt onarıldı")
+    # elle her ay olarak kaydedilmiş ikramiye: yeniden yüklemede sıklık değişikliği önerilir
+    a.ev("o=>{applyData({history:[],budget:{items:[{...o,every:1}]}});render()}", old)
+    eq(a.ev("r=>detectFixedFromBank(r).sugs.filter(s=>s.type==='change').map(s=>[s.itemName,s.freqFrom,s.every,s.amtCh])", rows), [["İkramiye", 1, 3, False]], "sıklık değişikliği önerisi")
+    a.close()
+
+
+def _kur_app(b, respond, respond2=None):
+    """USD ve gram altın birikimi olan bir sayfa; kur servisi taklit edilir: jsDelivr `respond(route)`,
+    yedek adres `respond2` (verilmezse o da `respond`). İstekler geliş sırasıyla `reqs`'e yazılır."""
+    a = _butce_app(b, budget=False)
+    reqs = []
+    def handler(fn):
+        def h(route):
+            reqs.append(route.request); fn(route)
+        return h
+    a.pg.route(RATE_JSD, handler(respond))
+    a.pg.route(RATE_PAGES, handler(respond2 or respond))
+    a.ev("()=>{budget.assets=[{id:'u',name:'Dolar',type:'USD',qty:1000,upd:''},{id:'g',name:'Bilezik',type:'GAU',qty:10,upd:''},{id:'c',name:'Çeyrek',type:'CEYREK',qty:2,upd:''},{id:'b',name:'Bilezik 22',type:'G22',qty:5,upd:''}];render()}")
+    return a, reqs
+
+
+KUR = {"date": "2026-09-27", "usd": {"try": 41.5, "eur": 0.86, "xau": 0.00025, "gbp": 0.75}}
+CORS = {"Access-Control-Allow-Origin": "*"}
+GRAM = 41.5 / 0.00025 / 31.1034768
+
+
+def tl2(v):
+    """fmt2 gibi: ₺1.234,56"""
+    return "₺" + f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+@test
+def birikim_kurlar_internetten(b, info):
+    a, reqs = _kur_app(b, lambda r: r.fulfill(status=200, headers=CORS, json=KUR))
+    eq(len(reqs), 0, "Harcamalar sekmesi istek atmaz")
+    a.pg.click("#tabBudget"); a.pg.wait_for_function("document.querySelector('#rateStatus')&&/güncellendi/.test(document.querySelector('#rateStatus').textContent)", timeout=10000)
+    eq(len(reqs), 1, "tek istek (ilk adres çalışınca yedek denenmez)")
+    r = reqs[0]
+    eq(r.url, RATE_JSD, "sabit adres, veri eklenmez"); eq(r.method, "GET")
+    h = r.headers; assert "cookie" not in h and "referer" not in h, h
+    gram = 41.5 / 0.00025 / 31.1034768
+    eq(a.ev("budget.rates"), {"USD": {"v": 41.5, "date": "2026-09-27", "auto": True}, "EUR": {"v": round(41.5 / 0.86, 2), "date": "2026-09-27", "auto": True},
+                              "GAU": {"v": round(gram, 2), "date": "2026-09-27", "auto": True}, "G22": {"v": round(gram * 22 / 24, 2), "date": "2026-09-27", "auto": True},
+                              "CEYREK": {"v": round(gram * 1.6038, 2), "date": "2026-09-27", "auto": True}}, "kurlar (22 ayar = 24 ayar × 22/24)")
+    t = a.text("#budget .rates")
+    assert "internetten" in t and "27.09.2026" in t and "ons fiyatından" in t and "cdn.jsdelivr.net" in t, t
+    assert "yedek" not in t and "korundu" not in t, t
+    # güncellemeden sonra kısa özet: dört kurun yeni fiyatı
+    s = a.text("#rateSum")
+    for want in ("Yeni kurlar", "Dolar", tl2(41.5), "Euro", tl2(round(41.5 / 0.86, 2)), "Gram altın (24 ayar)", tl2(round(GRAM, 2)),
+                 "Gram altın (22 ayar)", tl2(round(GRAM * 22 / 24, 2)), "Çeyrek altın", tl2(round(GRAM * 1.6038, 2))):
+        assert want in s, f"{want}: {s}"
+    eq(s.count("yeni"), 5, "önceki kayıt yoktu"); assert "elle" not in s, s
+    assert '"auto": true' in a.ev("snapshot()"), "kurlar dosyaya yazılır"
+    eq(a.text("#aTotal"), f"₺{round(41.5*1000 + round(gram,2)*10 + round(gram*1.6038,2)*2 + round(gram*22/24,2)*5):,}".replace(",", "."), "toplam")
+    # sekme değiştirip dönünce yeni istek yok; düğmeyle yenilenir
+    a.pg.click("#tabSpend"); a.pg.click("#tabBudget"); a.pg.wait_for_timeout(200); eq(len(reqs), 1, "oturumda bir kez")
+    a.pg.click("#rateRefresh"); a.pg.wait_for_timeout(300); eq(len(reqs), 2, "Kurları güncelle")
+    a.close()
+
+
+@test
+def birikim_kurlar_internet_yoksa_kayitli(b, info):
+    a, reqs = _kur_app(b, lambda r: r.abort())
+    a.ev("()=>{budget.rates={USD:{v:40,date:'2026-09-20',auto:true},GAU:{v:5000,date:'2026-09-28'}}}")
+    a.pg.click("#tabBudget"); a.pg.wait_for_function("/ulaşılamadı/.test((document.querySelector('#rateStatus')||{}).textContent||'')", timeout=10000)
+    eq(a.ev("budget.rates"), {"USD": {"v": 40, "date": "2026-09-20", "auto": True}, "GAU": {"v": 5000, "date": "2026-09-28"}}, "kayıtlı kurlar korunur")
+    assert "kayıtlı" in a.text("#budget .rates") and "elle girildi" in a.text("#budget .rates"), a.text("#budget .rates")
+    a.close()
+    # internet varken: elle girilen kur tarihi ne olursa olsun ezilmez (sahibin kararı), eski otomatik dolar güncellenir
+    a, reqs = _kur_app(b, lambda r: r.fulfill(status=200, headers=CORS, json=KUR))
+    a.ev("()=>{budget.rates={USD:{v:40,date:'2026-09-20',auto:true},GAU:{v:5000,date:'2026-09-28'},EUR:{v:45,date:'2026-09-01'}}}")
+    a.pg.click("#tabBudget"); a.pg.wait_for_function("/güncellendi/.test((document.querySelector('#rateStatus')||{}).textContent||'')", timeout=10000)
+    eq(a.ev("[budget.rates.USD.v,budget.rates.GAU.v,!!budget.rates.GAU.auto,budget.rates.EUR.v,!!budget.rates.EUR.auto]"), [41.5, 5000, False, 45, False],
+       "elle girilen kurlar (yeni ve eski tarihli) korunur")
+    assert "Elle girdiğiniz 2 kur korundu" in a.text("#rateStatus"), a.text("#rateStatus")
+    s = a.text("#rateSum")
+    assert "▲ %3,8" in s and "önceki ₺40,00" in s, s
+    assert "elle girdiğiniz ₺5.000,00 korunuyor" in s and f"internette {tl2(round(GRAM, 2))}" in s, s
+    assert "elle girdiğiniz ₺45,00 korunuyor" in s, s
+    # "Bunu kullan": internetteki gram fiyatına geçer, geri alınabilir
+    a.pg.click("#rateSum [data-use='GAU']"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.rates.GAU"), {"v": round(GRAM, 2), "date": "2026-09-27", "auto": True}, "internetteki kur kullanıldı")
+    eq(json.loads(a.ev("snapshot()"))["budget"]["rates"]["GAU"], {"v": round(GRAM, 2), "date": "2026-09-27", "auto": True}, "kayıt dosyasına da yazılır")
+    s = a.text("#rateSum"); assert "elle girdiğiniz ₺5.000,00" not in s and "Gram altın" in s, s
+    a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150)
+    eq(a.ev("budget.rates.GAU"), {"v": 5000, "date": "2026-09-28"}, "geri al")
+    a.close()
+    # döviz/altın birikimi yoksa hiç istek yok
+    a = _butce_app(b); n = []
+    for u in RATE_URLS:
+        a.pg.route(u, lambda r: (n.append(1), r.abort()))
+    a.pg.click("#tabBudget"); a.pg.wait_for_timeout(300)
+    eq(len(n), 0, "birikimsiz istek yok"); eq(a.pg.locator("#rateStatus").count(), 0)
+    a.close()
+
+
+RATE_DONE = "(document.querySelector('#rateStatus')||{}).textContent&&!/güncelleniyor/.test(document.querySelector('#rateStatus').textContent)"
+
+
+@test
+def birikim_kurlar_yedek_adres(b, info):
+    """jsDelivr cevap vermezse yedek adres (pages.dev) denenir; ilk adresin neden çalışmadığı yazılır."""
+    ok = lambda r: r.fulfill(status=200, headers=CORS, json=KUR)
+    hang = []   # cevapsız bırakılan istekler; sayfa kapanmadan önce kapatılır
+    cases = [
+        ("bağlantı kesik", lambda r: r.abort(), None, "bağlantı kurulamadı"),
+        ("404", lambda r: r.fulfill(status=404, headers=CORS, body="yok"), None, "HTTP 404"),
+        ("yanıt yok", hang.append, "RATE_TIMEOUT=1500", "zaman aşımı"),
+    ]
+    for name, respond, setup, want in cases:
+        a, reqs = _kur_app(b, respond, ok)
+        a.ev("()=>{budget.rates={USD:{v:40,date:'2026-09-20',auto:true}}}")
+        if setup: a.ev(setup)
+        a.pg.click("#tabBudget")
+        a.pg.wait_for_function(RATE_DONE, timeout=15000)
+        eq([r.url for r in reqs], RATE_URLS, f"{name}: önce jsDelivr, sonra yedek")
+        t = a.text("#rateStatus")
+        assert "güncellendi" in t and "latest.currency-api.pages.dev" in t and "yedek" in t, f"{name}: {t}"
+        assert "cdn.jsdelivr.net" in t and want in t, f"{name}: {t}"
+        eq(a.ev("budget.rates.USD"), {"v": 41.5, "date": "2026-09-27", "auto": True}, f"{name}: yedekten gelen kur")
+        for r in hang:
+            try: r.abort()
+            except Exception: pass   # tarayıcı isteği zaten iptal etmiş olabilir
+        hang.clear()
+        a.close()
+
+
+@test
+def birikim_kurlar_hata_ayrintisi(b, info):
+    cases = [
+        ("bağlantı kesik", lambda r: r.abort(), None, "bağlantı kurulamadı"),
+        ("404", lambda r: r.fulfill(status=404, headers=CORS, body="yok"), None, "HTTP 404"),
+        ("bozuk JSON", lambda r: r.fulfill(status=200, headers=CORS, body="<html>"), None, "beklenmeyen yanıt"),
+        ("zaman aşımı", lambda r: r.fulfill(status=200, headers=CORS, json=KUR), "RATE_TIMEOUT=1", "zaman aşımı"),
+        ("yönlendirme", lambda r: r.fulfill(status=302, headers={**CORS, "Location": "https://example.com/kur.json"}), None, "ağ kilidi engelledi"),
+    ]
+    for name, respond, setup, want in cases:
+        a, reqs = _kur_app(b, respond)
+        a.ev("()=>{budget.rates={USD:{v:40,date:'2026-09-20',auto:true}}}")
+        if setup: a.ev(setup)
+        a.pg.click("#tabBudget")
+        a.pg.wait_for_function(RATE_DONE, timeout=15000)
+        eq([r.url for r in reqs], RATE_URLS, f"{name}: iki adres de denenir")
+        t = a.text("#rateStatus")
+        assert "Kayıt dosyanızdaki kurlar" in t and "cdn.jsdelivr.net" in t and "latest.currency-api.pages.dev" in t, f"{name}: {t}"
+        assert t.count(want) == 2, f"{name}: her adresin nedeni yazılır: {t}"
+        eq(a.ev("budget.rates.USD.v"), 40, f"{name}: kayıtlı kur korunur")
+        a.close()
 
 # ----------------------------------------------------------------
 def main():
