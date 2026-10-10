@@ -271,7 +271,7 @@ html{color-scheme:light}
 *{-webkit-print-color-adjust:exact;print-color-adjust:exact;animation:none!important;transition:none!important}
 body{background:#fff;color:#111;font-size:12px}
 main{max-width:none;padding:0}
-#msg,.toolbar,#saveBar,#toast,.lock,.badge,#how,#tabs,#bankBox,.bform,.bchk,.intro,.seg,.presets,.txbar,.notebtn,.noteedit,#hist,#unkFold,#rulesFold,#qOut,#q,#qClear,button.x,#exclInfo button,.anom button,input,.kwsug,.catlist select{display:none!important}
+#msg,.toolbar,#saveBar,#toast,.lock,.badge,#how,#tabs,#bankBox,.bform,.bchk,.intro,.seg,.presets,.txbar,.notebtn,.noteedit,#hist,#unkFold,#rulesFold,#qOut,#q,#qClear,button.x,#exclInfo button,.anom button,input,.kwsug,.catlist select,.bfilter,.ratesum button{display:none!important}
 .periodbar select{border:0;background:none;color:#111;font-weight:600;appearance:none;padding:0;width:auto}
 .periodbar label{display:none}
 .hero,.panel,.kpi,.qcard{background:#fff;border-color:#cfd4d2}
@@ -373,15 +373,22 @@ body:not(.tab-budget) #budget{display:none}
 .bkpil .linkish.bd{font-size:.9rem;font-weight:600}
 .bstart{grid-column:2/-1;margin:-2px 0 0;font-size:.8rem}
 #budget .bstart input,#budget .bstart select{width:auto;margin-left:6px;padding:4px 6px}
-.bfilter{margin:12px 0 0;border:1px solid var(--line);border-radius:10px;padding:8px 12px}
-.bfilter>summary{color:var(--teal)}
+.ratesum{margin:4px 0 10px}
+.rsrow{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline;padding:4px 0;border-top:1px solid var(--line)}
+.rsrow>span{min-width:7.5em}
+.rsrow>small{color:var(--muted)}
+.rsrow button{margin:0;padding:2px 10px;font-size:.8rem}
+.bfilter{margin:14px 0 4px;border:1px solid var(--line);border-radius:10px;padding:4px 12px}
+.bflabel{flex:none;color:var(--teal);font-weight:600}
 .bfrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
 .bfrow select,.bfrow input{width:auto;flex:1 1 130px;padding:6px 8px}
 .bfrow .seg{flex:none}
-.bfrow button#bfClear{margin:0;padding:6px 12px;font-size:.85rem}
+.bfmonth{display:inline-flex;align-items:center;gap:6px;color:var(--ink);font-size:.85rem;margin:0}
+.bfrow .bfmonth input,.bfmonth input{flex:none;width:18px;height:18px;padding:0}
 .bfchips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 8px}
 .bfchips .tagchip{padding:3px 10px}
-.bfchips .tagchip:not(.on){background:transparent;border:1px dashed var(--line);color:var(--muted);text-decoration:line-through}
+.bfchips .tagchip:not(.on){background:transparent;box-shadow:inset 0 0 0 1px var(--line);color:var(--muted)}
+.brest .bfchips{margin:8px 0}
 .bcount{margin:0 0 6px}
 .bcount .linkish{color:var(--teal);font-size:inherit}
 .bankhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
@@ -390,6 +397,7 @@ body:not(.tab-budget) #budget{display:none}
 .bhelp>small{display:block;margin-top:4px}
 .bflip{margin:2px 0 4px;padding:2px 10px;font-size:.78rem}
 .brest{margin-top:12px}
+.bfrow input[type=search]{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink)}
 .brest input[type=search]{margin:6px 0;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink);width:100%}
 .brest .brows{max-height:380px;overflow:auto;padding-right:8px}
 .brest .brow{cursor:default}
@@ -1934,8 +1942,10 @@ document.addEventListener("keydown",e=>{
    değiştirmez. Bir ayın kalanı = gelir − kart dışı sabit giderler − o ayın ekstresi (periodKey). Kartla ödenen sabit gider (card)
    ekstrede zaten olduğu için ayrıca düşülmez. Kurlar elle girilir; internetten hiçbir şey alınmaz. */
 let tab="spend";   /* açık sekme (yalnızca bellekte) */
+/* Süzgeçler: yalnızca bellekte, yalnızca gösterilenleri daraltır; ay her zaman üstteki "Ay" (bView.month) */
+const FI_NEW=()=>({dir:"",q:"",type:"",month:false,min:"",max:""}), FB_NEW=()=>({dir:"",min:"",max:"",month:false,why:""});
 const bView={month:"",open:new Set(),add:{income:{name:"",amt:"",from:""},expense:{name:"",amt:"",from:"",card:false}},asset:{name:"",type:"TRY",qty:""},msg:null,bank:null,bankMsg:"",
-  f:{dir:"",range:"",min:"",max:"",hide:new Set()}};   /* süzgeç: yalnızca bellekte, yalnızca gösterilenleri daraltır */
+  fi:FI_NEW(), fb:FB_NEW()};   /* fi: sabit kalemler süzgeci, fb: hesap özeti süzgeci */
 const ASSET_TYPES={TRY:{l:"TL",u:"₺"},USD:{l:"Dolar",u:"$"},EUR:{l:"Euro",u:"€"},GAU:{l:"Gram altın",u:"gr"},CEYREK:{l:"Çeyrek altın",u:"adet"}};
 const isMonth=s=>/^\d{4}-\d{2}$/.test(s||"");
 let uidN=0; const uid=()=>Date.now().toString(36)+"-"+(uidN++).toString(36);
@@ -2064,8 +2074,8 @@ function FixedItem({i,m,bm}){
 function FixedList({kind,m,bm}){
   const all=budget.items.filter(i=>i.kind===kind), list=all.filter(bfItem), f=bView.add[kind], p=kind==="income"?"i":"e";
   const msg=bView.msg&&bView.msg.k===kind?bView.msg.text:"";
-  return hx`${bfCount(list.length,all.length)}<div class="blist">
-    ${list.length?list.map(i=>hx`<${FixedItem} key=${i.id} i=${i} m=${m} bm=${bm}/>`):all.length?hx`<div class="empty"><small>Süzgece uyan kalem yok.${bfMonths()?" Seçili aylarda etkin kalem yok; kalemin başlangıç ayını ayrıntısından değiştirebilirsiniz.":""}</small></div>`:hx`<div class="empty"><small>${kind==="income"?"Henüz gelir eklenmedi (ör. maaş, kira geliri).":"Henüz sabit gider eklenmedi (ör. kira, aidat, kredi taksiti)."}</small></div>`}
+  return hx`<div class="blist">
+    ${list.length?list.map(i=>hx`<${FixedItem} key=${i.id} i=${i} m=${m} bm=${bm}/>`):all.length?hx`<div class="empty"><small>Süzgece uyan kalem yok.${bView.fi.month?` ${monthName(m)} ayında etkin kalem yok; kalemin başlangıç ayını ayrıntısından değiştirebilirsiniz.`:""}</small></div>`:hx`<div class="empty"><small>${kind==="income"?"Henüz gelir eklenmedi (ör. maaş, kira geliri).":"Henüz sabit gider eklenmedi (ör. kira, aidat, kredi taksiti)."}</small></div>`}
   </div>
   <div class="bform">
     <input type="text" id=${p+"Name"} placeholder=${kind==="income"?"Ad (ör. Maaş)":"Ad (ör. Kira)"} aria-label="Ad" value=${f.name} onInput=${e=>{f.name=e.target.value}}/>
@@ -2081,7 +2091,8 @@ function FixedList({kind,m,bm}){
    "Kurları güncelle" ile) sabit bir dosyadan günlük kurlar okunur: önce jsDelivr, cevap gelmezse yedek adres (aynı servis, aynı
    dosya; pages.dev sahibin ağında zaman aşımına uğradı). İsteğe hiçbir veri eklenmez (sabit adres, çerez/referer yok); CSP
    connect-src yalnızca bu iki tam dosya adresine açıktır. Gram altın ons fiyatından hesaplanır (işçiliksiz, yaklaşık); çeyrek ≈ 1,6038 gram.
-   Ulaşılamazsa kayıt dosyasındaki kurlar kullanılır. Elle girilmiş, servisten yeni ya da aynı günkü kur ezilmez. */
+   Ulaşılamazsa kayıt dosyasındaki kurlar kullanılır. Elle girilmiş kur hiç ezilmez (sahibin kararı); özet (RateSum) internetteki
+   fiyatı ve "Bunu kullan" düğmesini gösterir. */
 const RATE_URLS=["https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json",
                  "https://latest.currency-api.pages.dev/v1/currencies/usd.json"], GRAM_PER_OZ=31.1034768, CEYREK_GR=1.6038;
 const rateHost=u=>{try{return new URL(u).host}catch(e){return u}};
@@ -2133,19 +2144,38 @@ async function fetchRates(){
     const date=/^\d{4}-\d{2}-\d{2}$/.test(d.date)?d.date:iso(new Date()), next={USD:tl};
     if(+u.eur>0)next.EUR=tl/u.eur;
     if(+u.xau>0){next.GAU=tl/u.xau/GRAM_PER_OZ;next.CEYREK=next.GAU*CEYREK_GR}
-    let changed=false;
+    let changed=false; const got={}, prev={};
     for(const [k,v] of Object.entries(next)){
       const cur=budget.rates[k], nv=Math.round(v*100)/100;
-      if(cur&&!cur.auto&&cur.date&&cur.date>=date)continue;
-      if(!cur||!cur.auto||cur.v!==nv||cur.date!==date){budget.rates[k]={v:nv,date,auto:true};changed=true}
+      got[k]={v:nv,date}; prev[k]=cur?{...cur}:null;
+      if(cur&&!cur.auto)continue;   /* elle girilen kur hiç ezilmez (sahibin kararı); özetteki "Bunu kullan" ile değiştirilir */
+      if(!cur||cur.v!==nv||cur.date!==date){budget.rates[k]={v:nv,date,auto:true};changed=true}
     }
-    rateFetch={state:"ok",date,url,tries,at:new Date()};
+    rateFetch={state:"ok",date,url,tries,at:new Date(),got,prev};
     if(changed)save();
   }catch(e){
     tries.push({url:"",why:"beklenmeyen hata",detail:String(e&&e.message||e)}); console.warn("Kur servisi:",e);
     rateFetch={state:"fail",tries,at:new Date()};
   }
   finally{renderBudget()}
+}
+/* Güncellemenin kısa özeti: her kurun yeni fiyatı ve öncekine göre değişimi; korunan elle girilmiş kur için internetteki fiyat */
+const keptRates=()=>Object.keys(rateFetch.got||{}).filter(k=>{const c=budget.rates[k];return !c||(!c.auto&&c.v!==rateFetch.got[k].v)});
+const pct1=(a,b)=>`%${Math.abs((a-b)/b*100).toLocaleString("tr-TR",{minimumFractionDigits:1,maximumFractionDigits:1})}`;
+function useRate(k){
+  const g=rateFetch.got&&rateFetch.got[k]; if(!g)return;
+  undoable(`${ASSET_TYPES[k].l} kuru internetten: ${fmt2(g.v)}`,()=>{budget.rates[k]={v:g.v,date:g.date,auto:true}});
+}
+function RateSum(){
+  const {got,prev}=rateFetch, kept=new Set(keptRates());
+  return hx`<div class="ratesum" id="rateSum"><small><b>Yeni kurlar</b></small>
+    ${Object.keys(got).map(k=>{const g=got[k], c=budget.rates[k], p=prev[k], l=ASSET_TYPES[k].l;
+      if(kept.has(k))return hx`<div class="rsrow" key=${k} data-rate=${k}><span>${l}</span>
+        <small>${c?`elle girdiğiniz ${fmt2(c.v)} korunuyor`:"kayıtlı kur yok"} · internette ${fmt2(g.v)}</small>
+        <button class="ghost" data-use=${k} onClick=${()=>useRate(k)}>Bunu kullan</button></div>`;
+      const ch=!p?"yeni":p.v===g.v?"değişmedi":`${g.v>p.v?"▲":"▼"} ${pct1(g.v,p.v)} (önceki ${fmt2(p.v)}${p.auto?"":", elle girilmişti"})`;
+      return hx`<div class="rsrow" key=${k} data-rate=${k}><span>${l}</span><b>${fmt2(g.v)}</b><small>${ch}</small></div>`})}
+  </div>`;
 }
 function setRate(t,raw){
   if(!String(raw).trim()){if(budget.rates[t])undoable(`${ASSET_TYPES[t].l} kuru silindi`,()=>{delete budget.rates[t]});return}
@@ -2181,10 +2211,11 @@ function AssetsBox({total,vals}){
     ${missing.length?hx`<p class="bnote err" id="aMissing"><small class="err">Kuru girilmemiş: ${missing.join(", ")}. Aşağıdan kur girin; o zamana kadar toplama katılmaz.</small></p>`:null}
     ${used.length?hx`<div class="rates panel"><div class="bankhead"><b>Kurlar</b><button class="ghost" id="rateRefresh" disabled=${rateFetch.state==="busy"} onClick=${fetchRates}>Kurları güncelle</button></div>
       <small>İnternet varsa günlük kurlar bir kur servisinden alınır (isteğe hiçbir veriniz eklenmez); yoksa kayıt dosyanızdaki son kurlar kullanılır. İsterseniz elle de girebilirsiniz (1 birimin TL karşılığı).</small>
-      ${rateFetch.state?hx`<p class="bnote" id="rateStatus"><small class=${rateFetch.state==="fail"?"bwarn":""}>${rateFetch.state==="busy"||rateFetch.state==="queued"?"Kurlar güncelleniyor…":rateFetch.state==="ok"?`İnternetten güncellendi (servis tarihi ${toDate(rateFetch.date).toLocaleDateString("tr-TR")} · ${rateHost(rateFetch.url)}).`:"Kur servisine ulaşılamadı. Kayıt dosyanızdaki kurlar kullanılıyor."}</small>
+      ${rateFetch.state?hx`<p class="bnote" id="rateStatus"><small class=${rateFetch.state==="fail"?"bwarn":""}>${rateFetch.state==="busy"||rateFetch.state==="queued"?"Kurlar güncelleniyor…":rateFetch.state==="ok"?`İnternetten güncellendi (servis tarihi ${toDate(rateFetch.date).toLocaleDateString("tr-TR")} · ${rateHost(rateFetch.url)}).${keptRates().length?` Elle girdiğiniz ${keptRates().length} kur korundu.`:""}`:"Kur servisine ulaşılamadı. Kayıt dosyanızdaki kurlar kullanılıyor."}</small>
         ${rateFetch.state==="ok"?rateFetch.tries.map((x,i)=>hx`<small class="bseen" key=${i}>${rateHost(x.url)} çalışmadı (ayrıntı: ${x.why}), yedek adres kullanıldı.</small>`):null}
         ${rateFetch.state==="fail"?hx`${rateFetch.tries.map((x,i)=>hx`<small class="bseen" key=${i}>${rateFetch.tries.length>1?`${i+1}. `:""}${x.url||"Kur servisi"} · ayrıntı: ${x.why}${x.detail?` · ${x.detail}`:""}</small>`)}
           <small class="bseen">Denendi: ${rateFetch.at.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</small>`:null}</p>`:null}
+      ${rateFetch.state==="ok"?hx`<${RateSum}/>`:null}
       <div class="grid">${used.map(t=>{const r=budget.rates[t], age=r&&r.date?Math.round((toDate(today)-toDate(r.date))/864e5):0;
         return hx`<div key=${t}><label for=${"rate-"+t}>${ASSET_TYPES[t].l} (₺)</label><input type="text" inputmode="decimal" id=${"rate-"+t} value=${r?fmtNum(r.v):""} placeholder="Kur girin" onChange=${e=>setRate(t,e.target.value)} onKeyDown=${enterBlur}/>
           <small class=${age>7?"bwarn":""}>${r?hx`<span class="pqty">${fmtNum(r.v)} ₺ · </span>${r.auto?(rateFetch.state==="ok"?"internetten":"kayıtlı (internetten alınmıştı)"):"elle girildi"} · ${r.date?toDate(r.date).toLocaleDateString("tr-TR"):""}${age>7?` · ${age} gün önce, güncelleyin`:""}`:"kur yok"}</small>
@@ -2422,7 +2453,7 @@ function splitSug(s,k0){
 }
 async function readBankFiles(files){
   if(!files.length)return;
-  bView.bank={busy:true}; bView.bankMsg=""; bView.restQ=""; renderBudget();
+  bView.bank={busy:true}; bView.bankMsg=""; bView.restQ=""; bView.fb=FB_NEW(); renderBudget();
   const all=[], errs=[]; let unk=0;
   for(const f of files){
     try{
@@ -2495,7 +2526,9 @@ function BankImport(){
     ${B&&!B.busy?hx`<div id="bankPrev">
       <p class="rmsg" id="bankInfo"><small>${B.files.join(", ")}: ${B.n} hareket okundu${B.ms.length?` (${periodLabel(B.ms[0],true)} – ${periodLabel(B.ms.at(-1),true)})`:""}${B.cardN?` · ${B.cardN} kredi kartı ödemesi (${fmt(B.cardSum)}) atlandı`:""}${B.unk?` · ${B.unk} satırın yönü belirlenemedi`:""} · hareketler kaydedilmedi.</small></p>
       ${B.errs.map(e=>hx`<p class="rmsg err" key=${e}>${e}</p>`)}
+      ${B.sugs.length||B.rest.length?hx`<${BankFilter}/>`:null}
       ${B.sugs.length?hx`<p><small>İstemediklerinizin işaretini kaldırın; adı ve tutarı değiştirebilirsiniz. "Ekle"ye basana kadar hiçbir şey değişmez.</small></p>
+        ${B.sugs.some(bfSug)?null:hx`<p class="empty"><small>Süzgece uyan öneri yok.</small></p>`}
         ${group("Düzenli gelirler",B.sugs.filter(s=>s.type==="new"&&s.kind==="income"))}
         ${group("Düzenli giderler",B.sugs.filter(s=>s.type==="new"&&s.kind==="expense"))}
         ${group("Tutarı değişenler",B.sugs.filter(s=>s.type==="change"))}
@@ -2513,6 +2546,7 @@ function RestList({rest}){
   const shown=all.filter(({r,s})=>(!q||norm(r.desc).includes(q))&&bfRow(r,s));
   return hx`<details class="bdet brest" id="bankRest"><summary><small>Önerilmeyen ${all.length} hareket${shown.length<all.length?` (${shown.length} gösteriliyor)`:""}</small></summary>
     <input type="search" id="restQ" placeholder="Açıklamada ara…" aria-label="Önerilmeyen hareketlerde ara" value=${bView.restQ||""} onInput=${e=>{bView.restQ=e.target.value;renderBudget()}}/>
+    <div class="bfchips"><${Chips} opts=${FB_WHY.filter(([k])=>!k||rest.some(s=>s.why===k))} val=${bView.fb.why} attr="why" set=${k=>{bView.fb.why=k;renderBudget()}}/></div>
     <div class="brows">${shown.map(({r,s})=>{const inc=s.kind==="income";
       return hx`<div class="brow" key=${s.kind+s.key+r.date+r.desc+r.amt}><span class=${"bsign "+(inc?"in":"out")}>${inc?"+":"−"}</span>
         <span><small class="bd">${r.desc}</small><small>${toDate(r.date).toLocaleDateString("tr-TR")} · ${REST_WHY[s.why]}</small></span>
@@ -2520,58 +2554,56 @@ function RestList({rest}){
       ${shown.length?null:hx`<small>Aramaya ya da süzgece uyan hareket yok.</small>`}</div>
   </details>`;
 }
-/* ---------- Birikim süzgeci ---------- */
-const BF_TYPES=[["iCard","Kartla ödenen"],["iNoCard","Kart dışı"],["iBank","Hesap özetinden eklenen"],["iManual","Elle eklenen"]];
-const BF_BANK=[["sug","Düzenli (öneri)"],["once","Tek seferlik"],["cardpay","Kredi kartı ödemesi"],["small","Küçük tutar"],["same","Kayıtlı kalemle aynı"]];
-const BF_WHY={once:"once",card:"cardpay",small:"small",same:"same"};
-function bfMonths(){
-  const r=bView.f.range; if(!r)return null;
-  if(isMonth(r))return new Set([r]);
-  const now=iso(new Date()).slice(0,7);
-  return new Set(monthSpan(shiftMonth(now+"-01",1-(+r)).slice(0,7),now));
-}
-function bfAmt(v){
-  const f=bView.f, lo=parseMoney(f.min), hi=parseMoney(f.max);
-  return !(lo>0&&v<lo)&&!(hi>0&&v>hi);
-}
-const bfDir=kind=>!bView.f.dir||bView.f.dir===kind;
+/* ---------- Birikim süzgeçleri ----------
+   Her süzgeç etkilediği listenin hemen üstünde: sabit kalemler (ItemFilter) listelerin, hesap özeti (BankFilter) önerilerin üstünde;
+   neden çipleri "Önerilmeyen hareketler"in içinde. Ayrı ay seçimi yok: "yalnızca bu ay" üstteki "Ay"ı kullanır.
+   Kalan ve toplamlar süzgeçten etkilenmez. */
+const FI_TYPES=[["","Hepsi"],["iCard","Kartla ödenen"],["iNoCard","Kart dışı"],["iBank","Hesap özetinden"],["iManual","Elle eklenen"]];
+const FB_WHY=[["","Hepsi"],["once","Tek seferlik"],["card","Kredi kartı ödemesi"],["small","Küçük tutar"],["same","Kayıtlı kalemle aynı"]];
+const inRange=(v,f)=>{const lo=parseMoney(f.min), hi=parseMoney(f.max);return !(lo>0&&v<lo)&&!(hi>0&&v>hi)};
+const fiDir=kind=>!bView.fi.dir||bView.fi.dir===kind;
 function bfItem(i){
-  const f=bView.f, ms=bfMonths();
-  if(!bfDir(i.kind))return false;
-  if(ms&&![...ms].some(m=>amtAt(i,m)>0))return false;
-  if(!bfAmt(amtAt(i,bView.month)||i.amts.at(-1).v))return false;
-  if(f.hide.has(i.card?"iCard":"iNoCard")||f.hide.has(i.src?"iBank":"iManual"))return false;
-  return true;
+  const f=bView.fi, v=amtAt(i,bView.month);
+  if(!fiDir(i.kind))return false;
+  if(f.q&&!norm(i.name).includes(norm(f.q)))return false;
+  if(f.type&&!{iCard:i.card,iNoCard:!i.card,iBank:!!i.src,iManual:!i.src}[f.type])return false;
+  if(f.month&&!(v>0))return false;
+  return inRange(v||i.amts.at(-1).v,f);
 }
-function bfSug(s){
-  const ms=bfMonths();
-  return bfDir(s.kind)&&!(ms&&!s.months.some(m=>ms.has(m)))&&bfAmt(s.amts.at(-1).v)&&!bView.f.hide.has("sug");
+const fbDir=kind=>!bView.fb.dir||bView.fb.dir===kind;
+const bfSug=s=>{const f=bView.fb;return fbDir(s.kind)&&!(f.month&&!s.months.includes(bView.month))&&inRange(s.amts.at(-1).v,f)};
+const bfRow=(r,s)=>{const f=bView.fb;return fbDir(s.kind)&&!(f.month&&(r.p||r.date.slice(0,7))!==bView.month)&&inRange(r.amt,f)&&(!f.why||f.why===s.why)};
+const fiActive=()=>{const f=bView.fi;return !!(f.dir||f.q||f.type||f.month||f.min||f.max)};
+const fbActive=()=>{const f=bView.fb;return !!(f.dir||f.month||f.min||f.max)};
+function fiClear(){bView.fi=FI_NEW();renderBudget()}
+function fbClear(){bView.fb={...FB_NEW(),why:bView.fb.why};renderBudget()}
+const Seg=({label,opts,val,set})=>hx`<div class="seg" role="group" aria-label=${label}>${opts.map(([k,l])=>hx`<button key=${k||"all"} data-dir=${k} aria-pressed=${String(val===k)} onClick=${()=>set(k)}>${l}</button>`)}</div>`;
+const MoneyRange=({f,p})=>hx`<input type="text" inputmode="decimal" id=${p+"Min"} placeholder="En az ₺" aria-label="En az tutar" value=${f.min} onChange=${e=>{f.min=e.target.value;renderBudget()}} onKeyDown=${enterBlur}/>
+  <input type="text" inputmode="decimal" id=${p+"Max"} placeholder="En çok ₺" aria-label="En çok tutar" value=${f.max} onChange=${e=>{f.max=e.target.value;renderBudget()}} onKeyDown=${enterBlur}/>`;
+const OnlyMonth=({f,id,label})=>hx`<label class="bchk bfmonth"><input type="checkbox" id=${id} checked=${f.month} onChange=${e=>{f.month=e.target.checked;renderBudget()}}/> ${label}</label>`;
+const Chips=({opts,val,attr,set})=>opts.map(([k,l])=>hx`<button key=${k||"all"} class=${"tagchip"+(val===k?" on":"")} ...${{["data-"+attr]:k}} aria-pressed=${String(val===k)} onClick=${()=>set(k)}>${l}</button>`);
+function ItemFilter(){
+  const f=bView.fi, all=budget.items, n=all.filter(bfItem).length, on=fiActive();
+  return hx`<div class="bfilter" id="iFilter">
+    <div class="bfrow"><small class="bflabel">Kalemleri süz</small>
+      <${Seg} label="Yön" opts=${[["","Hepsi"],["income","Gelir"],["expense","Gider"]]} val=${f.dir} set=${k=>{f.dir=k;renderBudget()}}/>
+      <input type="search" id="ifQ" placeholder="Adda ara…" aria-label="Kalem adında ara" value=${f.q} onInput=${e=>{f.q=e.target.value;renderBudget()}}/>
+      <${MoneyRange} f=${f} p="if"/></div>
+    <div class="bfchips"><${Chips} opts=${FI_TYPES} val=${f.type} attr="type" set=${k=>{f.type=k;renderBudget()}}/>
+      <${OnlyMonth} f=${f} id="ifMonth" label=${`Yalnızca ${monthName(bView.month)} ayında etkin`}/></div>
+    <p class="bcount"><small>${on?hx`${n} / ${all.length} kalem gösteriliyor · <button class="linkish" id="ifClear" onClick=${fiClear}>Temizle</button>`:`${all.length} kalem`}</small></p>
+  </div>`;
 }
-function bfRow(r,s){
-  const ms=bfMonths();
-  return bfDir(s.kind)&&!(ms&&!ms.has(r.p||r.date.slice(0,7)))&&bfAmt(r.amt)&&!bView.f.hide.has(BF_WHY[s.why]);
+function BankFilter(){
+  const f=bView.fb;
+  return hx`<div class="bfilter" id="bkFilter">
+    <div class="bfrow"><small class="bflabel">Hareketleri süz</small>
+      <${Seg} label="Yön" opts=${[["","Hepsi"],["income","Gelen"],["expense","Giden"]]} val=${f.dir} set=${k=>{f.dir=k;renderBudget()}}/>
+      <${MoneyRange} f=${f} p="bk"/>
+      <${OnlyMonth} f=${f} id="bkMonth" label=${`Yalnızca ${monthName(bView.month)} dönemi`}/>
+      ${fbActive()?hx`<button class="linkish" id="bkClear" onClick=${fbClear}>Temizle</button>`:null}</div>
+  </div>`;
 }
-const bfActive=()=>{const f=bView.f;return (f.dir?1:0)+(f.range?1:0)+(f.min||f.max?1:0)+(f.hide.size?1:0)};
-function bfClear(){bView.f={dir:"",range:"",min:"",max:"",hide:new Set()};renderBudget()}
-function BudgetFilter({months}){
-  const f=bView.f, n=bfActive(), now=iso(new Date()).slice(0,7);
-  const chip=([k,l])=>hx`<button key=${k} class=${"tagchip"+(f.hide.has(k)?"":" on")} data-type=${k} aria-pressed=${String(!f.hide.has(k))} onClick=${()=>{f.hide.has(k)?f.hide.delete(k):f.hide.add(k);renderBudget()}}>${l}</button>`;
-  return hx`<details class="bfilter" id="bFilter"><summary><small>Süzgeç${n?` (${n})`:""}</small></summary>
-    <div class="bfrow">
-      <div class="seg" role="group" aria-label="Yön">${[["","Hepsi"],["income","Gelir"],["expense","Gider"]].map(([k,l])=>hx`<button key=${k||"all"} data-dir=${k} aria-pressed=${String(f.dir===k)} onClick=${()=>{f.dir=k;renderBudget()}}>${l}</button>`)}</div>
-      <select id="bfRange" aria-label="Ay aralığı" onChange=${e=>{f.range=e.target.value;if(isMonth(f.range))bView.month=f.range;renderBudget()}}>
-        ${[["","Tüm aylar"],["3","Son 3 ay"],["6","Son 6 ay"],["12","Son 12 ay"]].map(([k,l])=>hx`<option key=${k||"all"} value=${k} selected=${f.range===k}>${l}</option>`)}
-        ${months.slice().reverse().map(k=>hx`<option key=${k} value=${k} selected=${f.range===k}>${monthName(k)}${k>now?" (tahmini)":""}</option>`)}</select>
-      <input type="text" inputmode="decimal" id="bfMin" placeholder="En az ₺" aria-label="En az tutar" value=${f.min} onChange=${e=>{f.min=e.target.value;renderBudget()}} onKeyDown=${enterBlur}/>
-      <input type="text" inputmode="decimal" id="bfMax" placeholder="En çok ₺" aria-label="En çok tutar" value=${f.max} onChange=${e=>{f.max=e.target.value;renderBudget()}} onKeyDown=${enterBlur}/>
-      ${n?hx`<button class="ghost" id="bfClear" onClick=${bfClear}>Temizle</button>`:null}
-    </div>
-    <div class="bfchips"><small>Sabit kalemler:</small>${BF_TYPES.map(chip)}</div>
-    ${bView.bank&&!bView.bank.busy?hx`<div class="bfchips"><small>Hesap hareketleri:</small>${BF_BANK.map(chip)}</div>`:null}
-    <small>Süzgeç yalnızca listeleri daraltır; kalan ve özet rakamları değişmez.</small>
-  </details>`;
-}
-const bfCount=(shown,total)=>shown<total?hx`<p class="bcount"><small>${shown} / ${total} gösteriliyor · <button class="linkish" onClick=${bfClear}>Süzgeci temizle</button></small></p>`:null;
 /* Gelir / Sabit giderler kartına tıklanınca: seçili ayın kalemleri tek tek (kartla ödenenler toplama katılmaz), bu ay etkin olmayanlar ayrıca */
 function KpiItems({kind,m}){
   const list=budget.items.filter(i=>i.kind===kind).map(i=>({i,v:amtAt(i,m)}));
@@ -2597,8 +2629,7 @@ function BudgetTab(){
   if(!months.includes(bView.month))bView.month=defaultBudgetMonth();
   const m=bView.month, bm=monthBudget(m), fut=m>now;
   const all=months.map(monthBudget);
-  const fms=bfMonths();
-  const rows=fms?all.filter(x=>fms.has(x.m)):all.filter(x=>x.m<=now&&(x.income||x.fixed||x.cardPaid||x.card)).slice(-12).concat(all.filter(x=>x.m>now).slice(0,3));
+  const rows=all.filter(x=>x.m<=now&&(x.income||x.fixed||x.cardPaid||x.card)).slice(-12).concat(all.filter(x=>x.m>now).slice(0,3));
   const vals=budget.assets.map(a=>({a,v:assetValue(a)})), total=vals.reduce((s,x)=>s+(x.v||0),0);
   /* Birikim kaç aylık gidere yeter: son 6 dönemin (ekstre varsa yalnızca ekstreli dönemlerin) ortalama gideri */
   const past=all.filter(x=>x.m<=now), withStmt=past.filter(x=>x.hasStmt);
@@ -2617,7 +2648,6 @@ function BudgetTab(){
   return hx`<div class="budget">
     <${BankImport}/>
     <div class="bbar"><label for="bMonth">Ay</label><select id="bMonth" onChange=${e=>{bView.month=e.target.value;renderBudget()}}>${months.slice().reverse().map(k=>hx`<option key=${k} value=${k} selected=${k===m}>${monthName(k)}${k>now?" (tahmini)":""}</option>`)}</select></div>
-    <${BudgetFilter} months=${[...new Set([...months,...(bView.bank&&bView.bank.ms||[])])].sort()}/>
     <div class="hero"><div class="herosum"><h2>${monthName(m)} · kalan</h2><p class=${"total"+(bm.left<0?" neg":"")} id="bLeft">${fmt(bm.left)}</p><small>gelir − sabit giderler − kart harcaması</small></div>
       <div class="kpis">${cards.map(c=>hx`<${KpiCard} key=${c.label} ...${c}/>`)}</div></div>
     ${bView.kpi?hx`<${KpiItems} kind=${bView.kpi} m=${m}/>`:null}
@@ -2636,10 +2666,11 @@ function BudgetTab(){
         :hx`<tr><td colspan="5"><div class="empty"><small>Henüz gösterilecek ay yok.</small></div></td></tr>`}</tbody></table></div>
     <p><small>* tahmini: kart harcamasında yalnızca planlanan taksitler var. "–": o ay için ekstre yok. Satıra tıklayınca o ay seçilir. Sabit sütunu kartla ödenen sabit giderleri içermez (ekstrede zaten var).</small></p>
 
-    ${bfDir("income")?hx`<h2>Sabit gelirler</h2>
+    ${budget.items.length?hx`<${ItemFilter}/>`:null}
+    ${fiDir("income")?hx`<h2>Sabit gelirler</h2>
     <p><small>Her ay düzenli gelen para. Zam olunca kaleme tıklayıp "Tutarı değiştir" deyin; önceki aylar eski tutarla kalır.</small></p>
     <${FixedList} kind="income" m=${m} bm=${bm}/>`:null}
-    ${bfDir("expense")?hx`<h2>Sabit giderler</h2>
+    ${fiDir("expense")?hx`<h2>Sabit giderler</h2>
     <p><small>Kira, aidat, kredi taksiti gibi her ay ödediğiniz tutarlar. Kartla ödediklerinizi işaretleyin; ekstrede zaten olduğu için ikinci kez düşülmez.</small></p>
     <${FixedList} kind="expense" m=${m} bm=${bm}/>`:null}
     <h2>Birikimler</h2>
