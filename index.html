@@ -478,6 +478,32 @@ details.fold>summary .chev{color:var(--tint,var(--muted))}
 .recon.good{background:color-mix(in srgb,var(--good) 6%,var(--paper));border-color:color-mix(in srgb,var(--good) 30%,var(--line))}
 .recon.bad{background:color-mix(in srgb,var(--red) 5%,var(--paper));border-color:color-mix(in srgb,var(--red) 28%,var(--line))}
 @media print{details.fold,.recon{background:#fff;border:0;border-bottom:1px solid #cfd4d2;border-radius:0;padding:8px 0}}
+/* 3. adım: menü ve ekranlar. Her bölüm data-screen ile bir (ya da birkaç) ekrana ait; yazdırmada hepsi görünür. */
+@media screen{
+body[data-tab=spend] #out [data-screen]:not([data-screen~=spend]),body[data-tab=tx] #out [data-screen]:not([data-screen~=tx]),
+body[data-tab=trend] #out [data-screen]:not([data-screen~=trend]),body[data-tab=more] #out [data-screen]:not([data-screen~=more]){display:none!important}
+}
+#tabs{position:fixed;left:0;right:0;bottom:0;z-index:15;display:flex;gap:2px;margin:0;padding:6px 6px calc(6px + env(safe-area-inset-bottom));background:var(--paper);border:0;border-top:1px solid var(--line);box-shadow:0 -4px 18px var(--shadow)}
+#tabs button{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;margin:0;padding:6px 2px;min-height:60px;border:0;border-radius:12px;background:none;color:var(--muted);font-size:.72rem;font-weight:600;white-space:nowrap}
+#tabs button span{overflow:hidden;text-overflow:ellipsis;max-width:100%}
+#tabs svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#tabs button[aria-selected=true]{color:var(--acc);background:color-mix(in srgb,var(--acc) 11%,transparent);border:0}
+#tabs button[aria-selected=true] svg{stroke-width:2.4}
+body.has-nav{padding-bottom:92px}
+body.has-nav #toast{bottom:100px}
+.morecard{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin:14px 0}
+.morecard h2{margin:0 0 10px;font-size:1.1rem}
+.vrow{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.vrow .seg button{min-height:44px;min-width:48px}
+body[data-tab=more] .folds,body[data-tab=tx] .folds,body[data-tab=trend] .folds{margin-top:6px}
+@media (min-width:1000px){
+#tabs{top:0;right:auto;width:220px;flex-direction:column;justify-content:flex-start;gap:4px;padding:84px 12px 20px;border-top:0;border-right:1px solid var(--line);box-shadow:none}
+#tabs::before{content:"Harcamalarım";position:absolute;top:26px;left:24px;font-weight:800;font-size:1.15rem;color:var(--ink)}
+#tabs button{flex:none;flex-direction:row;justify-content:flex-start;gap:12px;min-height:50px;padding:0 14px;font-size:1rem}
+body.has-nav{padding-bottom:0;padding-left:220px}
+body.has-nav #toast{bottom:18px;left:calc(50% + 110px)}
+}
+@media print{#tabs,.morecard{display:none!important}body.has-nav{padding:0}}
 /* 2. adım: dönem düğmeleri, özet kutusu, kart şeklinde kategori listesi ve simgeler */
 .pnav{display:flex;align-items:center;gap:8px;flex:1;max-width:480px}
 .pnav select{flex:1;font-weight:700;min-height:50px}
@@ -585,7 +611,7 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <span>Kaydedilmemiş değişiklikler var.</span><button id="dl" style="margin:0">Kaydet (dosyayı indir)</button>
 </div>
 
-<nav class="tabs hide" id="tabs" role="tablist" aria-label="Bölümler"><button role="tab" id="tabSpend" aria-selected="true" aria-controls="out">Harcamalar</button><button role="tab" id="tabBudget" aria-selected="false" aria-controls="budget">Birikim ve bütçe</button></nav>
+<nav class="tabs hide" id="tabs" role="tablist" aria-label="Bölümler"><button role="tab" id="tabSpend" data-tab="spend" aria-selected="true" aria-controls="out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Özet</span></button><button role="tab" id="tabTx" data-tab="tx" aria-selected="false" aria-controls="out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg><span>İşlemler</span></button><button role="tab" id="tabTrend" data-tab="trend" aria-selected="false" aria-controls="out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V5M16 20v-6M22 20H2"/></svg><span>Aylar</span></button><button role="tab" id="tabBudget" data-tab="budget" aria-selected="false" aria-controls="budget"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a1 1 0 0 1-1-1z"/><path d="M4 7l11-4 1 4"/><path d="M16 13h.01"/></svg><span>Birikim</span></button><button role="tab" id="tabMore" data-tab="more" aria-selected="false" aria-controls="out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg><span>Daha fazla</span></button></nav>
 
 <label class="drop hide" id="drop">
 <span class="num" aria-hidden="true">2</span>
@@ -619,74 +645,80 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 </section>
 
 <section id="out" class="hide">
-<div class="periodbar"><label for="period">Dönem</label><div class="pnav"><button class="ghost pstep" id="pPrev" aria-label="Önceki dönem" title="Önceki dönem">‹</button><select id="period"></select><button class="ghost pstep" id="pNext" aria-label="Sonraki dönem" title="Sonraki dönem">›</button></div><label for="cardSel" id="cardLbl" class="hide">Kart</label><select id="cardSel" class="hide"></select></div>
-<div id="rangeWrap" class="hide">
+<div class="periodbar" data-screen="spend tx trend"><label for="period">Dönem</label><div class="pnav"><button class="ghost pstep" id="pPrev" aria-label="Önceki dönem" title="Önceki dönem">‹</button><select id="period"></select><button class="ghost pstep" id="pNext" aria-label="Sonraki dönem" title="Sonraki dönem">›</button></div><label for="cardSel" id="cardLbl" class="hide">Kart</label><select id="cardSel" class="hide"></select></div>
+<div id="rangeWrap" class="hide" data-screen="spend tx trend">
 <div class="rangebox"><div><label for="rFrom">Başlangıç</label><input type="date" id="rFrom"></div><div><label for="rTo">Bitiş</label><input type="date" id="rTo"></div></div>
 <div class="presets"><button class="ghost" data-pr="7">Son 7 gün</button><button class="ghost" data-pr="30">Son 30 gün</button><button class="ghost" data-pr="90">Son 3 ay</button><button class="ghost" data-pr="month">Bu takvim ayı</button><button class="ghost" data-pr="year">Bu yıl</button></div>
 <p style="margin-top:8px"><small>Tarih aralığında normal harcamalar işlem tarihine, taksitler ise faturalandıkları ekstrenin kesim tarihine göre sayılır.</small></p>
 </div>
-<div class="hero">
+<div data-screen="spend" class="hero">
 <div class="herosum"><h2 id="totalTitle">Toplam harcama</h2>
 <p class="total" id="total"></p>
 <div id="totalCmp"></div>
 <small id="range"></small></div>
 <div class="kpis" id="kpis"></div>
 </div>
-<div id="exclInfo"></div>
-<div id="anom"></div>
-<div id="recon"></div>
-<div class="viewbar"><small id="viewHint">Kutucuğu kaldırarak bir kategoriyi toplamdan çıkarabilirsiniz.</small>
+<div data-screen="spend" id="exclInfo"></div>
+<div data-screen="spend" id="anom"></div>
+<div data-screen="spend" id="recon"></div>
+<div data-screen="spend" class="viewbar"><small id="viewHint">Kutucuğu kaldırarak bir kategoriyi toplamdan çıkarabilirsiniz.</small>
 <div class="seg" role="group" aria-label="Dağılım görünümü"><button id="vBar" aria-pressed="true">Çubuk</button><button id="vPie" aria-pressed="false">Pasta grafik</button></div></div>
-<div class="catview" id="catview">
+<div data-screen="spend" class="catview" id="catview">
 <div id="pieBox" class="hide"></div>
 <div><div class="strip" id="strip" aria-hidden="true"></div><div id="cats"></div></div>
 </div>
 
-<details class="fold" id="topFold" style="--tint:#c98500"><summary><span class="chev" aria-hidden="true">▶</span><h2>En çok harcanan yerler <small id="topCount"></small></h2></summary>
+<details data-screen="spend" class="fold" id="topFold" style="--tint:#c98500"><summary><span class="chev" aria-hidden="true">▶</span><h2>En çok harcanan yerler <small id="topCount"></small></h2></summary>
 <table id="top" class="top"></table>
 </details>
 
-<details class="fold" id="recurFold" style="--tint:#199e70"><summary><span class="chev" aria-hidden="true">▶</span><h2>Düzenli ödemeler <small id="recurCount"></small></h2></summary>
+<details class="fold" data-screen="trend" id="recurFold" style="--tint:#199e70"><summary><span class="chev" aria-hidden="true">▶</span><h2>Düzenli ödemeler <small id="recurCount"></small></h2></summary>
 <p><small>En az 3 ekstre döneminde benzer tutarla (±%15) tekrar eden harcamalar: abonelikler, faturalar, aidatlar. Taksitler dahil değildir. Yıllık tutar, tipik aylık tutarın 12 katıdır.</small></p>
 <table id="recur" class="top"></table>
 </details>
 
+<div id="qBox" data-screen="spend">
 <h2>Harcama ara</h2>
 <p><small>Bir yerin adını yazın, tüm dönemlerdeki harcamanızı görün. Birden fazla yer için virgül kullanın. Listelerdeki adlara tıklayarak da açabilirsiniz.</small></p>
 <div class="search"><input type="search" id="q" list="qList" placeholder="Harcama ara… (ör. getir)" autocomplete="off"><button class="ghost" id="qClear">Temizle</button></div>
 <datalist id="qList"></datalist>
 <div id="qOut"></div>
+</div>
 
 <div class="folds">
-<details class="fold" id="monthsFold" style="--tint:#3987e5"><summary><span class="chev" aria-hidden="true">▶</span><h2>Dönemlere göre <small id="monthsCount"></small></h2></summary>
+<details class="fold" data-screen="trend" id="monthsFold" style="--tint:#3987e5"><summary><span class="chev" aria-hidden="true">▶</span><h2>Dönemlere göre <small id="monthsCount"></small></h2></summary>
 <p><small>Kredi kartı işlemleri, hangi ekstrede göründülerse o ekstrenin dönemine yazılır. Banka bir harcamayı birkaç gün geç işlerse (ör. 25 Temmuz'daki harcama 26 Temmuz kesiminden sonra işlendiyse) sonraki ekstrede görünür; bu normaldir.</small></p>
 <p style="margin:0 0 6px"><small id="monthsNote" class="err"></small></p>
 <div id="months"></div>
 <div id="instCal"></div>
 </details>
 
-<details class="fold" id="trendFold" style="--tint:#7d6bd1"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategori trendleri <small id="trendCount"></small></h2></summary>
+<details class="fold" data-screen="trend" id="trendFold" style="--tint:#7d6bd1"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategori trendleri <small id="trendCount"></small></h2></summary>
 <p><small>Her kategorinin son 12 ekstre dönemi. Her kart kendi ölçeğindedir; tutarı görmek için çubuğun üzerine gelin. Bir dönem seçiliyse grafik o dönemde biter ve o dönem vurgulanır.</small></p>
 <div id="trends"></div>
 </details>
 
-<details class="fold" id="yearFold" style="--tint:#d55181"><summary><span class="chev" aria-hidden="true">▶</span><h2>Yıllık özet <small id="yearCount"></small></h2></summary>
+<details class="fold" data-screen="trend" id="yearFold" style="--tint:#d55181"><summary><span class="chev" aria-hidden="true">▶</span><h2>Yıllık özet <small id="yearCount"></small></h2></summary>
 <div id="yearSum"></div>
 </details>
 
-<details class="fold" id="allFold" style="--tint:#0e8a8a"><summary><span class="chev" aria-hidden="true">▶</span><h2>Tüm işlemler <small id="allCount"></small></h2></summary>
+<details class="fold" data-screen="tx" id="allFold" style="--tint:#0e8a8a"><summary><span class="chev" aria-hidden="true">▶</span><h2>Tüm işlemler <small id="allCount"></small></h2></summary>
 <p><small>Otomatik atanan kategoriyi buradan değiştirebilirsiniz; aynı açıklamaya sahip tüm işlemler güncellenir. Yanlışlıkla eklenen bir satırı (ör. kart ödemesi) silebilirsiniz.</small></p>
 <div id="tagbar"></div>
 <div class="txbar"><input type="search" id="txq" placeholder="İşlem ara… (ör. market, #tatil)" autocomplete="off" aria-label="İşlemlerde ara"><select id="txcat" aria-label="Kategoriye göre süz"><option value="">Tüm kategoriler</option></select></div>
 <div class="scroll"><table id="alltx"></table></div>
 </details>
 
-<details class="fold" id="unkFold" style="--tint:#d95926"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategorisi bulunamayanlar <small id="unkCount"></small></h2></summary>
+<details class="fold" data-screen="tx" id="unkFold" style="--tint:#d95926"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategorisi bulunamayanlar <small id="unkCount"></small></h2></summary>
 <p><small>Bir kategori seçtiğinizde aynı açıklamaya sahip tüm işlemler güncellenir.</small></p>
 <table id="unk"></table>
 </details>
 
-<details class="fold" id="rulesFold" style="--tint:#5b6b8a"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategori kuralları <small id="rulesCount"></small></h2></summary>
+<div class="morecard" data-screen="more"><h2>Görünüm</h2>
+<div class="vrow"><small>Tema</small><div class="seg" role="group" aria-label="Tema"><button data-theme-set="light">Açık</button><button data-theme-set="dark">Koyu</button><button data-theme-set="auto">Oto</button><button data-theme-set="naruto">Naruto</button></div></div>
+<div class="vrow"><small>Yazı boyutu</small><div class="seg" role="group" aria-label="Yazı boyutu"><button data-size-set="s" aria-label="Küçük yazı" style="font-size:15px">A</button><button data-size-set="m" aria-label="Normal yazı" style="font-size:18px">A</button><button data-size-set="l" aria-label="Büyük yazı" style="font-size:22px">A</button></div></div>
+<small>Seçim kayıt dosyanıza yazılır.</small></div>
+<details class="fold" data-screen="more" id="rulesFold" style="--tint:#5b6b8a"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kategori kuralları <small id="rulesCount"></small></h2></summary>
 <p><small>Bir kategoriye tıklayıp anahtar kelime ekleyin ya da silin. Açıklamada anahtar kelime geçerse işlem o kategoriye atanır; birden çok kelime eşleşirse en uzunu kazanır.</small></p>
 <div id="rulesEd"></div>
 <details id="rulesText" class="rtext"><summary>Metin olarak düzenle (gelişmiş)</summary>
@@ -701,7 +733,7 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <div id="sharePreview" class="hide"></div>
 </details>
 
-<details class="fold" id="hist" style="--tint:#6b7370"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kayıtlı geçmiş</h2></summary>
+<details class="fold" data-screen="more" id="hist" style="--tint:#6b7370"><summary><span class="chev" aria-hidden="true">▶</span><h2>Kayıtlı geçmiş</h2></summary>
 <p><small id="histInfo"></small></p>
 <button class="ghost danger" id="clr">Geçmişi sil</button>
 </details>
@@ -889,8 +921,9 @@ if(MOBILE){
 
 
 $("tbAdd").addEventListener("click",()=>{if(tab!=="spend")setTab("spend");$("file").click()});
-$("tabSpend").addEventListener("click",()=>setTab("spend"));
-$("tabBudget").addEventListener("click",()=>setTab("budget"));
+/* Menü: telefonda altta, bilgisayarda solda. Ekrana geçince o ekranın ana bölümü açılır. */
+document.querySelectorAll("#tabs [data-tab]").forEach(b=>b.addEventListener("click",()=>{
+  const t=b.dataset.tab; if(t==="tx")$("allFold").open=true; if(t==="trend")$("monthsFold").open=true; setTab(t)}));
 $("tbSwitch").addEventListener("click",()=>MOBILE?$("openData").click():$("pick").click());
 /* Dosyalar sayfanın herhangi bir yerine sürüklenip bırakılabilir */
 let dragDepth=0;
@@ -1700,7 +1733,7 @@ function merchantKey(desc){
   let k=""; for(const x of w){k=k?k+" "+x:x; if(k.replace(/ /g,"").length>=6||k.split(" ").length>=2)break}
   return k.toLowerCase();   /* norm() Türkçe harfleri sadeleştirdi; "PIDE" -> "pide" */
 }
-function openAnalysis(desc){$("q").value=merchantKey(desc);renderQuery();$("q").scrollIntoView({behavior:"smooth",block:"start"})}
+function openAnalysis(desc){if(tab!=="spend"){tab="spend";render()}$("q").value=merchantKey(desc);renderQuery();$("q").scrollIntoView({behavior:"smooth",block:"start"})}
 /* Dönem seçiminin kapsamı: tüm zamanlar / tek ekstre dönemi / tarih aralığı */
 function scopeInfo(){
   const p=$("period").value, today=iso(new Date());
@@ -1837,7 +1870,7 @@ function NoteCell({t}){
     onKeyDown=${e=>{if(e.key==="Enter")save1(e.target.value);else if(e.key==="Escape"){editNote=null;render()}}} onBlur=${e=>{if(editNote===t.id)save1(e.target.value)}}/></div>`;
   return hx`<div class="notecell">${n?hx`<span class="note">${n.split(/(#[\p{L}\p{N}_-]+)/gu).map((x,i)=>x[0]==="#"?hx`<button class="tag" key=${i} onClick=${e=>{e.stopPropagation();setTxSearch(x.toLocaleLowerCase("tr-TR"))}}>${x}</button>`:x)}</span>`:null}<button class="notebtn" title=${n?"Notu düzenle":"Not / etiket ekle"} aria-label="Not ekle" onClick=${()=>{editNote=t.id;render()}}>✎</button></div>`;
 }
-function setTxSearch(v){txView.q=v;$("txq").value=v;$("allFold").open=true;render()}
+function setTxSearch(v){txView.q=v;$("txq").value=v;$("allFold").open=true;tab="tx";render()}
 /* Etiket çipleri: kapsamdaki işlemlerin etiket toplamları */
 function TagBar({tx}){
   const by={}; tx.forEach(t=>{if(t.est)return;tagsOf(notes[t.id]||"").forEach(g=>{const b=by[g]=by[g]||{n:0,v:0};b.n++;b.v+=t.amt})});
@@ -3010,9 +3043,10 @@ function render(){
   /* Sekmeler, veri kaynağı açılınca görünür: ekstre yüklemeden de gelir ve birikim girilebilir */
   const srcOpen=history.length>0||!!dir||mobileReady;
   if(!srcOpen)tab="spend";
-  $("tabs").classList.toggle("hide",!srcOpen);
-  document.body.classList.toggle("tab-budget",tab==="budget");
-  $("tabSpend").setAttribute("aria-selected",String(tab!=="budget")); $("tabBudget").setAttribute("aria-selected",String(tab==="budget"));
+  if(!history.length&&tab!=="budget")tab="spend";
+  $("tabs").classList.toggle("hide",!srcOpen); document.body.classList.toggle("has-nav",srcOpen);
+  document.body.classList.toggle("tab-budget",tab==="budget"); document.body.dataset.tab=tab;
+  document.querySelectorAll("#tabs [data-tab]").forEach(b=>{b.setAttribute("aria-selected",String(b.dataset.tab===tab));if(b.dataset.tab!=="spend"&&b.dataset.tab!=="budget")b.classList.toggle("hide",!history.length)});
   renderBudget();
   if(!history.length){$("out").classList.add("hide");return}
   fillPeriods();
@@ -3143,7 +3177,7 @@ function render(){
 $("run").addEventListener("click",()=>{
   const {added,dup,skipped,ex,pays,refunds}=importRows(); save(); $("setup").classList.add("hide");
   $("msg").innerHTML=`<span class="ok">${added} yeni harcama eklendi.</span> `+(added&&ex.past?`Özette olmayan önceki aylara ${ex.past} taksit hesaplandı. `:"")+(added&&ex.future?`Henüz özeti gelmemiş aylara ${ex.future} taksit planlandı. `:"")+(dup?`${dup} tanesi zaten kayıtlıydı. `:"")+(refunds?`${refunds} iade/indirim harcamalardan düşüldü. `:"")+(pays?`${pays} ödemeniz kaydedildi (harcama sayılmaz, ekstre kontrolünde kullanılır). `:"")+(skipped?`${skipped} satır (gelen para) harcama sayılmadı.`:"");
-  render(); $("out").scrollIntoView({behavior:"smooth"});
+  tab="spend"; render(); $("out").scrollIntoView({behavior:"smooth"});
 });
 $("period").addEventListener("change",render);
 $("pPrev").addEventListener("click",()=>stepPeriod(-1));
@@ -3179,7 +3213,7 @@ $("shareCats").addEventListener("click",()=>{
 });
 $("importCats").addEventListener("change",async e=>{
   const f=e.target.files[0]; e.target.value=""; if(!f)return;
-  closeSharePreview(); $("rulesFold").open=true;
+  closeSharePreview(); $("rulesFold").open=true; setTab("more");
   let plan;
   try{plan=planImport(JSON.parse(await f.text()))}
   catch(err){$("shareMsg").innerHTML='<span class="err">Bu dosya okunamadı. "Kategorileri paylaş" ile indirilmiş bir dosya veya harcama-verisi.json seçin.</span>';return}
