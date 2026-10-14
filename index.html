@@ -503,6 +503,9 @@ body[data-tab=more] .folds,body[data-tab=tx] .folds,body[data-tab=trend] .folds{
 body.has-nav{padding-bottom:0;padding-left:220px}
 body.has-nav #toast{bottom:18px;left:calc(50% + 110px)}
 }
+/* Ekranın üstü sade: dosya kutusu yalnızca Özet ve Daha fazla'da; telefonda Görünüm menüsü Daha fazla ekranında */
+@media screen{body.has-nav:not([data-tab=spend]):not([data-tab=more]) .toolbar{display:none!important}}
+@media screen and (max-width:640px){body.has-nav .viewopt{display:none}body.has-nav .head h1{font-size:1.6rem}}
 @media print{#tabs,.morecard{display:none!important}body.has-nav{padding:0}}
 /* 2. adım: dönem düğmeleri, özet kutusu, kart şeklinde kategori listesi ve simgeler */
 .pnav{display:flex;align-items:center;gap:8px;flex:1;max-width:480px}
@@ -572,7 +575,7 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <b>Bu sayfa şu an çalıştırılamıyor.</b> Dosya bir önizleme penceresinde açılmış (ör. iPhone'daki Dosyalar uygulaması). Sayfayı Safari'de bir web adresinden açın.</div></noscript>
 <main>
 <header class="head">
-<h1>Harcama analizi</h1>
+<h1 id="pageTitle">Harcama analizi</h1>
 <span class="hright"><span class="badge" title="Ekstreler ve kayıtlar hiçbir yere gönderilmez, tarayıcıda hiçbir şey saklanmaz; kayıtlar yalnızca harcama-verisi.json dosyanızda. Tek bağlantı: birikimlerinizde döviz/altın varsa günlük kurlar bir kur servisinden okunur (isteğe veri eklenmez).">🔒 Çevrimdışı</span>
 <details class="viewopt" id="viewOpt"><summary title="Görünüm: tema ve yazı boyutu"><span aria-hidden="true">Aa</span> Görünüm</summary>
 <div class="vpanel">
@@ -672,11 +675,6 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <table id="top" class="top"></table>
 </details>
 
-<details class="fold" data-screen="trend" id="recurFold" style="--tint:#199e70"><summary><span class="chev" aria-hidden="true">▶</span><h2>Düzenli ödemeler <small id="recurCount"></small></h2></summary>
-<p><small>En az 3 ekstre döneminde benzer tutarla (±%15) tekrar eden harcamalar: abonelikler, faturalar, aidatlar. Taksitler dahil değildir. Yıllık tutar, tipik aylık tutarın 12 katıdır.</small></p>
-<table id="recur" class="top"></table>
-</details>
-
 <div id="qBox" data-screen="spend">
 <h2>Harcama ara</h2>
 <p><small>Bir yerin adını yazın, tüm dönemlerdeki harcamanızı görün. Birden fazla yer için virgül kullanın. Listelerdeki adlara tıklayarak da açabilirsiniz.</small></p>
@@ -700,6 +698,11 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 
 <details class="fold" data-screen="trend" id="yearFold" style="--tint:#d55181"><summary><span class="chev" aria-hidden="true">▶</span><h2>Yıllık özet <small id="yearCount"></small></h2></summary>
 <div id="yearSum"></div>
+</details>
+
+<details class="fold" data-screen="trend" id="recurFold" style="--tint:#199e70"><summary><span class="chev" aria-hidden="true">▶</span><h2>Düzenli ödemeler <small id="recurCount"></small></h2></summary>
+<p><small>En az 3 ekstre döneminde benzer tutarla (±%15) tekrar eden harcamalar: abonelikler, faturalar, aidatlar. Taksitler dahil değildir. Yıllık tutar, tipik aylık tutarın 12 katıdır.</small></p>
+<table id="recur" class="top"></table>
 </details>
 
 <details class="fold" data-screen="tx" id="allFold" style="--tint:#0e8a8a"><summary><span class="chev" aria-hidden="true">▶</span><h2>Tüm işlemler <small id="allCount"></small></h2></summary>
@@ -923,7 +926,7 @@ if(MOBILE){
 $("tbAdd").addEventListener("click",()=>{if(tab!=="spend")setTab("spend");$("file").click()});
 /* Menü: telefonda altta, bilgisayarda solda. Ekrana geçince o ekranın ana bölümü açılır. */
 document.querySelectorAll("#tabs [data-tab]").forEach(b=>b.addEventListener("click",()=>{
-  const t=b.dataset.tab; if(t==="tx")$("allFold").open=true; if(t==="trend")$("monthsFold").open=true; setTab(t)}));
+  const t=b.dataset.tab; if(t!==tab&&$("msg").querySelector(".flist,.ok"))$("msg").textContent="";   /* eski yükleme sonucu yeni ekranın üstünü kaplamasın */ if(t==="tx")$("allFold").open=true; if(t==="trend")$("monthsFold").open=true; setTab(t)}));
 $("tbSwitch").addEventListener("click",()=>MOBILE?$("openData").click():$("pick").click());
 /* Dosyalar sayfanın herhangi bir yerine sürüklenip bırakılabilir */
 let dragDepth=0;
@@ -3046,6 +3049,7 @@ function render(){
   if(!history.length&&tab!=="budget")tab="spend";
   $("tabs").classList.toggle("hide",!srcOpen); document.body.classList.toggle("has-nav",srcOpen);
   document.body.classList.toggle("tab-budget",tab==="budget"); document.body.dataset.tab=tab;
+  $("pageTitle").textContent=srcOpen?{spend:"Özet",tx:"İşlemler",trend:"Aylar",budget:"Birikim ve bütçe",more:"Daha fazla"}[tab]:"Harcama analizi";
   document.querySelectorAll("#tabs [data-tab]").forEach(b=>{b.setAttribute("aria-selected",String(b.dataset.tab===tab));if(b.dataset.tab!=="spend"&&b.dataset.tab!=="budget")b.classList.toggle("hide",!history.length)});
   renderBudget();
   if(!history.length){$("out").classList.add("hide");return}

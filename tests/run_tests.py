@@ -762,11 +762,17 @@ def menu_ve_ekranlar(b, info):
     assert box["y"] + box["height"] >= 1300 - 2, "telefonda menü ekranın altında"
     eq(a.ev("document.body.dataset.tab"), "spend", "Özet ile açılır")
     assert a.pg.is_visible("#cats") and not a.pg.is_visible("#allFold") and not a.pg.is_visible("#rulesFold")
+    eq(a.text("#pageTitle"), "Özet", "başlık ekranın adı")
+    a.ev("$('msg').innerHTML='<span class=\"ok\">2/2 dosya işlendi</span><div class=\"flist\"></div>'")
     a.screen("tx")
+    eq(a.text("#pageTitle"), "İşlemler", "başlık ekranla değişir")
+    eq(a.ev("$('msg').textContent"), "", "eski yükleme sonucu yeni ekranın üstünde kalmaz")
+    assert not a.pg.is_visible("#toolbar"), "dosya kutusu yalnızca Özet ve Daha fazla'da"
     assert a.ev("$('allFold').open") and a.pg.is_visible("#alltx"), "İşlemler ekranında tüm işlemler açık"
     assert not a.pg.is_visible("#cats") and a.pg.is_visible("#period"), "dönem seçici İşlemler'de de var"
     a.screen("trend"); assert a.ev("$('monthsFold').open") and a.pg.is_visible("#yearFold") and a.pg.is_visible("#recurFold")
-    a.screen("more"); assert a.pg.is_visible("#rulesFold") and a.pg.is_visible("#hist") and not a.pg.is_visible("#period")
+    a.screen("more"); assert a.pg.is_visible("#toolbar") and not a.pg.is_visible("#viewOpt"), "telefonda Görünüm Daha fazla'da"
+    assert a.pg.is_visible("#rulesFold") and a.pg.is_visible("#hist") and not a.pg.is_visible("#period")
     a.pg.click(".morecard [data-theme-set=naruto]"); eq(a.ev("document.documentElement.dataset.theme"), "naruto", "Daha fazla'dan tema")
     a.screen("tx"); a.pg.locator("#alltx button[data-an]").first.click(); a.pg.wait_for_timeout(150)
     eq(a.ev("document.body.dataset.tab"), "spend", "harcama analizi Özet ekranında açılır"); assert a.pg.is_visible("#qOut")
