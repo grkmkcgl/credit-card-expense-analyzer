@@ -304,7 +304,7 @@ html{color-scheme:light}
 *{-webkit-print-color-adjust:exact;print-color-adjust:exact;animation:none!important;transition:none!important}
 body{background:#fff;color:#111;font-size:12px}
 main{max-width:none;padding:0}
-#msg,.toolbar,#saveBar,.viewopt,#toast,.lock,.badge,#how,#tabs,#bankBox,.bform,.bchk,.intro,.seg,.presets,.txbar,.notebtn,.noteedit,#hist,#unkFold,#rulesFold,#qOut,#q,#qClear,button.x,#exclInfo button,.anom button,input,.kwsug,.catlist select,.bfilter,.ratesum button{display:none!important}
+#msg,.toolbar,#saveBar,.viewopt,#toast,.lock,.badge,#how,#tabs,#bankBox,.bform,.bchk,.intro,.seg,.presets,.txbar,.notebtn,.noteedit,#hist,#unkFold,#rulesFold,#qOut,#q,#qClear,button.x,#exclInfo button,.anom button,input,.kwsug,.catlist select,.catlist .catbtn,.bfilter,.ratesum button{display:none!important}
 .periodbar select{border:0;background:none;color:#111;font-weight:600;appearance:none;padding:0;width:auto}
 .periodbar label{display:none}
 .hero,.panel,.kpi,.qcard{background:#fff;border-color:#cfd4d2}
@@ -507,6 +507,57 @@ body.has-nav #toast{bottom:18px;left:calc(50% + 110px)}
 @media screen{body.has-nav:not([data-tab=spend]):not([data-tab=more]) .toolbar{display:none!important}}
 @media screen and (max-width:640px){body.has-nav .viewopt{display:none}body.has-nav .head h1{font-size:1.6rem}}
 @media print{#tabs,.morecard{display:none!important}body.has-nav{padding:0}}
+/* 4. adım: İşlemler listesi (telefonda kart + gün başlıkları) ve alttan açılan kategori seçici */
+.catbtn{display:inline-flex;align-items:center;gap:8px;margin:0;min-height:44px;padding:4px 12px 4px 4px;border-radius:12px;background:var(--paper);color:var(--ink);border:1.5px solid var(--line);font-weight:600;font-size:.88rem;max-width:100%;text-align:left}
+.catbtn:hover{border-color:var(--acc);filter:none}
+.catbtn .cico{width:34px;height:34px;border-radius:9px}.catbtn .cico svg{width:20px;height:20px}
+.catbtn span:not(.cico){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.catbtn .dn{color:var(--muted);font-size:.8rem;flex:none}
+.rowcat .catbtn{min-height:40px}
+#alltx td{padding:10px 6px}
+#alltx .tdesc{display:flex;gap:10px;align-items:flex-start}
+#alltx .tdesc>.cico{width:38px;height:38px;border-radius:11px;flex:none}#alltx .tdesc>.cico svg{width:22px;height:22px}
+#alltx .tdesc .linkish{font-weight:700}
+#alltx td.n{font-weight:700;font-size:1.02rem}
+#alltx td.n.pos,.pos{color:var(--good)}
+.refb{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.85rem;background:color-mix(in srgb,var(--good) 15%,transparent);color:var(--good);border:0;font-weight:700}
+body[data-tab=tx] #allFold .scroll{max-height:none;overflow:visible;border:0;padding:0}
+body[data-tab=tx] .txbar input,body[data-tab=tx] .txbar select{min-height:50px;font-size:1rem}
+#sheet .sheetbg{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.42);animation:fadein .2s ease-out}
+#sheet .sheetbox{position:fixed;z-index:31;left:0;right:0;bottom:0;max-height:88vh;overflow:auto;background:var(--paper);border-radius:24px 24px 0 0;padding:10px 18px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -10px 30px var(--shadow);animation:sheetin .25s ease-out}
+@keyframes sheetin{from{transform:translateY(40px);opacity:0}}
+.sheetbox .handle{width:44px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 12px}
+.sheetbox h3{margin:0;font-size:1.3rem}
+.sheetsub{margin:4px 0 12px;color:var(--muted);overflow-wrap:anywhere}.sheetsub b{color:var(--ink)}
+.pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.pk{display:flex;align-items:center;gap:10px;margin:0;min-height:58px;padding:6px 12px 6px 8px;border-radius:14px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);font-weight:600;text-align:left}
+.pk:hover{border-color:var(--acc);filter:none}
+.pk .cico{width:38px;height:38px;border-radius:10px;flex:none}.pk .cico svg{width:22px;height:22px}
+.pk span:not(.cico){overflow-wrap:anywhere;line-height:1.25}
+.pk.on{border:2.5px solid var(--acc);background:color-mix(in srgb,var(--acc) 8%,var(--paper))}
+.pk .ck{margin-left:auto;color:var(--acc);font-weight:800}
+.sheetnote{margin:12px 0 0}
+.sheetx{width:100%;margin-top:10px}
+body.sheet-open{overflow:hidden}
+@media (min-width:700px){#sheet .sheetbox{left:50%;right:auto;bottom:auto;top:50%;width:min(620px,92vw);transform:translate(-50%,-50%);border-radius:22px;padding:18px 22px;animation:none}}
+@media (max-width:640px){
+#alltx,#alltx tbody{display:block}
+#alltx thead{display:block}#alltx thead tr{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+#alltx th{position:static;background:none;border:0;padding:0}
+#alltx th .sortbtn{min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:var(--paper);font-size:.82rem}
+#alltx th:last-child{display:none}
+#alltx tbody tr{display:grid;grid-template-columns:1fr auto;grid-template-areas:"desc amt" "cat act" "date date";gap:8px 10px;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:12px;margin:0 0 8px;position:relative}
+#alltx tbody td{border:0;padding:0}
+#alltx .tdate{grid-area:date}#alltx .tdesc{grid-area:desc;min-width:0}#alltx .tcat{grid-area:cat;min-width:0}#alltx td.n{grid-area:amt;align-self:start;font-size:1.08rem}#alltx tbody td:last-child{grid-area:act;text-align:right}
+#alltx.grouped .tdate{display:none}
+#alltx tbody tr.dstart{margin-top:42px}
+#alltx tbody tr.dstart::before{content:attr(data-day);position:absolute;top:-32px;left:4px;font-size:.8rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+#alltx tbody tr.dstart:first-child{margin-top:34px}
+#alltx button.x{min-height:40px;padding:0 14px}
+}
+#alltx .notebtn{opacity:1;min-height:36px;padding:0 10px;margin-top:4px;border:1px solid var(--line);border-radius:999px;font-size:.8rem}
+#alltx .notebtn::after{content:" Not"}
+@media print{.catbtn{border:0;padding:0;min-height:0}.catbtn .cico,.catbtn .dn,#sheet{display:none!important}#alltx tbody tr.dstart::before{content:none}}
 /* 2. adım: dönem düğmeleri, özet kutusu, kart şeklinde kategori listesi ve simgeler */
 .pnav{display:flex;align-items:center;gap:8px;flex:1;max-width:480px}
 .pnav select{flex:1;font-weight:700;min-height:50px}
@@ -744,6 +795,7 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 </section>
 <section id="budget" role="tabpanel" aria-labelledby="tabBudget"></section>
 <div id="toast" aria-live="polite"></div>
+<div id="sheet"></div>
 </main>
 
 <script>
@@ -1850,9 +1902,27 @@ function txExtra(t){
 }
 function AnBtn({desc}){return hx`<button class="linkish" data-an=${desc} title="Bu harcamayı analiz et" onClick=${e=>{e.stopPropagation();openAnalysis(desc)}}>${desc}</button>`}
 /* Kategori seçici: seçim bu açıklama için override yazar (Diğer = override'ı siler); "Tüm işlemler" ve grafik listesi paylaşır */
+/* Kategori seçici: simgeli düğme, alttan açılan pencerede (CatSheet) büyük kategori düğmeleri. Seçim bu açıklama için override yazar
+   (Diğer = override'ı siler), yani aynı yerden gelen tüm işlemlere uygulanır. "Tüm işlemler" ve grafik listesi paylaşır. */
 function CatPick({t,catOpts}){
-  const pick=e=>{const v=e.target.value,k=norm(t.desc);undoable(`"${t.desc}" → ${v}`,()=>{if(v==="Diğer")delete overrides[k];else overrides[k]=v})};
-  return hx`<select data-k=${norm(t.desc)} onChange=${pick}>${catOpts.map(c=>hx`<option key=${c} selected=${c===t.sub}>${c}</option>`)}</select>`;
+  return hx`<button class="catbtn" data-k=${norm(t.desc)} aria-haspopup="dialog" title="Kategoriyi değiştir" onClick=${e=>{e.stopPropagation();openCatSheet(t,catOpts)}}><${CatIcon} c=${t.sub} color=${catColor(t.sub)}/><span>${t.sub}</span><span class="dn" aria-hidden="true">▾</span></button>`;
+}
+let catSheet=null, catColor=()=>GRAY;   /* açık seçici (yalnızca bellekte); renkler render()'daki sıraya göre */
+function openCatSheet(t,catOpts){catSheet={t,catOpts,back:document.activeElement};renderSheet();
+  setTimeout(()=>{const b=document.querySelector("#sheet .pk.on")||document.querySelector("#sheet .pk");if(b)b.focus()},0)}
+function closeCatSheet(){const b=catSheet&&catSheet.back;catSheet=null;renderSheet();if(b&&b.isConnected)b.focus()}
+function pickCat(t,v){closeCatSheet();if(v===t.sub)return;const k=norm(t.desc);undoable(`"${t.desc}" → ${v}`,()=>{if(v==="Diğer")delete overrides[k];else overrides[k]=v})}
+function renderSheet(){document.body.classList.toggle("sheet-open",!!catSheet);preact.render(catSheet?hx`<${CatSheet} ...${catSheet}/>`:null,$("sheet"))}
+function CatSheet({t,catOpts}){
+  return hx`<div class="sheetbg" onClick=${closeCatSheet}></div>
+  <div class="sheetbox" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" onKeyDown=${e=>{if(e.key==="Escape")closeCatSheet()}}>
+    <div class="handle" aria-hidden="true"></div>
+    <h3 id="sheetTitle">Hangi kategoriye ait?</h3>
+    <p class="sheetsub"><b>${t.desc}</b> · ${fmt2(t.amt)}${t.d?` · ${t.d.toLocaleDateString("tr-TR",{day:"numeric",month:"long"})}`:""}</p>
+    <div class="pick">${catOpts.map(c=>hx`<button key=${c} class=${"pk"+(c===t.sub?" on":"")} data-cat=${c} aria-pressed=${String(c===t.sub)} onClick=${()=>pickCat(t,c)}><${CatIcon} c=${c} color=${catColor(c)}/><span>${c}</span>${c===t.sub?hx`<span class="ck" aria-hidden="true">✓</span>`:null}</button>`)}</div>
+    <p class="sheetnote"><small>Seçim bu yerden gelen tüm işlemlere uygulanır. Geri almak için ekranın altındaki "Geri al"ı kullanın.</small></p>
+    <button class="ghost sheetx" onClick=${closeCatSheet}>Vazgeç</button>
+  </div>`;
 }
 function TxRow({t,catOpts}){
   const extra=txExtra(t);
@@ -1881,13 +1951,13 @@ function TagBar({tx}){
   if(!ks.length)return null;
   return hx`<div class="tagbar">${ks.map(g=>hx`<button class=${"tagchip"+(norm(txView.q)===norm(g)?" on":"")} key=${g} data-tag=${g} onClick=${()=>setTxSearch(norm(txView.q)===norm(g)?"":g)}>${g} <small>${by[g].n} · ${fmt(by[g].v)}</small></button>`)}</div>`;
 }
-function AllRow({t,catOpts}){
+function AllRow({t,catOpts,day}){
   const extra=txExtra(t);
   const del=()=>{
     if(!confirm(`Bu işlem silinsin mi?\n\n${t.date?toDate(t.date).toLocaleDateString("tr-TR"):""} · ${t.desc} · ${fmt2(t.amt)}\n\nSilinen işlem aynı ekstreyi tekrar yüklerseniz geri gelir.`))return;
     undoable(`"${t.desc}" silindi`,()=>{history=history.filter(x=>x.id!==t.id);expandInstallments()});
   };
-  return hx`<tr><td style="white-space:nowrap"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td><${AnBtn} desc=${t.desc}/>${extra?hx`<br/><small>${extra}</small>`:null}<${NoteCell} t=${t}/></td><td><${CatPick} t=${t} catOpts=${catOpts}/></td><td class="n">${fmt(t.amt)}</td><td>${t.est?null:hx`<button class="x" data-id=${t.id} title="Bu işlemi sil" onClick=${del}>Sil</button>`}</td></tr>`;
+  return hx`<tr class=${day?"dstart":null} data-day=${day||null}><td class="tdate"><small>${t.d?t.d.toLocaleDateString("tr-TR"):""}</small></td><td class="tdesc"><${CatIcon} c=${t.cat} color=${catColor(t.cat)}/><div><${AnBtn} desc=${t.desc}/>${extra?hx`<br/><small>${extra}</small>`:null}<${NoteCell} t=${t}/></div></td><td class="tcat">${t.cat==="İadeler ve indirimler"?hx`<span class="refb">İade</span>`:hx`<${CatPick} t=${t} catOpts=${catOpts}/>`}</td><td class=${"n"+(t.amt<0?" pos":"")}>${fmt(t.amt)}</td><td>${t.est?null:hx`<button class="x" data-id=${t.id} title="Bu işlemi sil" onClick=${del}>Sil</button>`}</td></tr>`;
 }
 /* Kategori simgeleri: adın içindeki kelimeye göre seçilir (kullanıcının kendi kategorileri de çoğu zaman eşleşir); eşleşmezse etiket simgesi.
    Yalnızca path "d" dizileri; daire = iki yay. */
@@ -3105,6 +3175,7 @@ function render(){
   const allTime={}; allTx.forEach(t=>{if(t.amt<=0||t.kind==="refund")return;allTime[t.cat]=(allTime[t.cat]||0)+t.amt});
   const ranked=Object.entries(allTime).filter(([c])=>c!=="Diğer").sort((a,b)=>b[1]-a[1]).slice(0,PAL.length).map(x=>x[0]);
   const colorOf=c=>ranked.includes(c)?PAL[ranked.indexOf(c)]:GRAY;
+  catColor=c=>c==="Taksitler"||c==="İadeler ve indirimler"?col[c]||colorOf(c):colorOf(c);
   const col={}; cats.forEach(([c])=>col[c]=colorOf(c));
   renderPie(posCats,col,ranked,gross,total,allTx);
   
@@ -3171,7 +3242,9 @@ function render(){
   preact.render([hx`<option value="">Tüm kategoriler</option>`,...cats0.map(c=>hx`<option key=${c} value=${c}>${c}</option>`)],tc); tc.value=txView.cat;
   const th=(k,l,cls)=>hx`<th class=${cls} aria-sort=${txView.sort===k?(txView.dir<0?"descending":"ascending"):null}><button class="sortbtn" data-sort=${k} onClick=${()=>{if(txView.sort===k)txView.dir=-txView.dir;else{txView.sort=k;txView.dir=k==="cat"?1:-1}render()}}>${l}${txView.sort===k?(txView.dir<0?" ↓":" ↑"):""}</button></th>`;
   preact.render([hx`<thead key="h"><tr>${th("date","Tarih")}${th("desc","Açıklama")}${th("cat","Kategori")}${th("amt","Tutar","n")}<th></th></tr></thead>`,
-    hx`<tbody key="b">${list.length?list.map((t,n)=>hx`<${AllRow} key=${t.id||"i"+n} t=${t} catOpts=${catOpts}/>`):hx`<tr><td colspan="5"><div class="empty"><small>Aramaya uyan işlem yok.</small></div></td></tr>`}</tbody>`],$("alltx"));
+    hx`<tbody key="b">${list.length?list.map((t,n)=>hx`<${AllRow} key=${t.id||"i"+n} t=${t} catOpts=${catOpts} day=${txView.sort==="date"&&t.d&&(n===0||list[n-1].date!==t.date)?t.d.toLocaleDateString("tr-TR",{day:"numeric",month:"long",weekday:"long"}):null}/>`):hx`<tr><td colspan="5"><div class="empty"><small>Aramaya uyan işlem yok.</small></div></td></tr>`}</tbody>`],$("alltx"));
+  $("alltx").classList.toggle("grouped",txView.sort==="date");
+  if(catSheet&&!history.some(x=>x.id===catSheet.t.id))closeCatSheet(); else if(catSheet)renderSheet();
   const keys=[...new Set(history.filter(t=>t.kind!=="payment").map(t=>merchantKey(t.desc)))].sort();
   $("qList").innerHTML=keys.slice(0,400).map(k=>`<option value="${esc(k)}">`).join("");
   renderQuery();

@@ -79,6 +79,11 @@ class App:
         if not self.ev(f"$('{fid}').open"):
             self.pg.click(f"#{fid} > summary"); self.pg.wait_for_timeout(100)
 
+    def pick_cat(self, sel, cat):
+        """Satırdaki kategori düğmesine basar ve alttan açılan pencereden kategoriyi seçer."""
+        (self.pg.locator(sel) if isinstance(sel, str) else sel).click(); self.pg.wait_for_timeout(100)
+        self.pg.click(f"#sheet .pk[data-cat='{cat}']"); self.pg.wait_for_timeout(150)
+
     def text(self, sel):
         return self.pg.inner_text(sel)
 
@@ -568,7 +573,7 @@ def katlanir_bolumler(b, info):
     eq(a.text("#rulesCount"), f"({cats} kategori)", "kategori sayısı")
     a.open_fold("allFold")
     assert a.pg.is_visible("#alltx"), "açınca tablo görünmeli"
-    a.pg.select_option("#alltx select >> nth=0", "Market"); a.pg.wait_for_timeout(150)
+    a.pick_cat("#alltx .catbtn >> nth=0", "Market")
     eq(a.ev("$('allFold').open"), True, "yeniden çizimde açık kalmalı")
     a.pg.click("#allFold > summary"); a.pg.wait_for_timeout(100)
     eq(a.ev("$('allFold').open"), False, "tekrar tıklayınca kapanmalı")
@@ -788,6 +793,31 @@ def menu_ve_ekranlar(b, info):
 
 
 @test
+def islemler_telefonda_kart_ve_gun_basliklari(b, info):
+    a = App(b, width=390, mobile=True)
+    H = _pide_history() + [{"id": "ayni", "date": "2026-08-20", "stmt": "2026-08-26", "desc": "MAHALLE MANAVI", "amt": 50}]
+    a.ev("h=>{applyData({history:h});startMobile('test')}", H)
+    a.screen("tx")
+    days = a.ev("[...document.querySelectorAll('#alltx tbody tr[data-day]')].map(r=>r.dataset.day)")
+    n = a.ev("$('alltx').tBodies[0].rows.length")
+    assert days and days[0].startswith("20 Ağustos"), days
+    eq(len(days), len(set(days)), "her gün bir kez başlık")
+    assert len(days) < n, "aynı günün işlemleri tek başlık altında"
+    assert a.ev("getComputedStyle(document.querySelector('#alltx tbody tr')).display") == "grid", "telefonda kart"
+    assert not a.pg.is_visible("#alltx .tdate"), "gruplu listede tarih başlıkta"
+    a.pg.click("#alltx button[data-sort=amt]"); a.pg.wait_for_timeout(100)
+    eq(a.ev("document.querySelectorAll('#alltx tbody tr[data-day]').length"), 0, "tutara göre sıralayınca gün başlığı yok")
+    assert a.pg.is_visible("#alltx .tdate"), "gruplanmayınca tarih satırda"
+    a.pg.locator("#alltx .catbtn").first.click(); a.pg.wait_for_timeout(450)  # açılış animasyonu bitsin
+    box = a.pg.locator("#sheet .sheetbox").bounding_box()
+    assert abs(box["y"] + box["height"] - 1300) < 2 and box["width"] == 390, f"telefonda pencere alttan: {box}"
+    a.pg.click("#sheet .sheetbg", position={"x": 20, "y": 20}); a.pg.wait_for_timeout(100)
+    assert not a.pg.is_visible("#sheet .sheetbox"), "dışarı dokununca kapanır"
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
 def gorunum_tercihi_kayit_dosyasinda(b, info):
     a = App(b); a.ev("h=>{applyData({history:h});render()}", _pide_history())
     eq(a.ev("document.documentElement.dataset.theme"), "light", "varsayılan açık tema")
@@ -904,7 +934,7 @@ def kategorisiz_icin_kural_onerisi(b, info):
 def geri_al(b, info):
     a = App(b); a.import_("arti.pdf"); a.open_fold("allFold")
     before = a.ev("JSON.stringify({h:history,o:overrides,e:[...excluded]})"); total = a.total()
-    a.pg.select_option("#alltx tbody select >> nth=0", "Market"); a.pg.wait_for_timeout(150)
+    a.pick_cat("#alltx tbody .catbtn >> nth=0", "Market")
     assert "Market" in a.text("#toast") and a.pg.is_visible("#undoBtn"), a.text("#toast")
     a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150)
     eq(a.ev("JSON.stringify({h:history,o:overrides,e:[...excluded]})"), before, "kategori değişikliği geri alınmalı")
@@ -1324,12 +1354,19 @@ def _ac(a, name):
 @test
 def liste_icinden_kategori_duzenleme(b, info):
     a = _liste_app(b)
-    sel = lambda c: a.pg.locator(f"#cats .cat[data-k='{c}'] .catlist .rowcat select")
+    sel = lambda c: a.pg.locator(f"#cats .cat[data-k='{c}'] .catlist .rowcat .catbtn")
     # kapalıyken hiçbir seçici yok
     eq(a.ev("document.querySelectorAll('#cats .rowcat').length"), 0, "kapalı listede seçici yok")
     # 1) Kafe: aynı açıklamalı iki satır birlikte taşınır
     _ac(a, "Kafe ve restoran"); eq(sel("Kafe ve restoran").count(), 3, "her satırın altında seçici")
-    sel("Kafe ve restoran").nth(0).select_option("Market"); a.pg.wait_for_timeout(200)
+    sel("Kafe ve restoran").nth(0).click(); a.pg.wait_for_timeout(100)
+    assert a.pg.is_visible("#sheet .sheetbox"), "kategori penceresi açılmalı"
+    eq(a.ev("document.querySelector('#sheet .pk.on').dataset.cat"), "Kafe ve restoran", "şimdiki kategori işaretli")
+    eq(a.ev("document.activeElement.dataset.cat"), "Kafe ve restoran", "odak seçili kategoride")
+    a.pg.keyboard.press("Escape"); a.pg.wait_for_timeout(100)
+    assert not a.pg.is_visible("#sheet .sheetbox"), "Esc kapatmalı"
+    eq(a.ev("overrides[norm('EGE PIDE SALONU ANKARA TR')]"), None, "vazgeçince değişiklik yok")
+    a.pick_cat(sel("Kafe ve restoran").nth(0), "Market")
     eq(a.ev("overrides[norm('EGE PIDE SALONU ANKARA TR')]"), "Market", "seçim override olarak yazılmalı")
     eq(sel("Kafe ve restoran").count(), 1, "taşınan satırlar Kafe listesinden kalkmalı")
     assert "₺540" in a.text("#cats .cat[data-k='Kafe ve restoran'] button.row") and "₺3.320" in a.text("#cats .cat[data-k='Market'] button.row"), a.text("#cats")
@@ -1337,10 +1374,10 @@ def liste_icinden_kategori_duzenleme(b, info):
     eq(sel("Kafe ve restoran").count(), 3, "Geri al satırları döndürmeli")
     # 2) Taksitler: seçici var, satır Taksitler'de kalır, alt kategori değişir
     _ac(a, "Taksitler"); eq(sel("Taksitler").count(), 1)
-    sel("Taksitler").nth(0).select_option("Market"); a.pg.wait_for_timeout(200)
+    a.pick_cat(sel("Taksitler").nth(0), "Market")
     eq(sel("Taksitler").count(), 1, "taksit satırı Taksitler'de kalmalı")
     eq(a.ev("categorize('ORNEK ELEKTRONIK TR')"), "Market", "alt kategori güncellenmeli")
-    eq(sel("Taksitler").nth(0).input_value(), "Market", "seçici yeni alt kategoriyi göstermeli")
+    eq(sel("Taksitler").nth(0).inner_text().strip(" ▾\n"), "Market", "seçici yeni alt kategoriyi göstermeli")
     # 3) İadeler: seçici yok
     _ac(a, "İadeler ve indirimler"); eq(sel("İadeler ve indirimler").count(), 0, "iadede seçici olmamalı")
     assert not a.errors, a.errors
