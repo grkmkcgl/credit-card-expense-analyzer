@@ -823,6 +823,23 @@ def islemler_telefonda_kart_ve_gun_basliklari(b, info):
 
 
 @test
+def telefonda_kayit_acmadan_ekstre_eklenir(b, info):
+    a = App(b, width=390, mobile=True)
+    assert a.pg.is_visible("#drop") and a.pg.is_visible("#mobilePanel"), "ekstre alanı kayıt dosyası açmadan da görünür"
+    a.pg.set_input_files("#file", f("arti.pdf"))
+    a.pg.wait_for_function("!document.getElementById('setup').classList.contains('hide')", timeout=20000)
+    assert a.ev("mobileReady") and "Ekle ve göster" in a.text("#msg"), a.text("#msg")
+    assert "Yeni kayıt başlatıldı" in a.text("#mobileInfo"), "boş kayıt başladığı söylenir"
+    a.pg.click("#runTop"); a.pg.wait_for_timeout(200)
+    assert a.ev("history.length") > 0 and a.pg.is_visible("#saveBar"), "üstteki düğme de ekler, kaydet çubuğu çıkar"
+    a.pg.set_input_files("#file", [f("r_tutuyor.pdf"), f("bozuk.pdf")])
+    a.pg.wait_for_function("/dosya işlendi/.test(document.getElementById('msg').textContent)", timeout=30000)
+    eq(a.ev("[...document.querySelectorAll('#msg .frow')].map(r=>r.className)"), ["frow fok", "frow fbad"], "sonuç kartları durumlarıyla")
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
 def gorunum_tercihi_kayit_dosyasinda(b, info):
     a = App(b); a.ev("h=>{applyData({history:h});render()}", _pide_history())
     eq(a.ev("document.documentElement.dataset.theme"), "light", "varsayılan açık tema")

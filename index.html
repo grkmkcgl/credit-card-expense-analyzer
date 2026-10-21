@@ -590,6 +590,34 @@ body.sheet-open{overflow:hidden}
 .rhist{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:8px}.rhist i{width:22px;height:9px;border-radius:5px;background:var(--good)}.rhist i.n{background:var(--field);outline:1px solid var(--line)}.rhist i.u{background:var(--red)}
 .rhist small{margin-left:4px;white-space:nowrap}
 @media print{.mchart{height:160px;overflow:visible}.mchart .vh{position:static;width:auto;height:auto;clip:auto;font-size:9px}}
+/* 6. adım: karşılama, ekstre ekleme alanı, sonuç kartları */
+.welcome{display:flex;align-items:center;gap:14px;margin:6px 0 10px}
+.wlogo{width:60px;height:60px;border-radius:18px;background:var(--acc);color:var(--accInk);display:grid;place-items:center;flex:none}
+.wlogo svg{width:34px;height:34px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round}
+body:not(.has-data):not(.has-nav) .head h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.wtitle{font-size:1.5rem;font-weight:800;line-height:1.2;margin:0;letter-spacing:-.01em}
+.intro .lead{font-size:1.05rem;color:var(--muted)}
+.lock{border-radius:16px;padding:14px 16px}
+.panel.step{border-radius:18px;padding:18px}
+.stephead .num,.drop .num{width:36px;height:36px;font-size:1.05rem}
+.drop{border-width:2.5px;border-radius:20px;padding:26px 16px;background:color-mix(in srgb,var(--acc) 5%,var(--paper))}
+.drop b{font-size:1.15rem}
+.drop .btn{min-height:52px;padding:12px 26px;font-size:1.05rem}
+.dropico{width:42px;height:42px;fill:none;stroke:var(--acc);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+:root[data-theme=naruto] .dropico{display:none}
+.setuptop{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.setuptop p{margin:0;flex:1 1 240px}.setuptop button{margin:0;min-height:52px;font-size:1.05rem}
+#setup{border:2px solid var(--acc)}
+.flist{border:0;display:flex;flex-direction:column;gap:8px;overflow:visible}
+.frow{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:var(--paper);border:1px solid var(--line);border-radius:16px;font-size:.95rem}
+.frow>div:nth-child(2){flex:1;min-width:0;overflow-wrap:anywhere}
+.flist .frow:last-child{border-bottom:1px solid var(--line)}
+.fst{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;flex:none;font-weight:800;background:var(--field);color:var(--muted)}
+.frow.fok .fst{background:color-mix(in srgb,var(--good) 15%,transparent);color:var(--good)}
+.frow.fwarn .fst{background:var(--warnBg);color:var(--warnInk)}
+.frow.fbad{flex-wrap:wrap}.frow.fbad>div.err{flex-basis:100%;text-align:left!important;padding-left:48px}
+.frow.fbad .fst{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
+.frow .fchk{align-self:center}
 /* 2. adım: dönem düğmeleri, özet kutusu, kart şeklinde kategori listesi ve simgeler */
 .pnav{display:flex;align-items:center;gap:8px;flex:1;max-width:480px}
 .pnav select{flex:1;font-weight:700;min-height:50px}
@@ -668,7 +696,8 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 </div></details></span>
 </header>
 <div class="intro">
-<p>Kredi kartı ekstrenizi (PDF) ya da bankanızdan indirdiğiniz Excel/CSV dökümünü seçin; harcamalar otomatik kategorilere ayrılsın, siz sadece tanınmayanları düzeltin.</p>
+<div class="welcome"><span class="wlogo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg></span><p class="wtitle">Harcamalarınızı kolayca görün</p></div>
+<p class="lead">Kredi kartı ekstrenizi (PDF) ya da bankanızdan indirdiğiniz Excel/CSV dökümünü seçin; harcamalar otomatik kategorilere ayrılsın, siz sadece tanınmayanları düzeltin.</p>
 
 <div class="lock" role="note">
 <span aria-hidden="true">🔒</span>
@@ -682,7 +711,7 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 </section>
 
 <section class="panel step hide" id="mobilePanel">
-<div class="stephead"><span class="num" aria-hidden="true">1</span><p><b>Kayıt dosyanızı açın</b><br><small>Telefon tarayıcıları bir klasöre doğrudan yazamaz. Bu yüzden kayıtlar <code>harcama-verisi.json</code> dosyasında tutulur: açılışta dosyayı seçersiniz, değişiklikten sonra "Kaydet" ile güncel halini indirirsiniz. İlk kez kullanıyorsanız "Yeni başla"ya basın.</small></p></div>
+<div class="stephead"><span class="num" aria-hidden="true">1</span><p><b>Kayıt dosyanız varsa açın</b><br><small>İlk kez kullanıyorsanız bu adımı atlayıp aşağıdan ekstrenizi ekleyin. Telefon tarayıcıları bir klasöre doğrudan yazamaz. Bu yüzden kayıtlar <code>harcama-verisi.json</code> dosyasında tutulur: açılışta dosyayı seçersiniz, değişiklikten sonra "Kaydet" ile güncel halini indirirsiniz. İlk kez kullanıyorsanız "Yeni başla"ya basın.</small></p></div>
 <label class="btn ghost">Kayıt dosyasını aç<input type="file" id="openData" accept=".json,application/json" style="display:none"></label>
 <button class="ghost" id="fresh">Yeni başla</button>
 <p id="mobileInfo" style="margin-top:10px"><small></small></p>
@@ -700,6 +729,7 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <nav class="tabs hide" id="tabs" role="tablist" aria-label="Bölümler"><button role="tab" id="tabSpend" data-tab="spend" aria-selected="true" aria-controls="out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Özet</span></button><button role="tab" id="tabTx" data-tab="tx" aria-selected="false" aria-controls="out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg><span>İşlemler</span></button><button role="tab" id="tabTrend" data-tab="trend" aria-selected="false" aria-controls="out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V5M16 20v-6M22 20H2"/></svg><span>Aylar</span></button><button role="tab" id="tabBudget" data-tab="budget" aria-selected="false" aria-controls="budget"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a1 1 0 0 1-1-1z"/><path d="M4 7l11-4 1 4"/><path d="M16 13h.01"/></svg><span>Birikim</span></button><button role="tab" id="tabMore" data-tab="more" aria-selected="false" aria-controls="out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg><span>Daha fazla</span></button></nav>
 
 <label class="drop hide" id="drop">
+<svg class="dropico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
 <span class="num" aria-hidden="true">2</span>
 <b>Ekstre veya döküm dosyalarını seçin</b>
 <small>PDF hesap özeti (şifreli olabilir), .xlsx, .xls veya .csv. Birden fazla dosyayı aynı anda seçebilirsiniz.</small>
@@ -716,7 +746,7 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <div id="msg"></div>
 
 <section id="setup" class="panel hide">
-<p><b>Sütunları kontrol edin.</b> Otomatik tahmin ettim; yanlışsa düzeltin.</p>
+<div class="setuptop"><p><b>Okunan işlemleri kontrol edin.</b> Sütunları otomatik tahmin ettim; yanlışsa aşağıdan düzeltin.</p><button id="runTop">Ekle ve göster</button></div>
 <div class="grid">
 <div><label for="hdr">Başlık satırı</label><input type="number" id="hdr" min="1"></div>
 <div><label for="cDate">Tarih</label><select id="cDate"></select></div>
@@ -727,7 +757,7 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <div id="stmtWrap" class="hide"><label for="stmtDate">Hesap kesim tarihi</label><input type="date" id="stmtDate"><small id="stmtSrc"></small><br><small>Bu ekstredeki tüm işlemler ve taksitler bu kesim tarihinin dönemine yazılır.</small></div>
 </div>
 <div id="preview" style="margin-top:14px;overflow-x:auto"></div>
-<button id="run">Analiz et</button>
+<button id="run">Ekle ve göster</button>
 </section>
 
 <section id="out" class="hide">
@@ -989,6 +1019,7 @@ $("clr").addEventListener("click",async()=>{
   if(!confirm(`Kayıtlı tüm işlemler silinsin mi? Kategori seçimleriniz, kurallarınız, bütçe ve birikimleriniz korunur.`+(MOBILE?"":` Önceki hali "${PREV_FILE}" olarak kalır.`)))return;
   history=[];await save();render();$("msg").textContent="İşlemler silindi. Özetleri yeniden yükleyebilirsiniz; kategori seçimleriniz korundu.";
 });
+function freshMobile(info){dataName="";history=[];overrides={};lastMap=null;notes={};dismissed=new Set();removedDefaults=new Set();budget=normBudget();$("rules").value=DEFAULT_RULES;startMobile(info)}
 function startMobile(info){
   mobileReady=true; rateFetch={state:""};   /* yeni kayıt dosyası: kurlar yeniden denenir */
   $("mobileInfo").innerHTML=`<small>${info}</small>`;
@@ -1004,7 +1035,8 @@ if(MOBILE){
     catch(err){$("msg").innerHTML='<span class="err">Bu dosya okunamadı. Bu araçla kaydedilmiş harcama-verisi.json dosyasını seçin.</span>'}
     e.target.value="";
   });
-  $("fresh").addEventListener("click",()=>{dataName="";history=[];overrides={};lastMap=null;notes={};dismissed=new Set();removedDefaults=new Set();budget=normBudget();$("rules").value=DEFAULT_RULES;startMobile("Boş kayıtla başlandı. İşiniz bitince Kaydet'e basmayı unutmayın.")});
+  $("fresh").addEventListener("click",()=>freshMobile("Boş kayıtla başlandı. İşiniz bitince Kaydet'e basmayı unutmayın."));
+  $("drop").classList.remove("hide");   /* kayıt dosyası açmadan da ekstre eklenebilir; ilk dosyada boş kayıt başlar */
   $("dl").addEventListener("click",downloadData);
   window.addEventListener("beforeunload",e=>{if(!$("saveBar").classList.contains("hide")){e.preventDefault();e.returnValue=""}});
 }
@@ -1501,6 +1533,7 @@ function reconDiff(stmt){
 $("file").addEventListener("change",e=>{const files=[...e.target.files]; e.target.value=""; handleFiles(files)});
 async function handleFiles(files){
   if(!files.length)return;
+  if(MOBILE&&!mobileReady)freshMobile("Yeni kayıt başlatıldı. Daha önce kaydettiğiniz bir kayıt dosyası varsa önce onu açın; yoksa işiniz bitince Kaydet'e basın.");
   if(tab!=="spend")setTab("spend");
   $("msg").textContent="";
   /* Tek dosya: önizleme ve kontrol adımıyla */
@@ -1510,7 +1543,8 @@ async function handleFiles(files){
       if(/\.pdf$/i.test(f.name))$("msg").textContent="PDF okunuyor…";
       await loadFile(f);
       $("setup").classList.remove("hide");
-      $("msg").textContent=`${f.name} okundu: ${raw.length-1} işlem bulundu. Aşağıdaki listeyi kontrol edip "Analiz et"e basın.`;
+      $("msg").textContent=`${f.name} okundu: ${raw.length-1} işlem bulundu. Listeyi kontrol edip "Ekle ve göster"e basın.`;
+      $("setup").scrollIntoView({behavior:"smooth",block:"start"});
     }catch(err){$("msg").innerHTML=`<span class="err">${fileErr(err)}</span>`}
     return;
   }
@@ -1529,10 +1563,11 @@ async function handleFiles(files){
   save(); render();
   const tot=k=>results.filter(r=>r.ok).reduce((s,r)=>s+(r[k]||0),0);
   const rowsHtml=results.map(r=>{
-    if(!r.ok)return `<div class="frow"><div><b>${esc(r.name)}</b></div><div class="err" style="white-space:normal;text-align:right">${esc(r.err)}</div></div>`;
+    if(!r.ok)return `<div class="frow fbad"><span class="fst" aria-hidden="true">!</span><div><b>${esc(r.name)}</b></div><div class="err" style="white-space:normal;text-align:right">${esc(r.err)}</div></div>`;
     const d=r.stmt?reconDiff(r.stmt):null;
     const check=d==null?"<small>dönem borcu yok</small>":Math.abs(d)<1?'<span class="ok">✓ Tutuyor</span>':`<span class="err">Fark ${fmt2(d)}</span>`;
-    return `<div class="frow"><div><b>${esc(r.name)}</b><br><small>${r.stmt?`Kesim ${toDate(r.stmt).toLocaleDateString("tr-TR")}`:"Kesim tarihi yok"}${r.warn?' <span class="err">(tahmini, kontrol edin)</span>':""} · ${r.added} yeni${r.dup?`, ${r.dup} zaten kayıtlı`:""}</small></div><div class="fchk">${check}</div></div>`;
+    const st=d!=null&&Math.abs(d)>=1||r.warn?"fwarn":r.added?"fok":"fsame";
+    return `<div class="frow ${st}"><span class="fst" aria-hidden="true">${st==="fwarn"?"!":"✓"}</span><div><b>${esc(r.name)}</b><br><small>${r.stmt?`Kesim ${toDate(r.stmt).toLocaleDateString("tr-TR")}`:"Kesim tarihi yok"}${r.warn?' <span class="err">(tahmini, kontrol edin)</span>':""} · ${r.added} yeni${r.dup?`, ${r.dup} zaten kayıtlı`:""}</small></div><div class="fchk">${check}</div></div>`;
   }).join("");
   $("msg").innerHTML=`<span class="ok">${results.filter(r=>r.ok).length}/${files.length} dosya işlendi, ${tot("added")} yeni kayıt eklendi.</span>
     <div class="flist">${rowsHtml}</div>
@@ -3312,6 +3347,7 @@ function render(){
   document.querySelectorAll("[data-an]:not(#cats [data-an],#top [data-an],#alltx [data-an],#recur [data-an],#anom [data-an],#yearSum [data-an],#instCal [data-an])").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();openAnalysis(b.dataset.an)}));
 }
 
+$("runTop").addEventListener("click",()=>$("run").click());
 $("run").addEventListener("click",()=>{
   const {added,dup,skipped,ex,pays,refunds}=importRows(); save(); $("setup").classList.add("hide");
   $("msg").innerHTML=`<span class="ok">${added} yeni harcama eklendi.</span> `+(added&&ex.past?`Özette olmayan önceki aylara ${ex.past} taksit hesaplandı. `:"")+(added&&ex.future?`Henüz özeti gelmemiş aylara ${ex.future} taksit planlandı. `:"")+(dup?`${dup} tanesi zaten kayıtlıydı. `:"")+(refunds?`${refunds} iade/indirim harcamalardan düşüldü. `:"")+(pays?`${pays} ödemeniz kaydedildi (harcama sayılmaz, ekstre kontrolünde kullanılır). `:"")+(skipped?`${skipped} satır (gelen para) harcama sayılmadı.`:"");
