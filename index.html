@@ -3211,7 +3211,7 @@ function render(){
   if(!history.length&&tab!=="budget")tab="spend";
   $("tabs").classList.toggle("hide",!srcOpen); document.body.classList.toggle("has-nav",srcOpen);
   document.body.classList.toggle("tab-budget",tab==="budget"); document.body.dataset.tab=tab;
-  $("pageTitle").textContent=srcOpen?{spend:"Özet",tx:"İşlemler",trend:"Aylar",budget:"Birikim ve bütçe",more:"Daha fazla"}[tab]:"Harcama analizi";
+  $("pageTitle").textContent=srcOpen?{spend:"Özet",tx:"İşlemler",trend:"Aylar",budget:"Birikim",more:"Daha fazla"}[tab]:"Harcama analizi";
   document.querySelectorAll("#tabs [data-tab]").forEach(b=>{b.setAttribute("aria-selected",String(b.dataset.tab===tab));if(b.dataset.tab!=="spend"&&b.dataset.tab!=="budget")b.classList.toggle("hide",!history.length)});
   renderBudget();
   if(!history.length){$("out").classList.add("hide");return}
