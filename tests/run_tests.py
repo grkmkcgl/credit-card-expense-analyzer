@@ -753,6 +753,11 @@ def donem_dugmeleri_ozet_farki_ve_simgeler(b, info):
     assert a.ev("$('pPrev').disabled"), "en eski dönemde ‹ kapalı"
     eq(a.ev("$('totalCmp').textContent"), "", "önceki dönem yoksa fark yazılmaz")
     assert a.ev("document.querySelectorAll('#cats .cat[data-k=\"Market\"] .cico svg path').length") > 0, "kategori simgesi"
+    a.open_fold("monthsFold")
+    a.pg.locator("#months .mrow").filter(has_text="Tem").click(); a.pg.wait_for_timeout(100)
+    eq(a.ev("$('period').value"), "2026-07", "grafikte sütuna dokununca o dönem seçilir")
+    eq(a.ev("document.querySelector('#months .mrow.sel').title"), "Temmuz 2026 ekstresi (kesim 26.07.2026): ₺2.450", "seçili sütun")
+    assert "₺2.450" in a.text("#months .mhead"), a.text("#months .mhead")
     assert not a.errors, a.errors
     a.close()
 
@@ -899,14 +904,24 @@ def olagandisi_harcamalar(b, info):
 def gelecek_taksit_takvimi(b, info):
     H = [{"id": "i1", "date": "2026-08-01", "pdate": "2026-08-01", "stmt": "2026-09-26", "desc": "ORNEK ELEKTRONIK TR", "amt": 500, "inst": {"n": 2, "m": 4, "total": 2000}},
          {"id": "i2", "date": "2026-09-10", "pdate": "2026-09-10", "stmt": "2026-09-26", "desc": "ORNEK GIYIM TR", "amt": 300, "inst": {"n": 1, "m": 2, "total": 600}}]
-    a = App(b); a.ev("h=>{applyData({history:h});render()}", H); a.open_fold("monthsFold")
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", H); a.open_fold("instFold")
     rows = a.ev("[...document.querySelectorAll('#instCal .mrow')].map(r=>r.textContent)")
     eq(len(rows), 2, "iki gelecek dönem")
     assert rows[0].startswith("Eki") and "₺800" in rows[0] and "2 taksit" in rows[0] and "1 seri biter" in rows[0], rows
     assert rows[1].startswith("Kas") and "₺500" in rows[1] and "1 seri biter" in rows[1], rows
     assert "Toplam kalan: ₺1.300" in a.text("#instCal")
+    eq(a.text("#instCount"), "(₺1.300 kalan)", "başlıkta kalan")
+    ser = a.ev("[...document.querySelectorAll('#instCal .iser')].map(r=>r.textContent)")
+    eq(len(ser), 2, "iki devam eden seri")
+    assert "ORNEK GIYIM" in ser[0] and "1/2 ödendi" in ser[0] and "1 × ₺300" in ser[0] and "Ekim'de biter" in ser[0], ser
+    assert "ORNEK ELEKTRONIK" in ser[1] and "2/4 ödendi" in ser[1] and "2 × ₺500" in ser[1] and "Kasım'da biter" in ser[1], ser
+    eq(a.ev("document.querySelectorAll('#instCal .iser')[1].querySelectorAll('.idots i.p').length"), 2, "ödenen noktalar")
+    a.ev("()=>{window.__an=0;const o=openAnalysis;window.openAnalysis=d=>{window.__an++;o(d)}}")
+    a.pg.locator("#instCal .iser button[data-an]").first.click(); a.pg.wait_for_timeout(150)
+    eq(a.ev("window.__an"), 1, "analiz tek sefer açılmalı")
     a.ev("()=>{applyData({history:[{id:'n1',date:'2026-09-01',stmt:'2026-09-26',desc:'ORNEK MARKET TR',amt:100}]});render()}")
     eq(a.ev("$('instCal').textContent"), "", "taksit yoksa bölüm yok")
+    assert not a.pg.is_visible("#instFold"), "taksit yoksa başlık da gizli"
     assert not a.errors, a.errors
     a.close()
 

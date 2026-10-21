@@ -558,6 +558,38 @@ body.sheet-open{overflow:hidden}
 #alltx .notebtn{opacity:1;min-height:36px;padding:0 10px;margin-top:4px;border:1px solid var(--line);border-radius:999px;font-size:.8rem}
 #alltx .notebtn::after{content:" Not"}
 @media print{.catbtn{border:0;padding:0;min-height:0}.catbtn .cico,.catbtn .dn,#sheet{display:none!important}#alltx tbody tr.dstart::before{content:none}}
+/* 5. adım: Aylar ekranı — sütun grafik, taksit kartları, düzenli ödeme kartları */
+.mhead{display:flex;flex-direction:column;margin:4px 0 8px}.mhead b{font-size:1.7rem;line-height:1.15}
+.mchart{position:relative;display:flex;align-items:stretch;gap:3px;height:230px;padding:8px 0 0;overflow-x:auto}
+.mchart .mrow{all:unset;box-sizing:border-box;flex:1 0 20px;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;border-radius:8px;padding:0 1px}
+.mchart .mrow:focus-visible{outline:3px solid var(--mustard)}
+.mchart .mcol{flex:1;width:100%;display:flex;align-items:flex-end}
+.mchart .mcol i{display:block;width:100%;border-radius:6px 6px 2px 2px;background:color-mix(in srgb,var(--c1,#3987e5) 45%,transparent);transition:height .45s ease}
+.mchart .mrow.sel .mcol i{background:var(--acc)}
+.mchart .mrow.fut .mcol i{background:transparent;border:2px dashed var(--acc);border-bottom:0}
+.mchart .ml{display:flex;flex-direction:column;align-items:center;font-size:.64rem;color:var(--muted);white-space:nowrap;height:30px;line-height:1.1}.mchart .ml small{font-size:.6rem}
+.mchart .mrow.sel .ml{color:var(--ink);font-weight:800}
+.mchart .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.mavg{position:absolute;left:0;right:0;border-top:2px dashed var(--muted);opacity:.6;pointer-events:none}
+.instcal{margin-top:4px}
+.ihero{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}.ihero b{font-size:1.9rem;line-height:1.1}
+.ihero .pill{align-self:flex-start;background:color-mix(in srgb,#7d6bd1 15%,transparent);color:#6a55c9}
+.imonths{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:14px}
+.imonths .mrow{display:flex;flex-direction:column;gap:0;padding:10px 12px;background:var(--paper);border:1px solid var(--line);border-radius:14px;font-size:.9rem}
+.imonths .mrow b{font-size:1.15rem}.imonths .mrow.now{border:2px solid #7d6bd1}
+.instcal h3{font-size:1.05rem;margin:6px 0 8px}
+.iser{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:8px}
+.ihead{display:flex;align-items:center;gap:10px}.ihead .cico{width:40px;height:40px;flex:none}.ihead .cico svg{width:22px;height:22px}
+.iname{flex:1;min-width:0;display:flex;flex-direction:column}.iname .linkish{font-weight:700;overflow-wrap:anywhere}
+.ihead>b{white-space:nowrap;font-size:1.05rem}.ihead>b small{font-weight:400}
+.idots{display:flex;gap:4px;margin:10px 0 6px}.idots i{flex:1;height:10px;border-radius:5px;background:var(--field)}.idots i.p{background:#7d6bd1}
+.ifoot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;font-size:.88rem;color:var(--muted)}.ifoot b{color:var(--ink)}
+#recur td.ric{width:52px;vertical-align:top;padding-top:10px}#recur td.ric .cico{width:42px;height:42px}#recur td.ric .cico svg{width:22px;height:22px}
+#recur td{padding:10px 6px}
+#recur{table-layout:fixed}#recur td.n{width:100px}#recur td{overflow-wrap:anywhere}
+.rhist{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:8px}.rhist i{width:22px;height:9px;border-radius:5px;background:var(--good)}.rhist i.n{background:var(--field);outline:1px solid var(--line)}.rhist i.u{background:var(--red)}
+.rhist small{margin-left:4px;white-space:nowrap}
+@media print{.mchart{height:160px;overflow:visible}.mchart .vh{position:static;width:auto;height:auto;clip:auto;font-size:9px}}
 /* 2. adım: dönem düğmeleri, özet kutusu, kart şeklinde kategori listesi ve simgeler */
 .pnav{display:flex;align-items:center;gap:8px;flex:1;max-width:480px}
 .pnav select{flex:1;font-weight:700;min-height:50px}
@@ -739,6 +771,9 @@ if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol))
 <p><small>Kredi kartı işlemleri, hangi ekstrede göründülerse o ekstrenin dönemine yazılır. Banka bir harcamayı birkaç gün geç işlerse (ör. 25 Temmuz'daki harcama 26 Temmuz kesiminden sonra işlendiyse) sonraki ekstrede görünür; bu normaldir.</small></p>
 <p style="margin:0 0 6px"><small id="monthsNote" class="err"></small></p>
 <div id="months"></div>
+</details>
+
+<details class="fold" data-screen="trend" id="instFold" style="--tint:#7d6bd1"><summary><span class="chev" aria-hidden="true">▶</span><h2>Taksitler <small id="instCount"></small></h2></summary>
 <div id="instCal"></div>
 </details>
 
@@ -978,7 +1013,7 @@ if(MOBILE){
 $("tbAdd").addEventListener("click",()=>{if(tab!=="spend")setTab("spend");$("file").click()});
 /* Menü: telefonda altta, bilgisayarda solda. Ekrana geçince o ekranın ana bölümü açılır. */
 document.querySelectorAll("#tabs [data-tab]").forEach(b=>b.addEventListener("click",()=>{
-  const t=b.dataset.tab; if(t!==tab&&$("msg").querySelector(".flist,.ok"))$("msg").textContent="";   /* eski yükleme sonucu yeni ekranın üstünü kaplamasın */ if(t==="tx")$("allFold").open=true; if(t==="trend")$("monthsFold").open=true; setTab(t)}));
+  const t=b.dataset.tab; if(t!==tab&&$("msg").querySelector(".flist,.ok"))$("msg").textContent="";   /* eski yükleme sonucu yeni ekranın üstünü kaplamasın */ if(t==="tx")$("allFold").open=true; if(t==="trend"){$("monthsFold").open=true;$("instFold").open=true} setTab(t)}));
 $("tbSwitch").addEventListener("click",()=>MOBILE?$("openData").click():$("pick").click());
 /* Dosyalar sayfanın herhangi bir yerine sürüklenip bırakılabilir */
 let dragDepth=0;
@@ -2042,12 +2077,14 @@ function detectRecurring(){
     if(ok.length<3||ok.length<ps.length*.6)return;
     const lastP=ps.at(-1), lastV=x.per[lastP], idx=allP.indexOf(lastP);
     out.push({key:x.key,desc:x.last.desc,cat:categorize(x.last.desc),n:ps.length,med,lastP,lastV,
+      hist:allP.slice(-6).map(q=>({p:q,v:x.per[q]||0,s:!x.per[q]?"n":x.per[q]>med*1.1?"u":"y"})),
       up:lastV>med*1.1, gone:idx>=0&&allP.length-1-idx>=2});
   });
   return out.sort((a,b)=>b.med-a.med);
 }
 function RecurRow({r}){
-  return hx`<tr><td><${AnBtn} desc=${r.desc}/><br/><small>${r.cat} · ${r.n} dönem · son ${periodLabel(r.lastP,true)}</small>${r.up?hx` <span class="delta up" title=${`Son dönem ${fmt(r.lastV)}`}>tutar arttı</span>`:null}${r.gone?hx` <span class="delta down">son 2 dönemde yok</span>`:null}</td><td class="n"><b>${fmt(r.med)}</b><br/><small>yılda ${fmt(r.med*12)}</small></td></tr>`;
+  return hx`<tr><td class="ric"><${CatIcon} c=${r.cat} color=${catColor(r.cat)}/></td><td><${AnBtn} desc=${r.desc}/><br/><small>${r.cat} · ${r.n} dönem · son ${periodLabel(r.lastP,true)}</small>${r.up?hx` <span class="delta up" title=${`Son dönem ${fmt(r.lastV)}`}>tutar arttı</span>`:null}${r.gone?hx` <span class="delta down">son 2 dönemde yok</span>`:null}
+    <div class="rhist" aria-hidden="true">${r.hist.map(h=>hx`<i key=${h.p} class=${h.s} title=${`${periodLabel(h.p,true)}: ${h.v?fmt(h.v):"yok"}`}></i>`)}<small>${r.hist.length?`${periodLabel(r.hist[0].p,true)} – ${periodLabel(r.hist.at(-1).p,true)}`:""}</small></div></td><td class="n"><b>${fmt(r.med)}</b><br/><small>yılda ${fmt(r.med*12)}</small></td></tr>`;
 }
 /* Olağandışı harcamalar (seçili kapsamda): aynı ekstre + gün + açıklama + tutar birden fazla (çift çekim şüphesi)
    ve yerin kendi ortalamasının en az 3 katı olan, ₺500 ve üzeri tek harcamalar. Kullanıcı "gösterme" derse dismissed'e yazılır. */
@@ -2142,14 +2179,34 @@ function YearSummary({spend,years,colorOf}){
   </div>`;
 }
 /* Gelecek taksit takvimi: henüz özette görünmeyen planlı taksitlerin dönem başına toplamı ve o dönemde biten seriler */
+/* Taksitler: önümüzdeki dönemlerin kartları (ay ay yük, biten seriler) ve devam eden her seri için ödenen/kalan noktaları.
+   Seri = aynı açıklama + taksit sayısı + toplam (sameInst gibi); ödenen = gelecek tahmini olmayan en büyük taksit no. */
+function instSeries(){
+  const by={};
+  history.forEach(t=>{if(!t.inst||t.kind)return;const k=`${norm(t.desc)}|${t.inst.m}|${Math.round(t.inst.total||0)}`;(by[k]=by[k]||[]).push(t)});
+  return Object.values(by).map(rows=>{
+    const fut=rows.filter(t=>t.est==="future").sort((a,b)=>a.inst.n-b.inst.n); if(!fut.length)return null;
+    const t0=fut[0], m=t0.inst.m, paid=Math.max(0,...rows.filter(t=>t.est!=="future").map(t=>t.inst.n));
+    return {key:t0.id,desc:t0.desc,m,paid,amt:t0.amt,total:t0.inst.total||t0.amt*m,left:fut.reduce((s,t)=>s+t.amt,0),nLeft:fut.length,endP:periodKey(fut.at(-1)),cat:categorize(t0.desc)};
+  }).filter(Boolean).sort((a,b)=>a.endP.localeCompare(b.endP)||b.amt-a.amt);
+}
+const pMonth=k=>{const [y,m]=k.split("-");return new Date(y,m-1).toLocaleDateString("tr-TR",{month:"long"})};
+/* "Kasım'da", "Aralık'ta", "Eylül'de": ay adına bulunma eki */
+const pMonthDa=k=>pMonth(k)+["'ta","'ta","'ta","'da","'ta","'da","'da","'ta","'de","'de","'da","'ta"][+k.split("-")[1]-1];
 function InstCal({up}){
   if(!up.length)return null;
   const by={}; up.forEach(t=>{const k=periodKey(t);const b=by[k]=by[k]||{v:0,n:0,end:[]};b.v+=t.amt;b.n++;if(t.inst&&t.inst.n===t.inst.m)b.end.push(t.desc)});
-  const ks=Object.keys(by).sort().slice(0,12), mx=Math.max(...ks.map(k=>by[k].v),1);
-  return hx`<div class="instcal"><h3>Gelecek taksit takvimi</h3>
-    <p style="margin:0 0 6px"><small>Önümüzdeki ekstrelerde kesinleşmiş taksit yükü. Serinin son taksidi olan dönemde "biter" yazar.</small></p>
-    ${ks.map(k=>{const b=by[k];return hx`<div class="mrow" key=${k}><span>${periodLabel(k,true)}</span><div><div class="bar" style=${`width:${b.v/mx*100}%;background:transparent;border:1px dashed var(--acc)`}></div>${b.end.length?hx`<small class="iend" title=${b.end.join(", ")}>${b.end.length} seri biter</small>`:null}</div><b style="text-align:right">${fmt(b.v)}<br/><small>${b.n} taksit</small></b></div>`})}
-    <p style="margin:6px 0 0"><small>Toplam kalan: <b>${fmt(up.reduce((s,t)=>s+t.amt,0))}</b></small></p></div>`;
+  const ks=Object.keys(by).sort().slice(0,12), ser=instSeries();
+  return hx`<div class="instcal">
+    <div class="ihero"><small>Önümüzdeki dönemlerde ödenecek</small><b>${fmt(up.reduce((s,t)=>s+t.amt,0))}</b><span class="pill">${ser.length} devam eden taksit${ser.length?` · ${pMonthDa(ser.reduce((a,x)=>x.endP>a?x.endP:a,ser[0].endP))} bitiyor`:""}</span></div>
+    <p style="margin:0 0 8px"><small>Önümüzdeki ekstrelerde kesinleşmiş taksit yükü. Serinin son taksidi olan dönemde "biter" yazar.</small></p>
+    <div class="imonths">${ks.map((k,i)=>{const b=by[k];return hx`<div class=${"mrow"+(i===0?" now":"")} key=${k}><span>${periodLabel(k,true)}</span><b>${fmt(b.v)}</b><small>${b.n} taksit</small>${b.end.length?hx`<small class="iend" title=${b.end.join(", ")}>${b.end.length} seri biter</small>`:null}</div>`})}</div>
+    ${ser.length?hx`<h3>Devam eden taksitler</h3>${ser.map(x=>hx`<div class="iser" key=${x.key}>
+      <div class="ihead"><${CatIcon} c=${x.cat} color=${catColor(x.cat)}/><div class="iname"><${AnBtn} desc=${x.desc}/><small>${x.m} taksit · toplam ${fmt(x.total)}</small></div><b>${fmt(x.amt)}<small>/ay</small></b></div>
+      ${x.m<=24?hx`<div class="idots" aria-hidden="true">${Array.from({length:x.m},(_,i)=>hx`<i class=${i<x.paid?"p":""}></i>`)}</div>`:hx`<div class="cbar" aria-hidden="true"><i style=${`width:${x.paid/x.m*100}%;background:var(--c7,#7d6bd1)`}></i></div>`}
+      <div class="ifoot"><span>${x.paid}/${x.m} ödendi</span><span>Kalan <b>${x.nLeft} × ${fmt(x.amt)}</b> · ${pMonthDa(x.endP)} biter</span></div>
+    </div>`)}`:null}
+    <p style="margin:10px 0 0"><small>Toplam kalan: <b>${fmt(up.reduce((s,t)=>s+t.amt,0))}</b></small></p></div>`;
 }
 /* Kategorisiz satır: seçilen kategori ya kural olarak (önerilen anahtar kelimeyle; aynı yerin gelecekteki işlemleri de otomatik
    kategorilenir) ya da yalnızca bu açıklama için (override) kaydedilir. Kural beklenen kategoriyi vermezse override'a düşülür. */
@@ -3216,9 +3273,13 @@ function render(){
   const curM=iso(new Date()).slice(0,7);
   const past=Object.entries(byM).sort().filter(([k])=>k<=curM).slice(-12), fut=Object.entries(byM).sort().filter(([k])=>k>curM);
   const ms=[...past,...fut], mx=Math.max(...ms.map(m=>m[1]),1);
-  preact.render(hx`<${InstCal} up=${history.filter(t=>t.est==="future")}/>`,$("instCal"));
+  const upAll=history.filter(t=>t.est==="future");
+  preact.render(hx`<${InstCal} up=${upAll}/>`,$("instCal"));
+  $("instFold").classList.toggle("hide",!upAll.length); $("instCount").textContent=upAll.length?`(${fmt(upAll.reduce((s,t)=>s+t.amt,0))} kalan)`:"";
   $("monthsCount").textContent=ms.length?`(${ms.length} dönem)`:"";
-  preact.render(ms.length?ms.map(([k,v])=>hx`<div class="mrow" key=${k}><span>${periodLabel(k,true)}</span><div class="bar" style=${`width:${v/mx*100}%;`+(k===p?"background:var(--mustard)":k>curM?"background:transparent;border:1px dashed var(--acc)":"")}></div><b style="text-align:right">${fmt(v)}</b></div>`):hx`<small>Tarih sütunu okunamadı.</small>`,$("months"));
+  const avgM=past.length?past.reduce((s,m)=>s+m[1],0)/past.length:0, selM=p&&byM[p]!=null?p:(past.at(-1)||[])[0];
+  preact.render(ms.length?hx`<div class="mhead"><small>${selM?periodLabel(selM):""}${selM&&selM>curM?" (planlanan taksitler)":""}</small><b>${selM?fmt(byM[selM]):""}</b><small>Ortalama ${fmt(avgM)} · sütuna dokunarak dönem seçin</small></div>
+    <div class="mchart" role="list">${avgM?hx`<div class="mavg" style=${`bottom:${34+avgM/mx*188}px`} aria-hidden="true"></div>`:null}${ms.map(([k,v])=>hx`<button class=${"mrow"+(k===selM?" sel":"")+(k>curM?" fut":"")} key=${k} role="listitem" title=${`${periodLabel(k)}: ${fmt(v)}`} aria-pressed=${String(k===p)} onClick=${()=>{$("period").value=k;render()}}><span class="mcol"><i style=${`height:${Math.max(2,v/mx*100)}%`}></i></span><span class="ml">${pMonth(k).slice(0,3)}<small>${k.slice(2,4)}</small></span><b class="vh">${fmt(v)}</b></button>`)}</div>`:hx`<small>Tarih sütunu okunamadı.</small>`,$("months"));
 
   const byD={}; tx.forEach(t=>{const k=norm(t.desc);byD[k]=byD[k]||{desc:t.desc,sum:0,n:0,cat:t.inst?`Taksit · ${t.sub}`:t.cat,sub:t.sub,col:col[t.cat]||GRAY};byD[k].sum+=t.amt;byD[k].n++});
   const all=Object.values(byD).sort((a,b)=>b.sum-a.sum);
@@ -3248,7 +3309,7 @@ function render(){
   const keys=[...new Set(history.filter(t=>t.kind!=="payment").map(t=>merchantKey(t.desc)))].sort();
   $("qList").innerHTML=keys.slice(0,400).map(k=>`<option value="${esc(k)}">`).join("");
   renderQuery();
-  document.querySelectorAll("[data-an]:not(#cats [data-an],#top [data-an],#alltx [data-an],#recur [data-an],#anom [data-an],#yearSum [data-an])").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();openAnalysis(b.dataset.an)}));
+  document.querySelectorAll("[data-an]:not(#cats [data-an],#top [data-an],#alltx [data-an],#recur [data-an],#anom [data-an],#yearSum [data-an],#instCal [data-an])").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();openAnalysis(b.dataset.an)}));
 }
 
 $("run").addEventListener("click",()=>{
