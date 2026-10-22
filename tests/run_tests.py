@@ -2209,11 +2209,13 @@ def birikim_kurlar_yedek_adres(b, info):
 
 @test
 def birikim_kurlar_hata_ayrintisi(b, info):
+    hang = []   # cevapsız bırakılan istekler; sayfa kapanmadan önce kapatılır
     cases = [
         ("bağlantı kesik", lambda r: r.abort(), None, "bağlantı kurulamadı"),
         ("404", lambda r: r.fulfill(status=404, headers=CORS, body="yok"), None, "HTTP 404"),
         ("bozuk JSON", lambda r: r.fulfill(status=200, headers=CORS, body="<html>"), None, "beklenmeyen yanıt"),
-        ("zaman aşımı", lambda r: r.fulfill(status=200, headers=CORS, json=KUR), "RATE_TIMEOUT=1", "zaman aşımı"),
+        # cevap hiç gelmez: 1 ms'lik süre yük altında isteği gönderilmeden iptal edebiliyordu (ilk adres reqs'e düşmüyordu)
+        ("zaman aşımı", hang.append, "RATE_TIMEOUT=300", "zaman aşımı"),
         ("yönlendirme", lambda r: r.fulfill(status=302, headers={**CORS, "Location": "https://example.com/kur.json"}), None, "ağ kilidi engelledi"),
     ]
     for name, respond, setup, want in cases:
@@ -2227,6 +2229,10 @@ def birikim_kurlar_hata_ayrintisi(b, info):
         assert "Kayıt dosyanızdaki kurlar" in t and "cdn.jsdelivr.net" in t and "latest.currency-api.pages.dev" in t, f"{name}: {t}"
         assert t.count(want) == 2, f"{name}: her adresin nedeni yazılır: {t}"
         eq(a.ev("budget.rates.USD.v"), 40, f"{name}: kayıtlı kur korunur")
+        for r in hang:
+            try: r.abort()
+            except Exception: pass   # tarayıcı isteği zaten iptal etmiş olabilir
+        hang.clear()
         a.close()
 
 # ----------------------------------------------------------------
