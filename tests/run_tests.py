@@ -840,6 +840,24 @@ def telefonda_kayit_acmadan_ekstre_eklenir(b, info):
 
 
 @test
+def dar_telefonda_yana_tasma_yok(b, info):
+    # Samsung telefonların çoğu 360 px; bir şey taşarsa Android sayfayı büyütülmüş açar ve elle küçültmek gerekir
+    for size in ("m", "l"):
+        a = App(b, width=360, mobile=True)
+        a.upload_many(["ekstre7.pdf", "ekstre9.pdf", "buyuk.pdf", "taksit.pdf", "arti.pdf"])
+        a.ev(f"()=>{{prefs.size='{size}';applyPrefs()}}")
+        for t in ("spend", "tx", "trend", "budget", "more"):
+            a.screen(t); a.ev("document.querySelectorAll('details').forEach(d=>d.open=true)"); a.pg.wait_for_timeout(150)
+            w = a.ev("document.documentElement.scrollWidth")
+            assert w <= 360, f"{t} ekranı ({size} yazı) {w} px, 360'a sığmalı: " + str(a.ev(
+                "[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>361).slice(0,4).map(e=>e.tagName+'#'+e.id+'.'+e.className)"))
+        eq(a.ev("getComputedStyle(document.documentElement).webkitTextSizeAdjust"), "100%", "tarayıcı yazıyı kendiliğinden büyütmesin")
+        cut = a.ev("[...document.querySelectorAll('#tabs button span')].filter(e=>e.scrollWidth>e.clientWidth+1).map(e=>e.textContent)")
+        eq(cut, [], f"menü etiketleri kesilmemeli ({size} yazı)")
+        a.close()
+
+
+@test
 def gorunum_tercihi_kayit_dosyasinda(b, info):
     a = App(b); a.ev("h=>{applyData({history:h});render()}", _pide_history())
     eq(a.ev("document.documentElement.dataset.theme"), "light", "varsayılan açık tema")

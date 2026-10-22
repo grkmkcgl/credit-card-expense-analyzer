@@ -40,7 +40,7 @@
 :root[data-theme=naruto] .toast button{background:var(--acc);color:#fff}
 :root[data-theme=naruto] .cat{border-left:4px solid var(--c,var(--acc))}
 }
-html{font-size:18px}
+html{font-size:18px;-webkit-text-size-adjust:100%;text-size-adjust:100%}   /* Android/Samsung tarayıcısı yazıları kendiliğinden büyütmesin */
 html[data-size=s]{font-size:16px}
 html[data-size=l]{font-size:21px}
 *{box-sizing:border-box}
@@ -242,7 +242,7 @@ button.kpi:hover,.qcard:hover{transform:translateY(-1px);box-shadow:0 6px 18px v
 @keyframes fadein{from{opacity:0}}
 #msg .ok,#msg .err,#msg .flist{animation:fadein .3s ease-out}
 .txbar{display:flex;gap:8px;margin:0 0 8px;flex-wrap:wrap}
-.txbar input{flex:1 1 200px;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink)}
+.txbar input{flex:1 1 200px;min-width:0;max-width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--ink)}
 .txbar select{flex:0 1 200px;width:auto}
 #alltx th{text-align:left;font-weight:400;border-bottom:1px solid var(--line);padding:4px;position:sticky;top:0;background:var(--bg);z-index:1}
 #alltx th.n{text-align:right}
@@ -336,7 +336,7 @@ a{color:inherit}
 .kx{margin:0;padding:0 6px;background:none;border:0;color:var(--muted);font-size:.75rem;line-height:1.6}
 .kx:hover{color:var(--red);filter:none}
 .keyadd,.rnew,.rtools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.keyadd input,.rnew input,.rren{flex:1 1 180px;width:auto}
+.keyadd input,.rnew input,.rren{flex:1 1 180px;width:auto;min-width:0;max-width:100%}
 .keyadd button,.rnew button,.rtools button{margin:0}
 .rnew{margin-top:12px}
 .rmsg{margin:8px 0 0;font-size:.85rem}.rmsg button{margin:0 0 0 8px;padding:3px 10px;font-size:.8rem}
@@ -485,7 +485,7 @@ body[data-tab=trend] #out [data-screen]:not([data-screen~=trend]),body[data-tab=
 }
 #tabs{position:fixed;left:0;right:0;bottom:0;z-index:15;display:flex;gap:2px;margin:0;padding:6px 6px calc(6px + env(safe-area-inset-bottom));background:var(--paper);border:0;border-top:1px solid var(--line);box-shadow:0 -4px 18px var(--shadow)}
 #tabs button{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;margin:0;padding:6px 2px;min-height:60px;border:0;border-radius:12px;background:none;color:var(--muted);font-size:.72rem;font-weight:600;white-space:nowrap}
-#tabs button span{overflow:hidden;text-overflow:ellipsis;max-width:100%}
+#tabs button span{max-width:100%;white-space:normal;text-align:center;line-height:1.1;overflow-wrap:anywhere}   /* dar ekranda kesilmez, iki satıra iner */
 #tabs svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #tabs button[aria-selected=true]{color:var(--acc);background:color-mix(in srgb,var(--acc) 11%,transparent);border:0}
 #tabs button[aria-selected=true] svg{stroke-width:2.4}
@@ -595,7 +595,8 @@ body.sheet-open{overflow:hidden}
 .wlogo{width:60px;height:60px;border-radius:18px;background:var(--acc);color:var(--accInk);display:grid;place-items:center;flex:none}
 .wlogo svg{width:34px;height:34px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round}
 body:not(.has-data):not(.has-nav) .head h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-.wtitle{font-size:1.5rem;font-weight:800;line-height:1.2;margin:0;letter-spacing:-.01em}
+.welcome>p{flex:1;min-width:0}
+.wtitle{overflow-wrap:anywhere;font-size:1.5rem;font-weight:800;line-height:1.2;margin:0;letter-spacing:-.01em}
 .intro .lead{font-size:1.05rem;color:var(--muted)}
 .lock{border-radius:16px;padding:14px 16px}
 .panel.step{border-radius:18px;padding:18px}
@@ -618,6 +619,17 @@ body:not(.has-data):not(.has-nav) .head h1{position:absolute;width:1px;height:1p
 .frow.fbad{flex-wrap:wrap}.frow.fbad>div.err{flex-basis:100%;text-align:left!important;padding-left:48px}
 .frow.fbad .fst{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
 .frow .fchk{align-self:center}
+/* Dar telefonlar (Samsung'larda genişlik çoğu zaman 360 px): hiçbir şey ekrandan taşmasın; taşarsa Android sayfayı
+   büyütülmüş gibi açar. "Kategorisi bulunamayanlar" telefonda kart olur, giriş kutuları sığdığı kadar daralır. */
+input,select,textarea{max-width:100%}
+@media (max-width:640px){
+#unk,#unk tbody{display:block}
+#unk tr{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"d a" "s s";gap:8px 10px;background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:12px;margin:0 0 8px}
+#unk td{border:0;padding:0;min-width:0;overflow-wrap:anywhere}
+#unk td:first-child{grid-area:d}#unk td.n{grid-area:a;font-weight:700}#unk td:nth-child(3){grid-area:s}
+#unk select{min-width:0;width:100%;min-height:46px}
+.kwsug input[type=text]{min-width:0}
+}
 /* 2. adım: dönem düğmeleri, özet kutusu, kart şeklinde kategori listesi ve simgeler */
 .pnav{display:flex;align-items:center;gap:8px;flex:1;max-width:480px}
 .pnav select{flex:1;font-weight:700;min-height:50px}
