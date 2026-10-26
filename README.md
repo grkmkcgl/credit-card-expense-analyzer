@@ -17,13 +17,18 @@ Files are never uploaded anywhere; parsing and calculations run in the browser, 
 ## Kullanım / Usage
 
 - **Bilgisayar:** Chrome veya Edge ile açın, "Klasör seç" ile kayıt klasörünü seçin (ör. Masaüstü/harcamalar), ekstreleri yükleyin.
-- **Telefon (iOS/Android):** Canlı sayfayı açın; kayıt dosyası "Kayıt dosyasını aç" ile açılır, değişiklikler "Kaydet" ile indirilir. iOS 16.4+ gerekir.
+- **Telefon (iOS/Android):** Canlı sayfayı açın; ilk kez kullanıyorsanız doğrudan "Dosya seç" ile ekstrenizi ekleyin. Daha önce kaydettiyseniz önce "Kayıt dosyasını aç" ile `harcama-verisi.json` dosyanızı açın; değişiklikler "Kaydet" ile indirilir. iOS 16.4+ gerekir.
 - **Telefona uygulama olarak kurma (internetsiz çalışır):** Canlı sayfayı bir kez açın ve ana ekrana ekleyin: iPhone'da Safari → *Paylaş → Ana Ekrana Ekle*, Android'de Chrome → *⋮ → Uygulamayı yükle / Ana ekrana ekle*. Bundan sonra ikondan açılır, uçak modunda da çalışır. İnternet varken açıldığında yeni sürüm kendiliğinden alınır; dosya paylaşmaya gerek yoktur.
 - Dosyaya iPhone'daki Dosyalar uygulamasından dokunmak önizleme açar ve sayfa çalışmaz; canlı adresi kullanın.
 - **Dönemler:** İşlemler takvim ayına değil, göründükleri **ekstrenin dönemine** yazılır (banka bir harcamayı geç işlerse sonraki ekstrede görünür). Ayın 1–5'inde kesilen bir ekstre önceki ayın dönemi sayılır; ay sonunda kesen kartlarda kesim 31 Ocak → 1 Mart → 31 Mart diye kaysa da her ay tek ekstre görünür.
 - **Rapor:** Araç çubuğundaki "Yazdır" sade, beyaz zeminli bir baskı görünümü açar; tarayıcıdan "PDF olarak kaydet" ile rapor alınabilir.
 
 ## Özellikler / Features
+
+**Görünüm**
+- Açık tema (varsayılan), koyu, "Oto" (telefonun ayarına uyar) ve turuncu-lacivert "Naruto" teması; küçük / normal / büyük yazı. Seçim kayıt dosyasına yazılır.
+- Telefonda altta, bilgisayarda solda menü: Özet, İşlemler, Aylar, Birikim, Daha fazla.
+- Büyük, simgeli kategori kartları; kategori değiştirmek için alttan açılan büyük düğmeler; işlemler gün gün kartlar hâlinde.
 
 **Okuma**
 - PDF (şifreli dahil), Excel ve CSV; birden çok ekstreyi aynı anda yükleme (sayfanın herhangi bir yerine sürükle-bırak)

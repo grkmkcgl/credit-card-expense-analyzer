@@ -3,6 +3,7 @@
 Kurulum:   pip install -r tests/requirements.txt && python -m playwright install chromium
 Çalıştır:  python tests/run_tests.py            (hepsi)
            python tests/run_tests.py taksit     (adında "taksit" geçen testler)
+           python tests/run_tests.py taksit kural   (adında "taksit" ya da "kural" geçenler)
            VERBOSE=1 python tests/run_tests.py  (hata ayrıntısıyla)
            BROWSER=webkit python tests/run_tests.py  (Safari motoru; önce: python -m playwright install webkit)
 
@@ -66,6 +67,22 @@ class App:
 
     def ev(self, js, arg=None):
         return self.pg.evaluate(js, arg) if arg is not None else self.pg.evaluate(js)
+
+    def screen(self, tab):
+        """Menüden bir ekrana geçer (Özet=spend, İşlemler=tx, Aylar=trend, Birikim=budget, Daha fazla=more)."""
+        if self.ev("document.body.dataset.tab") != tab:
+            self.pg.click(f"#tabs [data-tab={tab}]"); self.pg.wait_for_timeout(100)
+
+    def open_fold(self, fid):
+        """Bölümün bulunduğu ekrana geçer ve bölüm kapalıysa açar."""
+        self.screen(self.ev(f"$('{fid}').dataset.screen.split(' ')[0]"))
+        if not self.ev(f"$('{fid}').open"):
+            self.pg.click(f"#{fid} > summary"); self.pg.wait_for_timeout(100)
+
+    def pick_cat(self, sel, cat):
+        """Satırdaki kategori düğmesine basar ve alttan açılan pencereden kategoriyi seçer."""
+        (self.pg.locator(sel) if isinstance(sel, str) else sel).click(); self.pg.wait_for_timeout(100)
+        self.pg.click(f"#sheet .pk[data-cat='{cat}']"); self.pg.wait_for_timeout(150)
 
     def text(self, sel):
         return self.pg.inner_text(sel)
@@ -203,6 +220,7 @@ def ayni_ekstre_iki_kez_yuklenince_tekrar_etmez(b, info):
 # ---------------------------------------------------------------- Ekstre kontrolü
 def _recon(a, stmt_month="2026-08"):
     a.period(stmt_month)
+    a.ev("document.querySelectorAll('#recon details').forEach(d=>d.open=true)")  # varsayılan kapalı; sonuç başlıkta da yazar
     return a.text("#recon")
 
 
@@ -308,7 +326,7 @@ def _write_json(name, obj):
 def kategori_paylas_disa_aktar(b, info):
     a = App(b); a.import_("arti.pdf")
     a.ev("()=>{$('rules').value+='\\nHobi: ORNEKHOBI';overrides['ORNEK BUTIK']='Giyim';render()}")
-    a.pg.click("#rulesFold > summary")
+    a.open_fold("rulesFold")
     with a.pg.expect_download() as dl:
         a.pg.click("#shareCats")
     d = dl.value
@@ -481,9 +499,10 @@ def harcama_analizi_listelerden_acilir(b, info):
         if row.get_attribute("aria-expanded") != "true": row.click(); a.pg.wait_for_timeout(100)
         a.pg.locator("#cats .catlist button[data-an]").filter(has_text="CANKAYA").first.click(); a.pg.wait_for_timeout(150)
         eq(a.ev("$('q').value"), "ege pide", f"kategori listesinden ({view})")
-    a.pg.click("#allFold > summary")
+    a.open_fold("allFold"); a.open_fold("topFold")
     for sel in ["#top", "#alltx"]:
-        a.pg.fill("#q", ""); a.pg.dispatch_event("#q", "input")
+        a.open_fold("topFold" if sel == "#top" else "allFold")
+        a.ev("$('q').value=''"); a.pg.dispatch_event("#q", "input")
         a.pg.locator(sel + " button[data-an]").first.click(); a.pg.wait_for_timeout(150)
         assert a.ev("$('q').value"), f"{sel} listesinden analiz açılmadı"
     a.close()
@@ -497,7 +516,10 @@ def veri_yuklenince_sade_ust_kisim_ve_ozet_kartlari(b, info):
     a.import_("wp_ayri.pdf")
     for sel in ["#folderPanel", "#drop", "#how", ".intro"]:
         assert not a.pg.is_visible(sel), f"veri varken {sel} gizlenmeli"
-    assert a.pg.is_visible("#toolbar") and a.pg.is_visible("#hist"), "araç çubuğu ve kayıt bölümü görünmeli"
+    assert a.pg.is_visible("#toolbar") and a.pg.is_visible("#tabs"), "araç çubuğu ve menü görünmeli"
+    a.screen("more"); assert a.pg.is_visible("#hist"), "kayıt bölümü Daha fazla ekranında"
+    assert not a.pg.is_visible("#cats"), "başka ekrandayken kategori listesi gizli"
+    a.screen("spend")
     a.period("2026-08")
     k = a.text("#kpis"); assert "Tutuyor" in k and "En büyük kategori" in k, k
     a.pg.click("#kpiRecon"); a.pg.wait_for_timeout(100)
@@ -522,7 +544,7 @@ def islem_silmeden_once_onay_sorulur(b, info):
     def dlg(d):
         msgs.append(d.message); d.accept() if answers.pop(0) else d.dismiss()
     a.pg.on("dialog", dlg)
-    a.pg.click("#allFold > summary"); a.pg.wait_for_timeout(100)
+    a.open_fold("allFold")
     desc = a.pg.locator("#alltx tbody tr").first.locator("button[data-an]").inner_text()
     a.pg.locator("#alltx button.x").first.click(); a.pg.wait_for_timeout(100)
     eq(a.ev(real), n, "vazgeçince silinmemeli")
@@ -535,8 +557,9 @@ def islem_silmeden_once_onay_sorulur(b, info):
 @test
 def katlanir_bolumler(b, info):
     a = App(b); a.import_("arti.pdf")
-    for fid in ("allFold", "unkFold", "monthsFold", "rulesFold"):
+    for fid in ("allFold", "unkFold", "monthsFold", "rulesFold", "topFold"):
         eq(a.ev(f"$('{fid}').open"), False, f"{fid} başta kapalı")
+    assert a.ev("$('top').tBodies[0].rows.length") > 0 and a.text("#topCount").endswith("yer)"), a.text("#topCount")
     assert not a.pg.is_visible("#alltx"), "kapalıyken tablo görünmemeli"
     n = a.ev("$('alltx').tBodies[0].rows.length")
     assert n > 0
@@ -548,9 +571,9 @@ def katlanir_bolumler(b, info):
     eq(a.text("#monthsCount"), f"({months} dönem)", "dönem sayısı")
     cats = a.ev("new Set($('rules').value.split('\\n').filter(l=>l.indexOf(':')>0).map(l=>l.slice(0,l.indexOf(':')).trim())).size")
     eq(a.text("#rulesCount"), f"({cats} kategori)", "kategori sayısı")
-    a.pg.click("#allFold > summary"); a.pg.wait_for_timeout(100)
+    a.open_fold("allFold")
     assert a.pg.is_visible("#alltx"), "açınca tablo görünmeli"
-    a.pg.select_option("#alltx select >> nth=0", "Market"); a.pg.wait_for_timeout(150)
+    a.pick_cat("#alltx .catbtn >> nth=0", "Market")
     eq(a.ev("$('allFold').open"), True, "yeniden çizimde açık kalmalı")
     a.pg.click("#allFold > summary"); a.pg.wait_for_timeout(100)
     eq(a.ev("$('allFold').open"), False, "tekrar tıklayınca kapanmalı")
@@ -621,6 +644,9 @@ def kategori_listesi_yerinde_guncellenir(b, info):
 def ekstre_kontrolu_kapali_kalir(b, info):
     a = App(b); a.import_("wp_ayri.pdf"); a.period("2026-08")
     assert a.ev("!!$('recon').querySelector('details')"), "ekstre kontrolü görünmeli"
+    eq(a.ev("$('recon').querySelector('details').open"), False, "ekstre kontrolü başta kapalı")
+    assert "Tutuyor" in a.text("#recon summary"), "sonuç başlıkta görünmeli"
+    a.ev("$('recon').querySelector('details').open=true")
     a.ev("$('recon').querySelector('details').open=false"); a.ev("render()")
     eq(a.ev("$('recon').querySelector('details').open"), False, "kullanıcının kapattığı kutu yeniden çizimde açılmamalı")
     a.pg.click("#kpiRecon"); a.pg.wait_for_timeout(100)
@@ -668,7 +694,7 @@ def pasta_grafik_hareket_azaltilinca_animasyonsuz(b, info):
 
 @test
 def tum_islemler_arama_suzgec_siralama(b, info):
-    a = App(b); a.import_("arti.pdf"); a.pg.click("#allFold > summary")
+    a = App(b); a.import_("arti.pdf"); a.open_fold("allFold")
     rows = lambda: a.ev("[...document.querySelectorAll('#alltx tbody button[data-an]')].map(b=>b.textContent)")
     n = len(rows()); assert n >= 5, rows()
     a.pg.fill("#txq", "teknosa"); a.pg.wait_for_timeout(300)
@@ -711,6 +737,145 @@ def donem_karsilastirma(b, info):
 
 
 @test
+def donem_dugmeleri_ozet_farki_ve_simgeler(b, info):
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", _pide_history())
+    a.period("")
+    a.pg.click("#pPrev"); a.pg.wait_for_timeout(100)
+    eq(a.ev("$('period').value"), "2026-08", "tüm zamanlardan ‹ son geçmiş döneme gider")
+    assert a.ev("$('pNext').disabled"), "en yeni dönemde › kapalı"
+    c = a.text("#totalCmp"); assert "Temmuz dönemine göre ₺1.410 fazla" in c, c
+    a.pg.click("#pPrev"); a.pg.wait_for_timeout(100)
+    eq(a.ev("$('period').value"), "2026-07", "‹ bir önceki dönem")
+    assert "Haziran dönemine göre" in a.text("#totalCmp")
+    a.pg.click("#pNext"); a.pg.wait_for_timeout(100)
+    eq(a.ev("$('period').value"), "2026-08", "› bir sonraki dönem")
+    a.period("2026-04")
+    assert a.ev("$('pPrev').disabled"), "en eski dönemde ‹ kapalı"
+    eq(a.ev("$('totalCmp').textContent"), "", "önceki dönem yoksa fark yazılmaz")
+    assert a.ev("document.querySelectorAll('#cats .cat[data-k=\"Market\"] .cico svg path').length") > 0, "kategori simgesi"
+    a.open_fold("monthsFold")
+    a.pg.locator("#months .mrow").filter(has_text="Tem").click(); a.pg.wait_for_timeout(100)
+    eq(a.ev("$('period').value"), "2026-07", "grafikte sütuna dokununca o dönem seçilir")
+    eq(a.ev("document.querySelector('#months .mrow.sel').title"), "Temmuz 2026 ekstresi (kesim 26.07.2026): ₺2.450", "seçili sütun")
+    assert "₺2.450" in a.text("#months .mhead"), a.text("#months .mhead")
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
+def menu_ve_ekranlar(b, info):
+    a = App(b, width=390, mobile=True)
+    assert not a.pg.is_visible("#tabs"), "veri kaynağı açılmadan menü yok"
+    a.ev("h=>{applyData({history:h});startMobile('test')}", _pide_history())
+    assert a.pg.is_visible("#tabs"), "menü görünür"
+    box = a.pg.locator("#tabs").bounding_box()
+    assert box["y"] + box["height"] >= 1300 - 2, "telefonda menü ekranın altında"
+    eq(a.ev("document.body.dataset.tab"), "spend", "Özet ile açılır")
+    assert a.pg.is_visible("#cats") and not a.pg.is_visible("#allFold") and not a.pg.is_visible("#rulesFold")
+    eq(a.text("#pageTitle"), "Özet", "başlık ekranın adı")
+    a.ev("$('msg').innerHTML='<span class=\"ok\">2/2 dosya işlendi</span><div class=\"flist\"></div>'")
+    a.screen("tx")
+    eq(a.text("#pageTitle"), "İşlemler", "başlık ekranla değişir")
+    eq(a.ev("$('msg').textContent"), "", "eski yükleme sonucu yeni ekranın üstünde kalmaz")
+    assert not a.pg.is_visible("#toolbar"), "dosya kutusu yalnızca Özet ve Daha fazla'da"
+    assert a.ev("$('allFold').open") and a.pg.is_visible("#alltx"), "İşlemler ekranında tüm işlemler açık"
+    assert not a.pg.is_visible("#cats") and a.pg.is_visible("#period"), "dönem seçici İşlemler'de de var"
+    a.screen("trend"); assert a.ev("$('monthsFold').open") and a.pg.is_visible("#yearFold") and a.pg.is_visible("#recurFold")
+    a.screen("more"); assert a.pg.is_visible("#toolbar") and not a.pg.is_visible("#viewOpt"), "telefonda Görünüm Daha fazla'da"
+    assert a.pg.is_visible("#rulesFold") and a.pg.is_visible("#hist") and not a.pg.is_visible("#period")
+    a.pg.click(".morecard [data-theme-set=naruto]"); eq(a.ev("document.documentElement.dataset.theme"), "naruto", "Daha fazla'dan tema")
+    a.screen("tx"); a.pg.locator("#alltx button[data-an]").first.click(); a.pg.wait_for_timeout(150)
+    eq(a.ev("document.body.dataset.tab"), "spend", "harcama analizi Özet ekranında açılır"); assert a.pg.is_visible("#qOut")
+    a.screen("budget"); assert a.pg.is_visible("#budget") and not a.pg.is_visible("#out")
+    a.pg.click("#tabSpend"); a.pg.wait_for_timeout(100); assert a.pg.is_visible("#cats")
+    assert not a.errors, a.errors
+    a.close()
+    a = App(b, width=1280)
+    a.ev("h=>{applyData({history:h});render()}", _pide_history())
+    box = a.pg.locator("#tabs").bounding_box()
+    assert box["x"] == 0 and box["width"] <= 230 and box["height"] > 600, f"bilgisayarda menü solda: {box}"
+    a.close()
+
+
+@test
+def islemler_telefonda_kart_ve_gun_basliklari(b, info):
+    a = App(b, width=390, mobile=True)
+    H = _pide_history() + [{"id": "ayni", "date": "2026-08-20", "stmt": "2026-08-26", "desc": "MAHALLE MANAVI", "amt": 50}]
+    a.ev("h=>{applyData({history:h});startMobile('test')}", H)
+    a.screen("tx")
+    days = a.ev("[...document.querySelectorAll('#alltx tbody tr[data-day]')].map(r=>r.dataset.day)")
+    n = a.ev("$('alltx').tBodies[0].rows.length")
+    assert days and days[0].startswith("20 Ağustos"), days
+    eq(len(days), len(set(days)), "her gün bir kez başlık")
+    assert len(days) < n, "aynı günün işlemleri tek başlık altında"
+    assert a.ev("getComputedStyle(document.querySelector('#alltx tbody tr')).display") == "grid", "telefonda kart"
+    assert not a.pg.is_visible("#alltx .tdate"), "gruplu listede tarih başlıkta"
+    a.pg.click("#alltx button[data-sort=amt]"); a.pg.wait_for_timeout(100)
+    eq(a.ev("document.querySelectorAll('#alltx tbody tr[data-day]').length"), 0, "tutara göre sıralayınca gün başlığı yok")
+    assert a.pg.is_visible("#alltx .tdate"), "gruplanmayınca tarih satırda"
+    a.pg.locator("#alltx .catbtn").first.click(); a.pg.wait_for_timeout(450)  # açılış animasyonu bitsin
+    box = a.pg.locator("#sheet .sheetbox").bounding_box()
+    assert abs(box["y"] + box["height"] - 1300) < 2 and box["width"] == 390, f"telefonda pencere alttan: {box}"
+    a.pg.click("#sheet .sheetbg", position={"x": 20, "y": 20}); a.pg.wait_for_timeout(100)
+    assert not a.pg.is_visible("#sheet .sheetbox"), "dışarı dokununca kapanır"
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
+def telefonda_kayit_acmadan_ekstre_eklenir(b, info):
+    a = App(b, width=390, mobile=True)
+    assert a.pg.is_visible("#drop") and a.pg.is_visible("#mobilePanel"), "ekstre alanı kayıt dosyası açmadan da görünür"
+    a.pg.set_input_files("#file", f("arti.pdf"))
+    a.pg.wait_for_function("!document.getElementById('setup').classList.contains('hide')", timeout=20000)
+    assert a.ev("mobileReady") and "Ekle ve göster" in a.text("#msg"), a.text("#msg")
+    assert "Yeni kayıt başlatıldı" in a.text("#mobileInfo"), "boş kayıt başladığı söylenir"
+    a.pg.click("#runTop"); a.pg.wait_for_timeout(200)
+    assert a.ev("history.length") > 0 and a.pg.is_visible("#saveBar"), "üstteki düğme de ekler, kaydet çubuğu çıkar"
+    a.pg.set_input_files("#file", [f("r_tutuyor.pdf"), f("bozuk.pdf")])
+    a.pg.wait_for_function("/dosya işlendi/.test(document.getElementById('msg').textContent)", timeout=30000)
+    eq(a.ev("[...document.querySelectorAll('#msg .frow')].map(r=>r.className)"), ["frow fok", "frow fbad"], "sonuç kartları durumlarıyla")
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
+def dar_telefonda_yana_tasma_yok(b, info):
+    # Samsung telefonların çoğu 360 px; bir şey taşarsa Android sayfayı büyütülmüş açar ve elle küçültmek gerekir
+    for size in ("m", "l"):
+        a = App(b, width=360, mobile=True)
+        a.upload_many(["ekstre7.pdf", "ekstre9.pdf", "buyuk.pdf", "taksit.pdf", "arti.pdf"])
+        a.ev(f"()=>{{prefs.size='{size}';applyPrefs()}}")
+        for t in ("spend", "tx", "trend", "budget", "more"):
+            a.screen(t); a.ev("document.querySelectorAll('details').forEach(d=>d.open=true)"); a.pg.wait_for_timeout(150)
+            w = a.ev("document.documentElement.scrollWidth")
+            assert w <= 360, f"{t} ekranı ({size} yazı) {w} px, 360'a sığmalı: " + str(a.ev(
+                "[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>361).slice(0,4).map(e=>e.tagName+'#'+e.id+'.'+e.className)"))
+        eq(a.ev("getComputedStyle(document.documentElement).webkitTextSizeAdjust"), "100%", "tarayıcı yazıyı kendiliğinden büyütmesin")
+        cut = a.ev("[...document.querySelectorAll('#tabs button span')].filter(e=>e.scrollWidth>e.clientWidth+1).map(e=>e.textContent)")
+        eq(cut, [], f"menü etiketleri kesilmemeli ({size} yazı)")
+        a.close()
+
+
+@test
+def gorunum_tercihi_kayit_dosyasinda(b, info):
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", _pide_history())
+    eq(a.ev("document.documentElement.dataset.theme"), "light", "varsayılan açık tema")
+    a.pg.click("#viewOpt summary")
+    a.pg.click("[data-theme-set=naruto]"); a.pg.click("[data-size-set=l]")
+    eq(a.ev("[document.documentElement.dataset.theme,document.documentElement.dataset.size]"), ["naruto", "l"], "seçim uygulanır")
+    eq(a.ev("JSON.parse(snapshot()).prefs"), {"theme": "naruto", "size": "l"}, "seçim kayıt dosyasına yazılır")
+    eq(a.ev("getComputedStyle(document.documentElement).fontSize"), "21px", "büyük yazı")
+    a.ev("h=>{applyData({history:h,prefs:{theme:'dark',size:'s'}});render()}", _pide_history())
+    eq(a.ev("[document.documentElement.dataset.theme,document.documentElement.dataset.size]"), ["dark", "s"], "dosyadaki tercih yüklenir")
+    a.ev("h=>{applyData({history:h});render()}", _pide_history())
+    eq(a.ev("document.documentElement.dataset.theme"), "dark", "tercihi olmayan eski dosya mevcut seçimi bozmaz")
+    eq(a.ev("document.querySelector('meta[name=theme-color]').content"), "#000", "tarayıcı çubuğu rengi temaya uyar")
+    assert not a.errors, a.errors
+    a.close()
+
+
+@test
 def duzenli_odemeler(b, info):
     H, i = [], 0
     def add(d, desc, amt, **kw):
@@ -722,7 +887,7 @@ def duzenli_odemeler(b, info):
         add(m + "-15", "KAHVE DURAGI ANKARA TR", kafe)
         add(m + "-20", "TAKSITLI MAGAZA TR", 500, inst={"n": 1, "m": 6, "total": 3000})
     a = App(b); a.ev("h=>{applyData({history:h});render()}", H)
-    a.pg.click("#recurFold > summary")
+    a.open_fold("recurFold")
     rows = a.ev("[...document.querySelectorAll('#recur tbody tr')].map(r=>r.textContent)")
     names = " | ".join(rows)
     assert "NETFLIX" in names and "SPOTIFY" in names and "ORNEK SPOR" in names, rows
@@ -774,21 +939,31 @@ def olagandisi_harcamalar(b, info):
 def gelecek_taksit_takvimi(b, info):
     H = [{"id": "i1", "date": "2026-08-01", "pdate": "2026-08-01", "stmt": "2026-09-26", "desc": "ORNEK ELEKTRONIK TR", "amt": 500, "inst": {"n": 2, "m": 4, "total": 2000}},
          {"id": "i2", "date": "2026-09-10", "pdate": "2026-09-10", "stmt": "2026-09-26", "desc": "ORNEK GIYIM TR", "amt": 300, "inst": {"n": 1, "m": 2, "total": 600}}]
-    a = App(b); a.ev("h=>{applyData({history:h});render()}", H); a.pg.click("#monthsFold > summary")
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", H); a.open_fold("instFold")
     rows = a.ev("[...document.querySelectorAll('#instCal .mrow')].map(r=>r.textContent)")
     eq(len(rows), 2, "iki gelecek dönem")
     assert rows[0].startswith("Eki") and "₺800" in rows[0] and "2 taksit" in rows[0] and "1 seri biter" in rows[0], rows
     assert rows[1].startswith("Kas") and "₺500" in rows[1] and "1 seri biter" in rows[1], rows
     assert "Toplam kalan: ₺1.300" in a.text("#instCal")
+    eq(a.text("#instCount"), "(₺1.300 kalan)", "başlıkta kalan")
+    ser = a.ev("[...document.querySelectorAll('#instCal .iser')].map(r=>r.textContent)")
+    eq(len(ser), 2, "iki devam eden seri")
+    assert "ORNEK GIYIM" in ser[0] and "1/2 ödendi" in ser[0] and "1 × ₺300" in ser[0] and "Ekim'de biter" in ser[0], ser
+    assert "ORNEK ELEKTRONIK" in ser[1] and "2/4 ödendi" in ser[1] and "2 × ₺500" in ser[1] and "Kasım'da biter" in ser[1], ser
+    eq(a.ev("document.querySelectorAll('#instCal .iser')[1].querySelectorAll('.idots i.p').length"), 2, "ödenen noktalar")
+    a.ev("()=>{window.__an=0;const o=openAnalysis;window.openAnalysis=d=>{window.__an++;o(d)}}")
+    a.pg.locator("#instCal .iser button[data-an]").first.click(); a.pg.wait_for_timeout(150)
+    eq(a.ev("window.__an"), 1, "analiz tek sefer açılmalı")
     a.ev("()=>{applyData({history:[{id:'n1',date:'2026-09-01',stmt:'2026-09-26',desc:'ORNEK MARKET TR',amt:100}]});render()}")
     eq(a.ev("$('instCal').textContent"), "", "taksit yoksa bölüm yok")
+    assert not a.pg.is_visible("#instFold"), "taksit yoksa başlık da gizli"
     assert not a.errors, a.errors
     a.close()
 
 
 @test
 def kategorisiz_icin_kural_onerisi(b, info):
-    a = App(b); a.import_("arti.pdf"); a.pg.click("#unkFold > summary")
+    a = App(b); a.import_("arti.pdf"); a.open_fold("unkFold")
     eq(a.ev("document.querySelector('#unk input[data-kw]').value"), "FATURA", "önerilen anahtar kelime (düzenlenebilir)")
     eq(a.ev("getComputedStyle(document.querySelector('#unk .kwsug')).display"), "flex", "öneri satırının stili yüklü olmalı")
     a.pg.select_option("#unk select", "Faturalar"); a.pg.wait_for_timeout(150)
@@ -807,9 +982,9 @@ def kategorisiz_icin_kural_onerisi(b, info):
 
 @test
 def geri_al(b, info):
-    a = App(b); a.import_("arti.pdf"); a.pg.click("#allFold > summary")
+    a = App(b); a.import_("arti.pdf"); a.open_fold("allFold")
     before = a.ev("JSON.stringify({h:history,o:overrides,e:[...excluded]})"); total = a.total()
-    a.pg.select_option("#alltx tbody select >> nth=0", "Market"); a.pg.wait_for_timeout(150)
+    a.pick_cat("#alltx tbody .catbtn >> nth=0", "Market")
     assert "Market" in a.text("#toast") and a.pg.is_visible("#undoBtn"), a.text("#toast")
     a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150)
     eq(a.ev("JSON.stringify({h:history,o:overrides,e:[...excluded]})"), before, "kategori değişikliği geri alınmalı")
@@ -820,7 +995,7 @@ def geri_al(b, info):
     eq(a.ev("history.length"), n - 1, "silindi")
     a.ev("document.activeElement&&document.activeElement.blur()"); a.pg.keyboard.press("Control+z"); a.pg.wait_for_timeout(150)
     eq(a.ev("history.length"), n, "Ctrl+Z silmeyi geri almalı"); eq(a.total(), total, "toplam aynı")
-    a.pg.uncheck("input[data-inc='Akaryakıt']"); a.pg.wait_for_timeout(150)
+    a.screen("spend"); a.pg.uncheck("input[data-inc='Akaryakıt']"); a.pg.wait_for_timeout(150)
     assert a.total() != total
     a.pg.click("#undoBtn"); a.pg.wait_for_timeout(150); eq(a.total(), total, "dışlama geri alınmalı")
     a.pg.uncheck("input[data-inc='Akaryakıt']"); a.pg.wait_for_timeout(6300)
@@ -831,7 +1006,7 @@ def geri_al(b, info):
 
 @test
 def islem_notu_ve_etiket(b, info):
-    a = App(b); a.import_("arti.pdf"); a.pg.click("#allFold > summary")
+    a = App(b); a.import_("arti.pdf"); a.open_fold("allFold")
     tr = a.pg.locator("#alltx tbody tr").filter(has_text="SHELL")
     tr.locator(".notebtn").click(); a.pg.wait_for_timeout(100)
     a.pg.fill("#alltx input[data-note]", "Yaz tatili yolu #tatil #araba"); a.pg.keyboard.press("Enter"); a.pg.wait_for_timeout(200)
@@ -873,7 +1048,7 @@ def kart_ayrimi(b, info):
     a.pg.select_option("#cardSel", "1234"); a.pg.wait_for_timeout(150)
     eq(a.total(), "₺1.500", "yalnızca 1234"); assert "Tutuyor" in a.text("#recon") and a.ev("document.querySelectorAll('#recon details').length") == 1
     a.pg.select_option("#cardSel", "5678"); a.pg.wait_for_timeout(150)
-    eq(a.total(), "₺500", "yalnızca 5678"); assert "SINEMA" in a.text("#top") and "MIGROS" not in a.text("#top")
+    eq(a.total(), "₺500", "yalnızca 5678"); a.ev("$('topFold').open=true"); assert "SINEMA" in a.text("#top") and "MIGROS" not in a.text("#top")
     a.pg.select_option("#cardSel", ""); a.pg.wait_for_timeout(150)
     eq(a.total(), "₺2.000", "tekrar tüm kartlar")
     # eski dosya / kartsız ekstre: seçici çıkmaz
@@ -907,7 +1082,7 @@ def yazdirma_gorunumu(b, info):
 
 
 def _rules_app(b):
-    a = App(b); a.ev("h=>{applyData({history:h});render()}", _pide_history()); a.pg.click("#rulesFold > summary")
+    a = App(b); a.ev("h=>{applyData({history:h});render()}", _pide_history()); a.open_fold("rulesFold")
     return a
 
 
@@ -1128,7 +1303,8 @@ def ay_sonu_kesim_kaymasi(b, info):
     opts = a.ev("[...document.querySelectorAll('#period option')].map(o=>o.value).filter(v=>/^\\d{4}-\\d{2}$/.test(v))")
     for m in ["2026-01", "2026-02", "2026-03"]:
         eq(opts.count(m), 1, f"{m} dönemi bir kez")
-    assert "Şubat 2026 ekstresi (kesim 01.03.2026)" in a.ev("document.querySelector('#period option[value=\"2026-02\"]').textContent"), a.ev("[...document.querySelectorAll('#period option')].map(o=>o.textContent)")
+    eq(a.ev("document.querySelector('#period option[value=\"2026-02\"]').textContent"), "Şubat 2026 ekstresi", "seçicide kısa ad")
+    a.period("2026-02"); assert a.text("#range").startswith("Kesim 01.03.2026 · "), a.text("#range")  # 1 Mart kesimi Şubat dönemi
     for m, v in [("2026-01", "₺1.300"), ("2026-02", "₺1.200"), ("2026-03", "₺1.400")]:
         a.period(m); eq(a.total(), v, f"{m} toplamı")
         eq(a.ev("document.querySelectorAll('#recon details').length"), 1, f"{m} tek ekstre kontrolü")
@@ -1228,12 +1404,19 @@ def _ac(a, name):
 @test
 def liste_icinden_kategori_duzenleme(b, info):
     a = _liste_app(b)
-    sel = lambda c: a.pg.locator(f"#cats .cat[data-k='{c}'] .catlist .rowcat select")
+    sel = lambda c: a.pg.locator(f"#cats .cat[data-k='{c}'] .catlist .rowcat .catbtn")
     # kapalıyken hiçbir seçici yok
     eq(a.ev("document.querySelectorAll('#cats .rowcat').length"), 0, "kapalı listede seçici yok")
     # 1) Kafe: aynı açıklamalı iki satır birlikte taşınır
     _ac(a, "Kafe ve restoran"); eq(sel("Kafe ve restoran").count(), 3, "her satırın altında seçici")
-    sel("Kafe ve restoran").nth(0).select_option("Market"); a.pg.wait_for_timeout(200)
+    sel("Kafe ve restoran").nth(0).click(); a.pg.wait_for_timeout(100)
+    assert a.pg.is_visible("#sheet .sheetbox"), "kategori penceresi açılmalı"
+    eq(a.ev("document.querySelector('#sheet .pk.on').dataset.cat"), "Kafe ve restoran", "şimdiki kategori işaretli")
+    eq(a.ev("document.activeElement.dataset.cat"), "Kafe ve restoran", "odak seçili kategoride")
+    a.pg.keyboard.press("Escape"); a.pg.wait_for_timeout(100)
+    assert not a.pg.is_visible("#sheet .sheetbox"), "Esc kapatmalı"
+    eq(a.ev("overrides[norm('EGE PIDE SALONU ANKARA TR')]"), None, "vazgeçince değişiklik yok")
+    a.pick_cat(sel("Kafe ve restoran").nth(0), "Market")
     eq(a.ev("overrides[norm('EGE PIDE SALONU ANKARA TR')]"), "Market", "seçim override olarak yazılmalı")
     eq(sel("Kafe ve restoran").count(), 1, "taşınan satırlar Kafe listesinden kalkmalı")
     assert "₺540" in a.text("#cats .cat[data-k='Kafe ve restoran'] button.row") and "₺3.320" in a.text("#cats .cat[data-k='Market'] button.row"), a.text("#cats")
@@ -1241,10 +1424,10 @@ def liste_icinden_kategori_duzenleme(b, info):
     eq(sel("Kafe ve restoran").count(), 3, "Geri al satırları döndürmeli")
     # 2) Taksitler: seçici var, satır Taksitler'de kalır, alt kategori değişir
     _ac(a, "Taksitler"); eq(sel("Taksitler").count(), 1)
-    sel("Taksitler").nth(0).select_option("Market"); a.pg.wait_for_timeout(200)
+    a.pick_cat(sel("Taksitler").nth(0), "Market")
     eq(sel("Taksitler").count(), 1, "taksit satırı Taksitler'de kalmalı")
     eq(a.ev("categorize('ORNEK ELEKTRONIK TR')"), "Market", "alt kategori güncellenmeli")
-    eq(sel("Taksitler").nth(0).input_value(), "Market", "seçici yeni alt kategoriyi göstermeli")
+    eq(sel("Taksitler").nth(0).inner_text().strip(" ▾\n"), "Market", "seçici yeni alt kategoriyi göstermeli")
     # 3) İadeler: seçici yok
     _ac(a, "İadeler ve indirimler"); eq(sel("İadeler ve indirimler").count(), 0, "iadede seçici olmamalı")
     assert not a.errors, a.errors
@@ -1302,7 +1485,7 @@ def yillik_ozet(b, info):
     a = _yil_app(b)
     eq(a.ev("$('yearFold').open"), False, "varsayılan kapalı")
     eq(a.text("#yearCount"), "(2 yıl)", "başlıkta yıl sayısı")
-    a.pg.click("#yearFold > summary"); a.pg.wait_for_timeout(100)
+    a.open_fold("yearFold")
     eq(a.ev("document.querySelector('#yearSum select').value"), "2026", "varsayılan son yıl")
     t = a.text("#yearSum")
     for s in ["₺20.688", "9 dönem", "₺2.299", "₺7.500", "₺1.250", "ORNEK ELEKTRONIK TEKNOSA", "₺6.000", "₺138", "₺400", "₺250", "₺5.800", "▲ %61"]:
@@ -1319,8 +1502,9 @@ def yillik_ozet(b, info):
     a.ev("()=>{window.__an=0;const o=openAnalysis;window.openAnalysis=d=>{window.__an++;o(d)}}")
     a.pg.locator("#yearSum .ytop [data-an]").first.click(); a.pg.wait_for_timeout(150)
     eq(a.ev("window.__an"), 1, "analiz tek sefer açılmalı"); eq(a.ev("$('q').value"), "migros", "analiz MİGROS için")
+    eq(a.ev("document.body.dataset.tab"), "spend", "analiz Özet ekranında açılır")
     # yıl değişince
-    a.pg.select_option("#yearSum select", "2025"); a.pg.wait_for_timeout(100)
+    a.screen("trend"); a.pg.select_option("#yearSum select", "2025"); a.pg.wait_for_timeout(100)
     t = a.text("#yearSum"); assert "₺6.600" in t and "6 dönem" in t and "₺1.100" in t, t
     assert "aynı dönemleri" not in t, "önceki yıl yoksa karşılaştırma yok"
     eq(a.ev("$('yearFold').open"), True, "yeniden çizimde açık kalmalı")
@@ -1338,7 +1522,7 @@ def kategori_trendleri(b, info):
     a = _yil_app(b)
     eq(a.ev("$('trendFold').open"), False, "varsayılan kapalı")
     eq(a.text("#trendCount"), "(5 kategori)", "başlıkta kategori sayısı")
-    a.pg.click("#trendFold > summary"); a.pg.wait_for_timeout(100)
+    a.open_fold("trendFold")
     eq(a.ev("[...document.querySelectorAll('#trends .trend')].map(e=>e.dataset.k)"),
        ["Market", "Elektronik", "Kafe ve restoran", "Taksitler", "Faiz ve ücretler"], "pencere toplamına göre sıra, iadeler yok")
     m = "#trends .trend[data-k='Market']"
@@ -2025,11 +2209,13 @@ def birikim_kurlar_yedek_adres(b, info):
 
 @test
 def birikim_kurlar_hata_ayrintisi(b, info):
+    hang = []   # cevapsız bırakılan istekler; sayfa kapanmadan önce kapatılır
     cases = [
         ("bağlantı kesik", lambda r: r.abort(), None, "bağlantı kurulamadı"),
         ("404", lambda r: r.fulfill(status=404, headers=CORS, body="yok"), None, "HTTP 404"),
         ("bozuk JSON", lambda r: r.fulfill(status=200, headers=CORS, body="<html>"), None, "beklenmeyen yanıt"),
-        ("zaman aşımı", lambda r: r.fulfill(status=200, headers=CORS, json=KUR), "RATE_TIMEOUT=1", "zaman aşımı"),
+        # cevap hiç gelmez: 1 ms'lik süre yük altında isteği gönderilmeden iptal edebiliyordu (ilk adres reqs'e düşmüyordu)
+        ("zaman aşımı", hang.append, "RATE_TIMEOUT=300", "zaman aşımı"),
         ("yönlendirme", lambda r: r.fulfill(status=302, headers={**CORS, "Location": "https://example.com/kur.json"}), None, "ağ kilidi engelledi"),
     ]
     for name, respond, setup, want in cases:
@@ -2043,14 +2229,18 @@ def birikim_kurlar_hata_ayrintisi(b, info):
         assert "Kayıt dosyanızdaki kurlar" in t and "cdn.jsdelivr.net" in t and "latest.currency-api.pages.dev" in t, f"{name}: {t}"
         assert t.count(want) == 2, f"{name}: her adresin nedeni yazılır: {t}"
         eq(a.ev("budget.rates.USD.v"), 40, f"{name}: kayıtlı kur korunur")
+        for r in hang:
+            try: r.abort()
+            except Exception: pass   # tarayıcı isteği zaten iptal etmiş olabilir
+        hang.clear()
         a.close()
 
 # ----------------------------------------------------------------
 def main():
-    only = sys.argv[1:] and sys.argv[1]
+    only = sys.argv[1:]
     print("Sentetik PDF'ler üretiliyor…")
     info = fixtures.build_all()
-    selected = [t for t in TESTS if not only or only in t.__name__]
+    selected = [t for t in TESTS if not only or any(o in t.__name__ for o in only)]
     ok = 0
     with sync_playwright() as p:
         b = getattr(p, os.environ.get("BROWSER", "chromium")).launch()
